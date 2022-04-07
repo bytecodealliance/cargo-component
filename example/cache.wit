@@ -1,0 +1,5 @@
+/// Get a value from the cache.
+get: function(key: string) -> option<list<u8>>
+
+/// Put a value into the cache.
+put: function(key: string, value: list<u8>)

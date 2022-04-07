@@ -1,0 +1,14 @@
+*.bk
+*.pyc
+*.swo
+*.swp
+*.swx
+*~
+.*.rustfmt
+docs/_build
+docs/book
+.vscode/
+target
+.cargo
+publish
+vendor
