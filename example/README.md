@@ -1,12 +1,13 @@
 # Component example
 
-This directory contains an example component implementing a simple "passthrough" service
+This directory contains an example component implementing a simple "passthrough cache" service
 responsible for fetching the content bytes of a given URL from a supplied origin service.
 
 The component imports two interfaces: a cache implementation for storing previously fetched content
-and a backend implementation for forwarding the request to when there is a cache miss.
+and an "origin" backend implementation for forwarding the request to when there is a cache miss.
 
-It exports the same backend interface it is given as the origin.
+It exports the same backend interface as it imports, effectively wrapping the provided import interface
+with some simplistic caching logic.
 
 ## Building the component
 
