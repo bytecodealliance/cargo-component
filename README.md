@@ -32,7 +32,7 @@ updated to install the crates.io package once a proper release is made.
 
 The `cargo component` subcommand has some analogous commands to cargo itself:
 
-* (_coming soon_) `cargo component new` — creates a new WebAssembly component Rust project.
+* `cargo component new` — creates a new WebAssembly component Rust project.
 * `cargo component build` — builds a WebAssembly component from a Rust project.
 * (_coming soon_) `cargo component metadata` — prints package metadata as `cargo metadata` would,
   except it also includes the metadata of generated bindings.
