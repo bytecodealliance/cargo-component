@@ -1,3 +1,4 @@
+use crate::commands::workspace;
 use anyhow::Result;
 use cargo::{
     core::{
@@ -10,8 +11,6 @@ use cargo::{
 };
 use clap::Args;
 use std::path::PathBuf;
-
-use crate::commands::workspace;
 
 /// Compile a WebAssembly component and all of its dependencies
 #[derive(Args)]
