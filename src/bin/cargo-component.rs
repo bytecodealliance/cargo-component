@@ -1,6 +1,6 @@
 use anyhow::Result;
 use cargo::{CliError, Config};
-use cargo_component::commands::BuildCommand;
+use cargo_component::commands::{BuildCommand, NewCommand};
 use clap::Parser;
 
 /// Cargo integration for WebAssembly components.
@@ -21,6 +21,7 @@ enum CargoComponent {
 
 #[derive(Parser)]
 pub enum Command {
+    New(NewCommand),
     Build(BuildCommand),
 }
 
@@ -32,6 +33,7 @@ fn main() -> Result<()> {
 
     if let Err(e) = match CargoComponent::parse() {
         CargoComponent::Component(cmd) | CargoComponent::Command(cmd) => match cmd {
+            Command::New(cmd) => cmd.exec(&mut config),
             Command::Build(cmd) => cmd.exec(&mut config),
         },
     } {
