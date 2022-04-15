@@ -35,7 +35,7 @@ The `cargo component` subcommand has some analogous commands to cargo itself:
 * `cargo component new` — creates a new WebAssembly component Rust project.
 * `cargo component build` — builds a WebAssembly component from a Rust project
   using the `wasm32-unknown-unknown` target by default.
-* (_coming soon_) `cargo component metadata` — prints package metadata as `cargo metadata` would,
+* `cargo component metadata` — prints package metadata as `cargo metadata` would,
   except it also includes the metadata of generated bindings.
 * (_coming soon_) `cargo component check` — checks the local package and all of its dependencies
   (including generated bindings) for errors.
