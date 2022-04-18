@@ -5,7 +5,7 @@
 use anyhow::{anyhow, bail, Context, Result};
 use cargo::{
     core::{compiler::Compilation, Manifest, Package, SourceId, Summary, Workspace},
-    ops::{self, CompileOptions},
+    ops::{self, CompileOptions, ExportInfo, OutputMetadataOptions},
     util::interning::InternedString,
     Config,
 };
@@ -564,4 +564,24 @@ pub fn compile(
     create_component(config, result, metadata)?;
 
     Ok(())
+}
+
+/// Retrieves workspace metadata for the given workspace and metadata options.
+///
+/// The returned metadata contains information about generated dependencies.
+pub fn metadata(
+    config: &Config,
+    mut workspace: Workspace,
+    options: &OutputMetadataOptions,
+) -> Result<ExportInfo> {
+    let component_metadata = ComponentMetadata::from_package(config, workspace.current()?)?;
+    let dependencies = generate_dependencies(config, &mut workspace, &component_metadata, false)?;
+
+    update_dependencies(
+        config,
+        workspace.current_mut()?.manifest_mut(),
+        dependencies,
+    )?;
+
+    ops::output_metadata(&workspace, options)
 }

@@ -6,9 +6,11 @@ use cargo_util::paths::normalize_path;
 use std::path::{Path, PathBuf};
 
 mod build;
+mod metadata;
 mod new;
 
 pub use self::build::*;
+pub use self::metadata::*;
 pub use self::new::*;
 
 fn root_manifest(manifest_path: Option<&Path>, config: &Config) -> Result<PathBuf> {
