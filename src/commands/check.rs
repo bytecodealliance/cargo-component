@@ -4,35 +4,64 @@ use cargo::{core::compiler::CompileMode, Config};
 use clap::Args;
 use std::path::PathBuf;
 
-/// Compile a WebAssembly component and all of its dependencies
+/// Check a local package and all of its dependencies for errors
 #[derive(Args)]
 #[clap(name = "build")]
-pub struct BuildCommand {
+pub struct CheckCommand {
     /// Do not print cargo log messages
     #[clap(long = "quiet", short = 'q')]
     pub quiet: bool,
 
-    /// Package to build (see `cargo help pkgid`)
+    /// Package(s) to check
     #[clap(long = "package", short = 'p', value_name = "SPEC")]
     pub packages: Vec<String>,
 
-    /// Build all packages in the workspace
+    /// Check all packages in the workspace
     #[clap(long = "workspace", alias = "all")]
     pub workspace: bool,
 
-    /// Exclude packages from the build
+    /// Exclude packages from the check
     #[clap(long = "exclude", value_name = "SPEC")]
     pub exclude: Vec<String>,
+
+    /// Use verbose output (-vv very verbose/build.rs output)
+    #[clap(
+        long = "verbose",
+        short = 'v',
+        takes_value = false,
+        parse(from_occurrences)
+    )]
+    pub verbose: u32,
+
+    /// Coloring: auto, always, never
+    #[clap(long = "color", value_name = "WHEN")]
+    pub color: Option<String>,
 
     /// Number of parallel jobs, defaults to # of CPUs
     #[clap(long = "jobs", short = 'j', value_name = "N")]
     pub jobs: Option<u32>,
 
-    /// Build only this package's library
+    /// Require Cargo.lock and cache are up to date
+    #[clap(long = "frozen")]
+    pub frozen: bool,
+
+    /// Check only this package's library
     #[clap(long = "lib")]
     pub lib: bool,
 
-    /// Build artifacts in release mode, with optimizations
+    /// Require Cargo.lock is up to date
+    #[clap(long = "locked")]
+    pub locked: bool,
+
+    /// Run without accessing the network
+    #[clap(long = "offline")]
+    pub offline: bool,
+
+    /// Check all targets
+    #[clap(long = "all-targets")]
+    pub all_targets: bool,
+
+    /// Check artifacts in release mode, with optimizations
     #[clap(long = "release", short = 'r')]
     pub release: bool,
 
@@ -48,13 +77,9 @@ pub struct BuildCommand {
     #[clap(long = "no-default-features")]
     pub no_default_features: bool,
 
-    /// Build for the target triple (defaults to `wasm32-unknown-unknown`)
+    /// Check for the target triple (defaults to `wasm32-unknown-unknown`)
     #[clap(long = "target", value_name = "TRIPLE")]
     pub targets: Vec<String>,
-
-    /// Build all targets
-    #[clap(long = "all-targets")]
-    pub all_targets: bool,
 
     /// Directory for all generated artifacts
     #[clap(long = "target-dir", value_name = "DIRECTORY")]
@@ -63,31 +88,6 @@ pub struct BuildCommand {
     /// Path to Cargo.toml
     #[clap(long = "manifest-path", value_name = "PATH")]
     pub manifest_path: Option<PathBuf>,
-
-    /// Use verbose output (-vv very verbose/build.rs output)
-    #[clap(
-        long = "verbose",
-        short = 'v',
-        takes_value = false,
-        parse(from_occurrences)
-    )]
-    pub verbose: u32,
-
-    /// Coloring: auto, always, never
-    #[clap(long = "color", value_name = "WHEN")]
-    pub color: Option<String>,
-
-    /// Require Cargo.lock and cache are up to date
-    #[clap(long = "frozen")]
-    pub frozen: bool,
-
-    /// Require Cargo.lock is up to date
-    #[clap(long = "locked")]
-    pub locked: bool,
-
-    /// Run without accessing the network
-    #[clap(long = "offline")]
-    pub offline: bool,
 
     /// Error format
     #[clap(long = "message-format", value_name = "FMT")]
@@ -102,10 +102,10 @@ pub struct BuildCommand {
     pub generate: bool,
 }
 
-impl BuildCommand {
+impl CheckCommand {
     /// Executes the command.
     pub fn exec(self, config: &mut Config) -> Result<()> {
-        log::debug!("executing compile command");
+        log::debug!("executing metadata command");
 
         config.configure(
             self.verbose,
@@ -121,14 +121,15 @@ impl BuildCommand {
 
         let force_generation = self.generate;
         let workspace = workspace(self.manifest_path.as_deref(), config)?;
-        let options = CompileOptions::from(self).into_cargo_options(config, CompileMode::Build)?;
+        let options = CompileOptions::from(self)
+            .into_cargo_options(config, CompileMode::Check { test: false })?;
 
-        crate::compile(config, workspace, &options, force_generation)
+        crate::check(config, workspace, &options, force_generation)
     }
 }
 
-impl From<BuildCommand> for CompileOptions {
-    fn from(cmd: BuildCommand) -> Self {
+impl From<CheckCommand> for CompileOptions {
+    fn from(cmd: CheckCommand) -> Self {
         CompileOptions {
             workspace: cmd.workspace,
             exclude: cmd.exclude,

@@ -585,3 +585,25 @@ pub fn metadata(
 
     ops::output_metadata(&workspace, options)
 }
+
+/// Check a component for errors with the given workspace and compile options.
+///
+/// It is expected that the current package contains a `package.metadata.component` section.
+pub fn check(
+    config: &Config,
+    mut workspace: Workspace,
+    options: &CompileOptions,
+    force_generation: bool,
+) -> Result<()> {
+    let metadata = ComponentMetadata::from_package(config, workspace.current()?)?;
+    let dependencies = generate_dependencies(config, &mut workspace, &metadata, force_generation)?;
+
+    update_dependencies(
+        config,
+        workspace.current_mut()?.manifest_mut(),
+        dependencies,
+    )?;
+
+    ops::compile(&workspace, options)?;
+    Ok(())
+}

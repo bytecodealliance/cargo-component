@@ -37,7 +37,7 @@ The `cargo component` subcommand has some analogous commands to cargo itself:
   using the `wasm32-unknown-unknown` target by default.
 * `cargo component metadata` — prints package metadata as `cargo metadata` would,
   except it also includes the metadata of generated bindings.
-* (_coming soon_) `cargo component check` — checks the local package and all of its dependencies
+* `cargo component check` — checks the local package and all of its dependencies
   (including generated bindings) for errors.
 
 More commands will be added over time.
@@ -76,7 +76,7 @@ Only one _default_ interface may be specified.
 
 **Support for specifying version dependencies (e.g. `dep = "0.1.0"`) from a component registry will eventually be supported.**
 
-## Using `cargo component` with `rust-analyzer`  (_coming soon_)
+## Using `cargo component` with `rust-analyzer`
 
 [rust-analyzer](https://github.com/rust-analyzer/rust-analyzer) is an extremely
 useful tool for analyzing Rust code and is used in many different editors to provide
