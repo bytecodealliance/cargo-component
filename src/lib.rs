@@ -23,6 +23,8 @@ use wit_bindgen_gen_rust_wasm::Opts;
 use wit_component::ComponentEncoder;
 use wit_parser::Interface;
 
+mod target;
+
 pub mod commands;
 
 const COMPONENT_PATH: &str = "package.metadata.component";

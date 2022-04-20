@@ -18,6 +18,7 @@ pub use self::build::*;
 pub use self::check::*;
 pub use self::metadata::*;
 pub use self::new::*;
+use crate::target;
 
 fn root_manifest(manifest_path: Option<&Path>, config: &Config) -> Result<PathBuf> {
     match manifest_path {
@@ -136,6 +137,7 @@ impl CompileOptions {
         let spec = Packages::from_flags(self.workspace, self.exclude, self.packages)?;
 
         if self.targets.is_empty() {
+            target::install_wasm32_unknown_unknown()?;
             self.targets.push("wasm32-unknown-unknown".to_string());
         }
 
