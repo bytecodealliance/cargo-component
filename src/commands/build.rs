@@ -6,7 +6,6 @@ use std::path::PathBuf;
 
 /// Compile a WebAssembly component and all of its dependencies
 #[derive(Args)]
-#[clap(name = "build")]
 pub struct BuildCommand {
     /// Do not print cargo log messages
     #[clap(long = "quiet", short = 'q')]

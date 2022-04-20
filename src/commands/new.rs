@@ -9,7 +9,6 @@ use toml_edit::{table, value, Document, InlineTable, Item, Table, Value};
 
 /// Create a new WebAssembly component package at <path>
 #[derive(Args)]
-#[clap(name = "build")]
 pub struct NewCommand {
     /// Do not print cargo log messages
     #[clap(long = "quiet", short = 'q')]
