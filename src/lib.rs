@@ -525,7 +525,8 @@ fn create_component(
     let mut encoder = ComponentEncoder::default()
         .module(&module)
         .imports(&imports)
-        .exports(&exports);
+        .exports(&exports)
+        .validate(true);
 
     if let Some(interface) = &interface {
         encoder = encoder.interface(interface);

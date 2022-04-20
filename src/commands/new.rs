@@ -59,6 +59,10 @@ pub struct NewCommand {
     #[clap(long = "offline")]
     pub offline: bool,
 
+    /// Code editor to use for rust-analyzer integration, defaults to `vscode`
+    #[clap(long = "editor", value_name = "EDITOR", possible_values = ["vscode", "none"])]
+    pub editor: Option<String>,
+
     /// The path for the generated package.
     #[clap(value_name = "path")]
     pub path: String,
@@ -89,6 +93,7 @@ impl NewCommand {
         self.update_manifest(&out_dir)?;
         self.update_source_file(&out_dir)?;
         self.create_interface_file(&out_dir)?;
+        self.create_editor_settings_file(&out_dir)?;
 
         let package_name = if let Some(name) = &self.name {
             name
@@ -202,5 +207,32 @@ interface::export!(Component);
                 interface_path.display()
             )
         })
+    }
+
+    fn create_editor_settings_file(&self, out_dir: &Path) -> Result<()> {
+        match self.editor.as_deref() {
+            Some("vscode") | None => {
+                let settings_dir = out_dir.join(".vscode");
+                let settings_path = settings_dir.join("settings.json");
+
+                fs::create_dir_all(settings_dir)?;
+
+                fs::write(
+                    &settings_path,
+                    r#"{
+    "rust-analyzer.server.extraEnv": { "CARGO": "cargo-component" }
+}
+"#,
+                )
+                .with_context(|| {
+                    format!(
+                        "failed to write editor settings file `{}`",
+                        settings_path.display()
+                    )
+                })
+            }
+            Some("none") => Ok(()),
+            _ => unreachable!(),
+        }
     }
 }
