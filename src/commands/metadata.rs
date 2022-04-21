@@ -7,7 +7,6 @@ use std::path::PathBuf;
 /// Output the resolved dependencies of a package, the concrete used versions
 /// including overrides, in machine-readable format
 #[derive(Args)]
-#[clap(name = "build")]
 pub struct MetadataCommand {
     /// Do not print cargo log messages
     #[clap(long = "quiet", short = 'q')]

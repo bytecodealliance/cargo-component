@@ -27,6 +27,7 @@ mod target;
 
 pub mod commands;
 
+const WIT_BINDGEN_REPO: &str = "https://github.com/bytecodealliance/wit-bindgen";
 const COMPONENT_PATH: &str = "package.metadata.component";
 const DEPENDENCIES_PATH: &str = "package.metadata.component.dependencies";
 
@@ -430,12 +431,14 @@ fn generate_dependency(
         fs::write(
             &manifest_path,
             format!(
-                "\
-              [package]\n\
-              name = \"{name}\"\n\
-              version = \"{version}\"\n\
-              edition = \"2021\"\n\
-              "
+                r#"[package]
+name = "{name}"
+version = "{version}"
+edition = "2021"
+
+[dependencies]
+"wit-bindgen-rust" = {{ git = "{WIT_BINDGEN_REPO}", default_features = false }}
+"#
             ),
         )
         .with_context(|| format!("failed to create manifest `{}`", manifest_path.display()))?;

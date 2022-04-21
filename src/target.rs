@@ -1,5 +1,9 @@
 use anyhow::{bail, Result};
-use std::{env, path::PathBuf, process::{Command, Stdio}};
+use std::{
+    env,
+    path::PathBuf,
+    process::{Command, Stdio},
+};
 
 pub fn install_wasm32_unknown_unknown() -> Result<()> {
     let sysroot = get_sysroot()?;

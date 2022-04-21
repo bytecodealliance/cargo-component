@@ -6,7 +6,6 @@ use std::path::PathBuf;
 
 /// Check a local package and all of its dependencies for errors
 #[derive(Args)]
-#[clap(name = "build")]
 pub struct CheckCommand {
     /// Do not print cargo log messages
     #[clap(long = "quiet", short = 'q')]

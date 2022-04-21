@@ -7,9 +7,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-# TODO: this dependency is only needed for the canonical ABI exports
-# potentially we could generate them as an additional dependency instead
-wit-bindgen-rust = { git = "https://github.com/bytecodealliance/wit-bindgen"}
+wit-bindgen-rust = { git = "https://github.com/bytecodealliance/wit-bindgen", default_features = false }
 
 [package.metadata.component.dependencies]
 cache = { version = "0.1.0", path = "cache.wit" }
