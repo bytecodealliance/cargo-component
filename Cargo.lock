@@ -19,9 +19,9 @@ dependencies = [
 
 [[package]]
 name = "anyhow"
-version = "1.0.56"
+version = "1.0.57"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4361135be9122e0870de935d7c439aef945b9f9ddd4199a553b5270b49c82a27"
+checksum = "08f9b8508dccb7687a1d6c4ce66b2b0ecef467c94667de27d8d7fe1f8d2a9cdc"
 
 [[package]]
 name = "arrayvec"
@@ -208,16 +208,16 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "clap"
-version = "3.1.8"
+version = "3.1.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71c47df61d9e16dc010b55dba1952a57d8c215dbb533fd13cdd13369aac73b1c"
+checksum = "7c167e37342afc5f33fd87bbc870cedd020d2a6dffa05d45ccd9241fbdd146db"
 dependencies = [
  "atty",
  "bitflags",
  "clap_derive",
+ "clap_lex",
  "indexmap",
  "lazy_static",
- "os_str_bytes",
  "strsim",
  "termcolor",
  "textwrap",
@@ -234,6 +234,15 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "clap_lex"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "189ddd3b5d32a70b35e7686054371742a937b0d99128e76dde6340210e966669"
+dependencies = [
+ "os_str_bytes",
 ]
 
 [[package]]
@@ -399,9 +408,9 @@ dependencies = [
 
 [[package]]
 name = "filetime"
-version = "0.2.15"
+version = "0.2.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "975ccf83d8d9d0d84682850a38c8169027be83368805971cc4f238c2b245bc98"
+checksum = "c0408e2626025178a6a7f7ffc05a25bc47103229f19c113755de7bf63816290c"
 dependencies = [
  "cfg-if",
  "libc",
@@ -696,9 +705,9 @@ checksum = "884e2677b40cc8c339eaefcb701c32ef1fd2493d71118dc0ca4b6a736c93bd67"
 
 [[package]]
 name = "libc"
-version = "0.2.122"
+version = "0.2.124"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec647867e2bf0772e28c8bcde4f0d19a9216916e890543b5a03ed8ef27b8f259"
+checksum = "21a41fed9d98f27ab1c6d161da622a4fa35e8a54a8adc24bbf3ddd0ef70b0e50"
 
 [[package]]
 name = "libgit2-sys"
@@ -864,9 +873,6 @@ name = "os_str_bytes"
 version = "6.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8e22443d1643a904602595ba1cd8f7d896afe56d26712531c5ff73a15b2fbf64"
-dependencies = [
- "memchr",
-]
 
 [[package]]
 name = "percent-encoding"
@@ -1338,7 +1344,7 @@ dependencies = [
 [[package]]
 name = "wasm-encoder"
 version = "0.11.0"
-source = "git+https://github.com/bytecodealliance/wasm-tools#d2f7059c2e99d64901dbfbfb5f5e41eecee371d1"
+source = "git+https://github.com/bytecodealliance/wasm-tools#4f96e393e42c85709414703f67fec63dfd6a886b"
 dependencies = [
  "leb128",
 ]
@@ -1346,7 +1352,7 @@ dependencies = [
 [[package]]
 name = "wasmparser"
 version = "0.84.0"
-source = "git+https://github.com/bytecodealliance/wasm-tools#d2f7059c2e99d64901dbfbfb5f5e41eecee371d1"
+source = "git+https://github.com/bytecodealliance/wasm-tools#4f96e393e42c85709414703f67fec63dfd6a886b"
 dependencies = [
  "indexmap",
 ]
@@ -1354,7 +1360,7 @@ dependencies = [
 [[package]]
 name = "wast"
 version = "40.0.0"
-source = "git+https://github.com/bytecodealliance/wasm-tools#d2f7059c2e99d64901dbfbfb5f5e41eecee371d1"
+source = "git+https://github.com/bytecodealliance/wasm-tools#4f96e393e42c85709414703f67fec63dfd6a886b"
 dependencies = [
  "leb128",
  "memchr",
@@ -1364,7 +1370,7 @@ dependencies = [
 [[package]]
 name = "wat"
 version = "1.0.42"
-source = "git+https://github.com/bytecodealliance/wasm-tools#d2f7059c2e99d64901dbfbfb5f5e41eecee371d1"
+source = "git+https://github.com/bytecodealliance/wasm-tools#4f96e393e42c85709414703f67fec63dfd6a886b"
 dependencies = [
  "wast",
 ]
@@ -1403,7 +1409,7 @@ checksum = "712e227841d057c1ee1cd2fb22fa7e5a5461ae8e48fa2ca79ec42cfc1931183f"
 [[package]]
 name = "wit-bindgen-gen-core"
 version = "0.1.0"
-source = "git+https://github.com/peterhuene/wit-bindgen?branch=update-rust-codegen#1f2abc2b654fe64bb3da9a7a7a5536b0be72c372"
+source = "git+https://github.com/peterhuene/wit-bindgen?branch=update-rust-codegen#4c5430f66d42b037a3e770f9de0dca5914a24157"
 dependencies = [
  "anyhow",
  "wit-parser",
@@ -1412,7 +1418,7 @@ dependencies = [
 [[package]]
 name = "wit-bindgen-gen-rust"
 version = "0.1.0"
-source = "git+https://github.com/peterhuene/wit-bindgen?branch=update-rust-codegen#1f2abc2b654fe64bb3da9a7a7a5536b0be72c372"
+source = "git+https://github.com/peterhuene/wit-bindgen?branch=update-rust-codegen#4c5430f66d42b037a3e770f9de0dca5914a24157"
 dependencies = [
  "heck 0.3.3",
  "wit-bindgen-gen-core",
@@ -1421,7 +1427,7 @@ dependencies = [
 [[package]]
 name = "wit-bindgen-gen-rust-wasm"
 version = "0.1.0"
-source = "git+https://github.com/peterhuene/wit-bindgen?branch=update-rust-codegen#1f2abc2b654fe64bb3da9a7a7a5536b0be72c372"
+source = "git+https://github.com/peterhuene/wit-bindgen?branch=update-rust-codegen#4c5430f66d42b037a3e770f9de0dca5914a24157"
 dependencies = [
  "heck 0.3.3",
  "wit-bindgen-gen-core",
@@ -1431,7 +1437,7 @@ dependencies = [
 [[package]]
 name = "wit-component"
 version = "0.1.0"
-source = "git+https://github.com/peterhuene/wit-bindgen?branch=update-rust-codegen#1f2abc2b654fe64bb3da9a7a7a5536b0be72c372"
+source = "git+https://github.com/peterhuene/wit-bindgen?branch=update-rust-codegen#4c5430f66d42b037a3e770f9de0dca5914a24157"
 dependencies = [
  "anyhow",
  "clap",
@@ -1447,7 +1453,7 @@ dependencies = [
 [[package]]
 name = "wit-parser"
 version = "0.1.0"
-source = "git+https://github.com/peterhuene/wit-bindgen?branch=update-rust-codegen#1f2abc2b654fe64bb3da9a7a7a5536b0be72c372"
+source = "git+https://github.com/peterhuene/wit-bindgen?branch=update-rust-codegen#4c5430f66d42b037a3e770f9de0dca5914a24157"
 dependencies = [
  "anyhow",
  "id-arena",
