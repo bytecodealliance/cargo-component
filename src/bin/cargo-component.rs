@@ -1,6 +1,8 @@
 use anyhow::Result;
 use cargo::{CliError, Config};
-use cargo_component::commands::{BuildCommand, CheckCommand, MetadataCommand, NewCommand};
+use cargo_component::commands::{
+    AddCommand, BuildCommand, CheckCommand, MetadataCommand, NewCommand,
+};
 use clap::Parser;
 
 /// Cargo integration for WebAssembly components.
@@ -25,6 +27,7 @@ pub enum Command {
     Build(BuildCommand),
     Metadata(MetadataCommand),
     Check(CheckCommand),
+    Add(AddCommand),
 }
 
 fn main() -> Result<()> {
@@ -39,6 +42,7 @@ fn main() -> Result<()> {
             Command::Build(cmd) => cmd.exec(&mut config),
             Command::Metadata(cmd) => cmd.exec(&mut config),
             Command::Check(cmd) => cmd.exec(&mut config),
+            Command::Add(cmd) => cmd.exec(&mut config),
         },
     } {
         cargo::exit_with_error(
