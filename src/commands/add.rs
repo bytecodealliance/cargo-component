@@ -42,7 +42,7 @@ pub struct AddCommand {
     #[clap(long = "export")]
     pub export: bool,
 
-    /// Path to Cargo.toml
+    /// Path to the manifest to add a dependency to
     #[clap(long = "manifest-path", value_name = "PATH")]
     pub manifest_path: Option<PathBuf>,
 
