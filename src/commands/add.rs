@@ -161,6 +161,10 @@ impl AddCommand {
                     );
                 }
             }
+        } else {
+            if self.version.is_none() {
+                bail!("version not specified for import `{}`", self.name);
+            }
         }
 
         // Validate exports
