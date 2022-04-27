@@ -146,6 +146,11 @@ impl AddCommand {
     }
 
     fn validate(&self, metadata: &ComponentMetadata) -> Result<()> {
+        let path = PathBuf::from(&self.path);
+        if !path.exists() {
+            bail!("interface file `{}` doesn't exists", path.display());
+        }
+
         if self.export {
             // Validate default export
             if let Some(default) = &metadata.interface {
