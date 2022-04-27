@@ -52,7 +52,7 @@ pub struct AddCommand {
 
     /// Package to add the dependency to (see `cargo help pkgid`)
     #[clap(long = "package", short = 'p', value_name = "SPEC")]
-    pub packages: Vec<String>,
+    pub package: Option<String>,
 }
 
 impl AddCommand {
@@ -71,22 +71,13 @@ impl AddCommand {
         )?;
 
         let ws = workspace(self.manifest_path.as_deref(), config)?;
-        let package = if !self.packages.is_empty() {
-            if self.packages.len() > 1 {
-                bail!("only one package can be specified");
-            }
-
-            let pkg = Packages::from_flags(false, vec![], self.packages.clone())?;
+        let package = if let Some(ref inner) = self.package {
+            let pkg = Packages::from_flags(false, vec![], vec![inner.clone()])?;
             let packages = pkg.get_packages(&ws)?;
-
-            if packages.len() != 1 {
-                bail!("no packages found matching the specifier");
-            }
 
             packages[0]
         } else {
-            let package = ws.current()?;
-            package
+            ws.current()?
         };
 
         let component_metadata = ComponentMetadata::from_package(config, &package)?;
