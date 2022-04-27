@@ -9,11 +9,13 @@ use cargo::{core::Workspace, util::important_paths::find_root_manifest_for_wd, C
 use cargo_util::paths::normalize_path;
 use std::path::{Path, PathBuf};
 
+mod add;
 mod build;
 mod check;
 mod metadata;
 mod new;
 
+pub use self::add::*;
 pub use self::build::*;
 pub use self::check::*;
 pub use self::metadata::*;
