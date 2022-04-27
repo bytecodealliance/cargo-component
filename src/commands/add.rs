@@ -85,9 +85,13 @@ impl AddCommand {
         self.validate(&component_metadata)
             .and_then(|_| self.add(&package))?;
 
-        config
-            .shell()
-            .status("Added component dependency", format!("{}", self.name))?;
+        let status = if let Some(v) = self.version {
+            format!("interface {} v{} to dependencies", self.name, v)
+        } else {
+            format!("interface {} to dependencies", self.name)
+        };
+
+        config.shell().status("Adding", status)?;
 
         Ok(())
     }
