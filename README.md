@@ -40,6 +40,7 @@ The `cargo component` subcommand has some analogous commands to cargo itself:
   except it also includes the metadata of generated bindings.
 * `cargo component check` — checks the local package and all of its dependencies
   (including generated bindings) for errors.
+* `cargo component clippy` — same as `cargo clippy` but also checks generated bindings.
 
 More commands will be added over time.
 
