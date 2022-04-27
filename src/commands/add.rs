@@ -168,24 +168,22 @@ impl AddCommand {
         }
 
         // Validate exports
-        let exports: Vec<&str> = metadata
+        let export = metadata
             .exports
             .iter()
-            .map(|e| e.interface.name.as_str())
-            .collect();
+            .find(|e| self.name == e.interface.name);
 
-        if exports.contains(&self.name.as_str()) {
+        if export.is_some() {
             bail!("{} is already declared as an export", self.name);
         }
 
         // Validate imports
-        let imports: Vec<&str> = metadata
+        let import = metadata
             .imports
             .iter()
-            .map(|i| i.interface.name.as_str())
-            .collect();
+            .find(|i| i.interface.name == self.name);
 
-        if imports.contains(&self.name.as_str()) {
+        if import.is_some() {
             bail!("{} is already declared as an import", self.name);
         }
 
