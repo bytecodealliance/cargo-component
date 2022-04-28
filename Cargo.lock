@@ -247,9 +247,9 @@ dependencies = [
 
 [[package]]
 name = "combine"
-version = "4.6.3"
+version = "4.6.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50b727aacc797f9fc28e355d21f34709ac4fc9adecfe470ad07b8f4464f53062"
+checksum = "2a604e93b79d1808327a6fca85a6f2d69de66461e7620f5a4cbf5fb4d1d7c948"
 dependencies = [
  "bytes",
  "memchr",
@@ -351,9 +351,9 @@ dependencies = [
 
 [[package]]
 name = "curl-sys"
-version = "0.4.53+curl-7.82.0"
+version = "0.4.54+curl-7.83.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8092905a5a9502c312f223b2775f57ec5c5b715f9a15ee9d2a8591d1364a0352"
+checksum = "25debbc3365c3e7ee79e30918df5759e84dbd4485807a18829188abf1786ec4e"
 dependencies = [
  "cc",
  "libc",
@@ -749,9 +749,9 @@ dependencies = [
 
 [[package]]
 name = "libz-sys"
-version = "1.1.5"
+version = "1.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f35facd4a5673cb5a48822be2be1d4236c1c99cb4113cab7061ac720d5bf859"
+checksum = "92e7e15d7610cce1d9752e137625f14e61a28cd45929b6e12e47b50fe154ee2e"
 dependencies = [
  "cc",
  "libc",
@@ -1205,9 +1205,9 @@ dependencies = [
 
 [[package]]
 name = "tinyvec"
-version = "1.5.1"
+version = "1.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c1c1d5a42b6245520c249549ec267180beaffcc0615401ac8e31853d4b6d8d2"
+checksum = "87cc5ceb3875bb20c2890005a4e226a4651264a5c75edb2421b52861a0a0cb50"
 dependencies = [
  "tinyvec_macros",
 ]
@@ -1248,9 +1248,9 @@ dependencies = [
 
 [[package]]
 name = "unicode-bidi"
-version = "0.3.7"
+version = "0.3.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1a01404663e3db436ed2746d9fefef640d868edae3cceb81c3b8d5732fda678f"
+checksum = "099b7128301d285f79ddd55b9a83d5e6b9e97c92e0ea0daebee7263e932de992"
 
 [[package]]
 name = "unicode-normalization"
@@ -1344,7 +1344,7 @@ dependencies = [
 [[package]]
 name = "wasm-encoder"
 version = "0.11.0"
-source = "git+https://github.com/bytecodealliance/wasm-tools#4f96e393e42c85709414703f67fec63dfd6a886b"
+source = "git+https://github.com/bytecodealliance/wasm-tools#1430cc4cfabe83e63978071b041682d8450eccb8"
 dependencies = [
  "leb128",
 ]
@@ -1352,7 +1352,7 @@ dependencies = [
 [[package]]
 name = "wasmparser"
 version = "0.84.0"
-source = "git+https://github.com/bytecodealliance/wasm-tools#4f96e393e42c85709414703f67fec63dfd6a886b"
+source = "git+https://github.com/bytecodealliance/wasm-tools#1430cc4cfabe83e63978071b041682d8450eccb8"
 dependencies = [
  "indexmap",
 ]
@@ -1360,7 +1360,7 @@ dependencies = [
 [[package]]
 name = "wast"
 version = "40.0.0"
-source = "git+https://github.com/bytecodealliance/wasm-tools#4f96e393e42c85709414703f67fec63dfd6a886b"
+source = "git+https://github.com/bytecodealliance/wasm-tools#1430cc4cfabe83e63978071b041682d8450eccb8"
 dependencies = [
  "leb128",
  "memchr",
@@ -1370,7 +1370,7 @@ dependencies = [
 [[package]]
 name = "wat"
 version = "1.0.42"
-source = "git+https://github.com/bytecodealliance/wasm-tools#4f96e393e42c85709414703f67fec63dfd6a886b"
+source = "git+https://github.com/bytecodealliance/wasm-tools#1430cc4cfabe83e63978071b041682d8450eccb8"
 dependencies = [
  "wast",
 ]

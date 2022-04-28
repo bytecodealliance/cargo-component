@@ -1,7 +1,7 @@
 use anyhow::Result;
 use cargo::{CliError, Config};
 use cargo_component::commands::{
-    AddCommand, BuildCommand, CheckCommand, MetadataCommand, NewCommand,
+    AddCommand, BuildCommand, CheckCommand, ClippyCommand, MetadataCommand, NewCommand,
 };
 use clap::Parser;
 
@@ -28,6 +28,7 @@ pub enum Command {
     Metadata(MetadataCommand),
     Check(CheckCommand),
     Add(AddCommand),
+    Clippy(ClippyCommand),
 }
 
 fn main() -> Result<()> {
@@ -43,6 +44,7 @@ fn main() -> Result<()> {
             Command::Metadata(cmd) => cmd.exec(&mut config),
             Command::Check(cmd) => cmd.exec(&mut config),
             Command::Add(cmd) => cmd.exec(&mut config),
+            Command::Clippy(cmd) => cmd.exec(&mut config),
         },
     } {
         cargo::exit_with_error(

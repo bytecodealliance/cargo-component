@@ -12,12 +12,14 @@ use std::path::{Path, PathBuf};
 mod add;
 mod build;
 mod check;
+mod clippy;
 mod metadata;
 mod new;
 
 pub use self::add::*;
 pub use self::build::*;
 pub use self::check::*;
+pub use self::clippy::*;
 pub use self::metadata::*;
 pub use self::new::*;
 use crate::target;
