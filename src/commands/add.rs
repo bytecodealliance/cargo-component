@@ -80,10 +80,10 @@ impl AddCommand {
             ws.current()?
         };
 
-        let component_metadata = ComponentMetadata::from_package(config, &package)?;
+        let component_metadata = ComponentMetadata::from_package(config, package)?;
 
         self.validate(&component_metadata)
-            .and_then(|_| self.add(&package))?;
+            .and_then(|_| self.add(package))?;
 
         let status = if let Some(v) = self.version {
             format!("interface {} v{} to dependencies", self.name, v)
@@ -132,7 +132,7 @@ impl AddCommand {
         deps[&self.name] = value(InlineTable::from_iter(inline_table));
 
         if self.dry_run {
-            println!("{}", document.to_string());
+            println!("{}", document);
         } else {
             fs::write(&manifest_path, document.to_string()).with_context(|| {
                 format!(
@@ -161,10 +161,8 @@ impl AddCommand {
                     );
                 }
             }
-        } else {
-            if self.version.is_none() {
-                bail!("version not specified for import `{}`", self.name);
-            }
+        } else if self.version.is_none() {
+            bail!("version not specified for import `{}`", self.name);
         }
 
         // Validate exports
