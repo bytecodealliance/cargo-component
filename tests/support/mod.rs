@@ -25,6 +25,13 @@ pub fn root() -> Result<PathBuf> {
     Ok(path.join(&format!("t{}", id)))
 }
 
+pub fn create_root() -> Result<PathBuf> {
+    let root = root()?;
+    drop(fs::remove_dir_all(&root));
+    fs::create_dir_all(&root)?;
+    Ok(root)
+}
+
 pub fn cargo_component(args: &str) -> Command {
     let mut exe = std::env::current_exe().unwrap();
     exe.pop(); // remove test exe name
@@ -42,7 +49,7 @@ pub fn cargo_component(args: &str) -> Command {
 }
 
 pub fn project() -> Result<ProjectBuilder> {
-    ProjectBuilder::new(root()?)
+    ProjectBuilder::new(create_root()?)
 }
 
 pub struct Project {
@@ -55,8 +62,6 @@ pub struct ProjectBuilder {
 
 impl ProjectBuilder {
     pub fn new(root: PathBuf) -> Result<Self> {
-        drop(fs::remove_dir_all(&root));
-        fs::create_dir_all(&root)?;
         Ok(Self {
             project: Project { root },
         })
