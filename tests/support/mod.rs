@@ -8,7 +8,7 @@ use std::{
     process::Command,
     sync::atomic::{AtomicUsize, Ordering::SeqCst},
 };
-use wasmparser::{Chunk, Encoding, Parser, Payload};
+use wasmparser::{Chunk, Encoding, Parser, Payload, Validator, WasmFeatures};
 
 pub fn root() -> Result<PathBuf> {
     static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
@@ -137,10 +137,18 @@ impl Project {
     }
 }
 
-pub fn check_component(path: &Path) -> Result<()> {
+pub fn validate_component(path: &Path) -> Result<()> {
     let bytes = fs::read(path).with_context(|| format!("failed to read `{}`", path.display()))?;
-    let mut parser = Parser::new(0);
 
+    // Validate the bytes as either a component or a module
+    Validator::new_with_features(WasmFeatures {
+        component_model: true,
+        ..Default::default()
+    })
+    .validate_all(&bytes)?;
+
+    // Check that the bytes are for a component and not a module
+    let mut parser = Parser::new(0);
     match parser.parse(&bytes, true)? {
         Chunk::Parsed {
             payload:

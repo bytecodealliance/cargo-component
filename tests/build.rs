@@ -26,7 +26,7 @@ fn it_builds_debug() -> Result<()> {
         .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
         .success();
 
-    check_component(&project.debug_wasm("foo"))?;
+    validate_component(&project.debug_wasm("foo"))?;
 
     Ok(())
 }
@@ -40,7 +40,7 @@ fn it_builds_release() -> Result<()> {
         .stderr(contains("Finished release [optimized] target(s)"))
         .success();
 
-    check_component(&project.release_wasm("foo"))?;
+    validate_component(&project.release_wasm("foo"))?;
 
     Ok(())
 }
