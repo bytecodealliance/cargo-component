@@ -21,7 +21,7 @@ To install the `cargo component` subcommand, first you'll want to install
 you'll execute to  install the subcommand from the root of this repository:
 
 ```
-cargo install --path .
+cargo install --locked --path .
 ```
 
 The [currently published crate](https://crates.io/crates/cargo-component)
