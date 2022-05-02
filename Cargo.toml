@@ -19,3 +19,8 @@ log = "0.4.16"
 
 [features]
 default = ["pretty_env_logger"]
+
+[dev-dependencies]
+assert_cmd = "2.0.4"
+predicates = "2.1.1"
+wasmparser = { git = "https://github.com/bytecodealliance/wasm-tools", branch = "main" }

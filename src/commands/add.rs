@@ -6,7 +6,7 @@ use clap::Args;
 use std::{fs, path::PathBuf};
 use toml_edit::{table, value, Document, InlineTable, Value};
 
-/// Add a depency for a WebAssembly component
+/// Add a dependency for a WebAssembly component
 #[derive(Args)]
 pub struct AddCommand {
     /// Do not print cargo log messages
@@ -80,10 +80,10 @@ impl AddCommand {
             ws.current()?
         };
 
-        let component_metadata = ComponentMetadata::from_package(config, &package)?;
+        let component_metadata = ComponentMetadata::from_package(config, package)?;
 
         self.validate(&component_metadata)
-            .and_then(|_| self.add(&package))?;
+            .and_then(|_| self.add(package))?;
 
         let status = if let Some(v) = self.version {
             format!("interface {} v{} to dependencies", self.name, v)
@@ -132,7 +132,7 @@ impl AddCommand {
         deps[&self.name] = value(InlineTable::from_iter(inline_table));
 
         if self.dry_run {
-            println!("{}", document.to_string());
+            println!("{}", document);
         } else {
             fs::write(&manifest_path, document.to_string()).with_context(|| {
                 format!(
@@ -148,7 +148,7 @@ impl AddCommand {
     fn validate(&self, metadata: &ComponentMetadata) -> Result<()> {
         let path = PathBuf::from(&self.path);
         if !path.exists() {
-            bail!("interface file `{}` doesn't exists", path.display());
+            bail!("interface file `{}` does not exist", path.display());
         }
 
         if self.export {
@@ -156,15 +156,13 @@ impl AddCommand {
             if let Some(default) = &metadata.interface {
                 if self.version.is_none() || self.name == default.interface.name {
                     bail!(
-                        "{} is already declared as the default interface",
+                        "dependency `{}` already exists as the default interface",
                         default.interface.name
                     );
                 }
             }
-        } else {
-            if self.version.is_none() {
-                bail!("version not specified for import `{}`", self.name);
-            }
+        } else if self.version.is_none() {
+            bail!("version not specified for import `{}`", self.name);
         }
 
         // Validate exports
@@ -174,7 +172,7 @@ impl AddCommand {
             .find(|e| self.name == e.interface.name);
 
         if export.is_some() {
-            bail!("{} is already declared as an export", self.name);
+            bail!("dependency `{}` already exists as an export", self.name);
         }
 
         // Validate imports
@@ -184,7 +182,7 @@ impl AddCommand {
             .find(|i| i.interface.name == self.name);
 
         if import.is_some() {
-            bail!("{} is already declared as an import", self.name);
+            bail!("dependency `{}` already exists as an import", self.name);
         }
 
         Ok(())

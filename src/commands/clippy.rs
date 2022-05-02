@@ -1,9 +1,13 @@
 use super::CheckCommand;
 use crate::commands::{workspace, CompileOptions};
-use anyhow::{bail, Result};
+use anyhow::{anyhow, Result};
 use cargo::{core::compiler::CompileMode, Config};
+use cargo_util::paths::resolve_executable;
 use clap::Args;
-use std::{env, path::PathBuf};
+use std::{
+    env,
+    path::{Path, PathBuf},
+};
 
 /// Checks a package to catch common mistakes and improve your Rust code.
 #[derive(Args)]
@@ -78,10 +82,12 @@ impl ClippyCommand {
             path.set_extension("exe");
         }
 
-        if !path.is_file() {
-            bail!("clippy driver was not found: run `rustup component add clippy` to install");
+        if path.is_file() {
+            return Ok(path);
         }
 
-        Ok(path)
+        resolve_executable(Path::new("clippy-driver")).map_err(|_| {
+            anyhow!("clippy driver was not found: run `rustup component add clippy` to install")
+        })
     }
 }

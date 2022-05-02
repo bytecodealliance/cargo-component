@@ -49,7 +49,7 @@ pub struct NewCommand {
     pub frozen: bool,
 
     /// Set the resulting package name, defaults to the directory name
-    #[clap(long = "name", value_name = "NAME", possible_values = ["2015", "2018", "2021"])]
+    #[clap(long = "name", value_name = "NAME")]
     pub name: Option<String>,
 
     /// Require Cargo.lock is up to date

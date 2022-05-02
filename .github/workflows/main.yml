@@ -1,0 +1,56 @@
+name: CI
+on:
+  push:
+    branches: [main]
+    tags: ['[0-9]*']
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    name: Run tests
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install Rust
+      run: rustup update stable --no-self-update && rustup default stable && rustup target add wasm32-unknown-unknown
+      shell: bash
+    - name: Build cargo-component
+      run: cargo build
+    - name: Test cargo-component
+      run: cargo test
+
+  example:
+    name: Build example component
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install Rust
+      run: rustup update stable --no-self-update && rustup default stable && rustup target add wasm32-unknown-unknown
+    - name: Install cargo-component (debug)
+      run: cargo install --locked --debug --path .
+    - name: Build the example component
+      run: (cd example && cargo component build --release -v)
+
+  install:
+    name: Install cargo-component
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install Rust
+      run: rustup update stable --no-self-update && rustup default stable
+    - name: Install cargo-component
+      run: cargo install --locked --path .
+
+  rustfmt:
+    name: Format source code
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install Rust
+      run: rustup update stable && rustup default stable && rustup component add rustfmt
+    - name: Run `cargo fmt`
+      run: cargo fmt -- --check
