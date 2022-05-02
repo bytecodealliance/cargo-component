@@ -8,6 +8,7 @@
   </p>
 
   <p>
+    <a href="https://github.com/bytecodealliance/cargo-component/actions?query=workflow%3ACI"><img src="https://github.com/bytecodealliance/cargo-component/workflows/CI/badge.svg" alt="build status" /></a>
     <a href="https://crates.io/crates/cargo-component"><img src="https://img.shields.io/crates/v/cargo-component.svg?style=flat-square" alt="Crates.io version" /></a>
     <a href="https://crates.io/crates/cargo-component"><img src="https://img.shields.io/crates/d/cargo-component.svg?style=flat-square" alt="Download" /></a>
     <a href="https://bytecodealliance.github.io/cargo-component/"><img src="https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square" alt="docs.rs docs" /></a>
@@ -147,12 +148,13 @@ responding to it in at most a few days.
 Code is required to be formatted with the current Rust stable's `cargo fmt`
 command. This is checked on CI.
 
-### Continuous integration (_coming soon_)
+### Continuous integration
 
 The CI for the `cargo component` repository is relatively significant. It tests
-changes on Windows, macOS, and Linux. It also performs a "dry run" of the
-release process to ensure that release binaries can be built and are ready to be
-published.
+changes on Windows, macOS, and Linux.
+
+It also performs a "dry run" of the release process to ensure that release binaries
+can be built and are ready to be published (_coming soon_).
 
 ### Publishing a new version (_coming soon_)
 
