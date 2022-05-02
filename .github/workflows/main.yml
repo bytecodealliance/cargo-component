@@ -16,7 +16,7 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Install Rust
-      run: rustup update stable --no-self-update && rustup default stable
+      run: rustup update stable --no-self-update && rustup default stable && rustup target add wasm32-unknown-unknown
       shell: bash
     - name: Build cargo-component
       run: cargo build
@@ -29,9 +29,9 @@ jobs:
     steps:
     - uses: actions/checkout@v2
     - name: Install Rust
-      run: rustup update stable --no-self-update && rustup default stable
+      run: rustup update stable --no-self-update && rustup default stable && rustup target add wasm32-unknown-unknown
     - name: Install cargo-component (debug)
-      run: cargo install --debug --path .
+      run: cargo install --locked --debug --path .
     - name: Build the example component
       run: (cd example && cargo component build --release -v)
 
@@ -43,7 +43,7 @@ jobs:
     - name: Install Rust
       run: rustup update stable --no-self-update && rustup default stable
     - name: Install cargo-component
-      run: cargo install --path .
+      run: cargo install --locked --path .
 
   rustfmt:
     name: Format source code
