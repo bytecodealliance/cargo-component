@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use assert_cmd::prelude::OutputAssertExt;
 use std::{
     env, fs,
@@ -8,6 +8,7 @@ use std::{
     process::Command,
     sync::atomic::{AtomicUsize, Ordering::SeqCst},
 };
+use wasmparser::{Chunk, Encoding, Parser, Payload};
 
 pub fn root() -> Result<PathBuf> {
     static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
@@ -126,9 +127,28 @@ impl Project {
 
     pub fn cargo_component(&self, cmd: &str) -> Command {
         let mut cmd = cargo_component(cmd);
-        cmd.current_dir(&self.root)
-            .env("CARGO_HOME", self.root.join("cargo-home"));
-
+        cmd.current_dir(&self.root);
         cmd
+    }
+}
+
+pub fn check_component(path: &Path) -> Result<()> {
+    let bytes = fs::read(path).with_context(|| format!("failed to read `{}`", path.display()))?;
+    let mut parser = Parser::new(0);
+
+    match parser.parse(&bytes, true)? {
+        Chunk::Parsed {
+            payload:
+                Payload::Version {
+                    encoding: Encoding::Component,
+                    ..
+                },
+            ..
+        } => Ok(()),
+        Chunk::Parsed { payload, .. } => Err(anyhow::anyhow!(
+            "expected component version payload, got {:?}",
+            payload
+        )),
+        Chunk::NeedMoreData(_) => unreachable!(),
     }
 }

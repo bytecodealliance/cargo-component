@@ -1,4 +1,5 @@
 use crate::support::*;
+use anyhow::Result;
 use assert_cmd::prelude::*;
 use predicates::str::contains;
 
@@ -14,4 +15,32 @@ fn help() {
             ))
             .success();
     }
+}
+
+#[test]
+fn it_builds_debug() -> Result<()> {
+    let project = Project::new("foo")?;
+    project
+        .cargo_component("build")
+        .assert()
+        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .success();
+
+    check_component(&project.debug_wasm("foo"))?;
+
+    Ok(())
+}
+
+#[test]
+fn it_builds_release() -> Result<()> {
+    let project = Project::new("foo")?;
+    project
+        .cargo_component("build --release")
+        .assert()
+        .stderr(contains("Finished release [optimized] target(s)"))
+        .success();
+
+    check_component(&project.release_wasm("foo"))?;
+
+    Ok(())
 }

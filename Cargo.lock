@@ -170,6 +170,7 @@ dependencies = [
  "predicates",
  "pretty_env_logger",
  "toml_edit",
+ "wasmparser 0.84.0 (git+https://github.com/bytecodealliance/wasm-tools?branch=main)",
  "wit-bindgen-gen-core",
  "wit-bindgen-gen-rust-wasm",
  "wit-component",
@@ -1449,6 +1450,14 @@ dependencies = [
 [[package]]
 name = "wasmparser"
 version = "0.84.0"
+source = "git+https://github.com/bytecodealliance/wasm-tools?branch=main#cf9460bc7125b99c2611379b0a219562a6aafeae"
+dependencies = [
+ "indexmap",
+]
+
+[[package]]
+name = "wasmparser"
+version = "0.84.0"
 source = "git+https://github.com/bytecodealliance/wasm-tools#1430cc4cfabe83e63978071b041682d8450eccb8"
 dependencies = [
  "indexmap",
@@ -1542,7 +1551,7 @@ dependencies = [
  "indexmap",
  "log",
  "wasm-encoder",
- "wasmparser",
+ "wasmparser 0.84.0 (git+https://github.com/bytecodealliance/wasm-tools)",
  "wat",
  "wit-parser",
 ]
