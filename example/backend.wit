@@ -1,2 +1,2 @@
 /// Fetch the content bytes of the given URL.
-fetch: function(url: string) -> list<u8>
+fetch: func(url: string) -> list<u8>
