@@ -44,6 +44,10 @@ pub struct CheckCommand {
     #[clap(long = "frozen")]
     pub frozen: bool,
 
+    /// Do not abort the build as soon as there is an error (unstable)
+    #[clap(long = "keep-going")]
+    pub keep_going: bool,
+
     /// Check only this package's library
     #[clap(long = "lib")]
     pub lib: bool,
@@ -142,6 +146,7 @@ impl From<CheckCommand> for CompileOptions {
             no_default_features: cmd.no_default_features,
             lib: cmd.lib,
             all_targets: cmd.all_targets,
+            keep_going: cmd.keep_going,
         }
     }
 }

@@ -203,7 +203,7 @@ interface::export!(Component);
     }
 
     fn create_interface_file(&self, out_dir: &Path) -> Result<()> {
-        const DEFAULT_INTERFACE_FILE: &str = "say-something: function() -> string\n";
+        const DEFAULT_INTERFACE_FILE: &str = "say-something: func() -> string\n";
 
         let interface_path = out_dir.join("interface.wit");
         fs::write(&interface_path, DEFAULT_INTERFACE_FILE).with_context(|| {

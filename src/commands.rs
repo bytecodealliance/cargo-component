@@ -130,6 +130,7 @@ struct CompileOptions {
     no_default_features: bool,
     lib: bool,
     all_targets: bool,
+    keep_going: bool,
 }
 
 impl CompileOptions {
@@ -147,7 +148,8 @@ impl CompileOptions {
 
         log::debug!("using targets {:#?}", self.targets);
 
-        let mut build_config = BuildConfig::new(config, self.jobs, &self.targets, mode)?;
+        let mut build_config =
+            BuildConfig::new(config, self.jobs, self.keep_going, &self.targets, mode)?;
 
         build_config.message_format = message_format(self.message_format.as_deref())?;
         build_config.requested_profile =

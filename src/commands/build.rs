@@ -80,6 +80,10 @@ pub struct BuildCommand {
     #[clap(long = "frozen")]
     pub frozen: bool,
 
+    /// Do not abort the build as soon as there is an error (unstable)
+    #[clap(long = "keep-going")]
+    pub keep_going: bool,
+
     /// Require Cargo.lock is up to date
     #[clap(long = "locked")]
     pub locked: bool,
@@ -141,6 +145,7 @@ impl From<BuildCommand> for CompileOptions {
             no_default_features: cmd.no_default_features,
             lib: cmd.lib,
             all_targets: cmd.all_targets,
+            keep_going: cmd.keep_going,
         }
     }
 }
