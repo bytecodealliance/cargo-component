@@ -46,7 +46,7 @@ foreknowledge of how the WebAssembly modules are implemented.
 
 ### WebAssembly Component Model
 
-The WebAssembly _component model_ proposal provides a way to
+The WebAssembly component model proposal provides a way to
 simplify the process of building WebAssembly applications and services
 out of reusable pieces of functionality using a variety of source
 languages, all while still maintaining the portability and
@@ -72,8 +72,17 @@ memory usage.
 
 ### Cargo Component
 
-`cargo component` is intended to be the go-to tool for authoring
-WebAssembly components for Rust developers.
+A primary goal of `cargo component` is to try to imagine what
+first-class support for WebAssembly components might look like for Rust.
+
+That means being able to reference WebAssembly components via
+`Cargo.toml` and have WebAssembly component dependencies used in the
+same way as Rust crate dependencies:
+
+* add a dependency on a WebAssembly component to `Cargo.toml`
+* reference it like you would an external crate (via `<name>::...`) in
+  your source code
+* build using `cargo component build` and out pops your component!
 
 To be able to use a WebAssembly component from any particular
 programming language, _bindings_ must be created by translating
@@ -87,23 +96,10 @@ including Rust.
 `wit-bindgen` even provides procedural macros to generate the
 bindings "inline" with the component's source code.
 
-However, a primary goal of `cargo component` is to try to imagine what
-first-class support for WebAssembly components might look like for Rust
-and that means being able to reference WebAssembly components via
-`Cargo.toml` and have WebAssembly component dependencies used in the
-same way as Rust crate dependencies.
-
-That is why `cargo component` is effectively a drop-in replacement for
-`cargo`, but for producing WebAssembly components. It doesn't use
-procedural macros or `build.rs` to generate bindings. Instead, it
-generates them into external crates that are automatically provided
-to the Rust compiler when building your component's project.
-
-This allows for the experience Rust developers are accustomed to:
-
-* add a dependency on a WebAssembly component to `Cargo.toml`
-* reference it like a normal external crate (via `<name>::...`)
-* build using `cargo component build` and out pops your component!
+Unlike `wit-bindgen`, `cargo component` doesn't use procedural macros
+or a `build.rs` file to generate bindings. Instead, it generates them
+into external crates that are automatically provided to the Rust
+compiler when building your component's project.
 
 This approach does come with some downsides, however. Commands like
 `cargo metadata` and `cargo check` used by many tools (e.g.
@@ -148,6 +144,49 @@ The [currently published crate](https://crates.io/crates/cargo-component)
 on crates.io is a nonfunctional placeholder and these instructions will be
 updated to install the crates.io package once a proper release is made.
 
+## Getting Started
+
+Use `cargo component new` to create a simple "hello world" style component.
+
+This will generate an `interface.wit` file that describes the component's
+default interface:
+
+```wit
+say-something: func() -> string
+```
+
+The component will export a `say-something` function returning a string.
+
+The implementation of the component will be in `src/lib.rs`:
+
+```rust
+use interface::Interface;
+
+struct Component;
+
+impl Interface for Component {
+    fn say_something() -> String {
+        "Hello, World!".to_string()
+    }
+}
+
+interface::export!(Component);
+```
+
+Here `interface` is the bindings crate that `cargo component` generated for you.
+
+The `export!` macro informs the bindings that the `Component` type implements
+the interface.
+
+The name of the crate is dependent upon the name specified in `Cargo.toml`:
+
+```toml
+# ...
+
+[package.metadata.component.dependencies]
+interface = { path = "interface.wit", export = true }
+```
+
 ## Usage
 
 The `cargo component` subcommand has some analogous commands to cargo itself:
@@ -164,7 +203,7 @@ The `cargo component` subcommand has some analogous commands to cargo itself:
 
 More commands will be added over time.
 
-## Specifying component dependencies
+## Specifying Dependencies
 
 Component dependencies are interfaces defined in [wit](https://github.com/bytecodealliance/wit-bindgen)
 that are listed in a special section in the project's `Cargo.toml` file: 
@@ -198,7 +237,7 @@ Only one _default_ interface may be specified.
 
 **Support for specifying version dependencies (e.g. `dep = "0.1.0"`) from a component registry will eventually be supported.**
 
-## Using `cargo component` with `rust-analyzer`
+## Using `rust-analyzer`
 
 [rust-analyzer](https://github.com/rust-analyzer/rust-analyzer) is an extremely
 useful tool for analyzing Rust code and is used in many different editors to provide
@@ -240,7 +279,7 @@ the Bytecode Alliance's [Code of Conduct](CODE_OF_CONDUCT.md) and
 1. The `cargo component` subcommand is written in Rust, so you'll want
   [Rust installed](https://www.rust-lang.org/tools/install) first.
 
-### Getting the code
+### Getting the Code
 
 You'll clone the code via `git`:
 
@@ -248,7 +287,7 @@ You'll clone the code via `git`:
 git clone https://github.com/bytecodealliance/cargo-component
 ```
 
-### Testing changes
+### Testing Changes
 
 We'd like tests ideally to be written for all changes. Test can be run via:
 
@@ -258,18 +297,18 @@ cargo test
 
 You'll be adding tests primarily to the `tests/` directory.
 
-### Submitting changes
+### Submitting Changes
 
 Changes to `cargo component` are managed through pull requests (PRs). Everyone is
 welcome to submit a pull request! We'll try to get to reviewing it or
 responding to it in at most a few days.
 
-### Code formatting
+### Code Formatting
 
 Code is required to be formatted with the current Rust stable's `cargo fmt`
 command. This is checked on CI.
 
-### Continuous integration
+### Continuous Integration
 
 The CI for the `cargo component` repository is relatively significant. It tests
 changes on Windows, macOS, and Linux.
@@ -277,7 +316,7 @@ changes on Windows, macOS, and Linux.
 It also performs a "dry run" of the release process to ensure that release binaries
 can be built and are ready to be published (_coming soon_).
 
-### Publishing a new version (_coming soon_)
+### Publishing (_coming soon_)
 
 Publication of this crate is entirely automated via CI. A publish happens
 whenever a tag is pushed to the repository, so to publish a new version you'll
