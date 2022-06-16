@@ -20,6 +20,8 @@
 `cargo component` is a `cargo` subcommand for creating [WebAssembly components](https://github.com/WebAssembly/component-model)
 using Rust as the component's implementation language.
 
+### Motivation
+
 Today, developers that target WebAssembly typically compile a monolithic
 program written in a single source language to a WebAssembly module. The
 WebAssembly module can then be used in all sorts of places: from web
@@ -42,7 +44,9 @@ While it is possible to solve these challenges with the existing
 WebAssembly standard, doing so is burdensome, error-prone, and requires
 foreknowledge of how the WebAssembly modules are implemented.
 
-And so was born the WebAssembly _component model_ proposal: a way to
+### WebAssembly Component Model
+
+The WebAssembly _component model_ proposal provides a way to
 simplify the process of building WebAssembly applications and services
 out of reusable pieces of functionality using a variety of source
 languages, all while still maintaining the portability and
@@ -66,10 +70,10 @@ different components might have a shared dependency, hosts may even
 share the same implementation of that dependency to save on host
 memory usage.
 
+### Cargo Component
+
 `cargo component` is intended to be the go-to tool for authoring
 WebAssembly components for Rust developers.
-
-## Motivation
 
 To be able to use a WebAssembly component from any particular
 programming language, _bindings_ must be created by translating
