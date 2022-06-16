@@ -15,6 +15,121 @@
   </p>
 </div>
 
+## Overview
+
+`cargo component` is a `cargo` subcommand for creating [WebAssembly components](https://github.com/WebAssembly/component-model)
+using Rust as the component's implementation language.
+
+Today, developers that target WebAssembly typically compile a monolithic
+program written in a single source language to a WebAssembly module. The
+WebAssembly module can then be used in all sorts of places: from web
+browsers to cloud compute platforms. WebAssembly was intentionally designed
+to provide the portability and security properties required for such
+environments.
+
+However, WebAssembly modules are not easily _composed_ with other modules
+into a single program or service. WebAssembly only has a few primitive
+value types (integer and floating point types) and those are inadequate
+to describe the complex types that developers would desire to exchange
+between modules.
+
+To make things even more challenging, WebAssembly modules typically define
+their own local linear memories, meaning one module can't access the
+(conceptual) _address space_ of another. Something must sit between the
+two modules to facilitate communication when pointers are passed around.
+
+While it is possible to solve these challenges with the existing
+WebAssembly standard, doing so is burdensome, error-prone, and requires
+foreknowledge of how the WebAssembly modules are implemented.
+
+And so was born the WebAssembly _component model_ proposal: a way to
+simplify the process of building WebAssembly applications and services
+out of reusable pieces of functionality using a variety of source
+languages, all while still maintaining the portability and
+security properties of WebAssembly.
+
+At its most fundamental level, WebAssembly components may be used to
+wrap a WebAssembly module in a way that describes how its _interface_,
+a set of functions using complex value types (e.g. strings, variants,
+records, lists, etc.), is translated to and from the lower-level
+representation required of the WebAssembly module.
+
+This enables WebAssembly runtimes to know specifically how they must
+facilitate the exchange of data between the discrete linear memories
+of components, eliminating the need for developers to do so by hand.
+
+Additionally, components can describe their dependencies in a way 
+that modules simply cannot today; they can even control how their
+dependencies are _instantiated_, enabling a component to
+_virtualize_ functionality needed by a dependency. And because
+different components might have a shared dependency, hosts may even
+share the same implementation of that dependency to save on host
+memory usage.
+
+`cargo component` is intended to be the go-to tool for authoring
+WebAssembly components for Rust developers.
+
+## Motivation
+
+To be able to use a WebAssembly component from any particular
+programming language, _bindings_ must be created by translating
+a WebAssembly component's _interface_ to a representation that
+a specific programming language can understand.
+
+Tools like [`wit-bindgen`](https://github.com/bytecodealliance/wit-bindgen)
+exist to generate those bindings for different languages,
+including Rust.
+
+`wit-bindgen` even provides procedural macros to generate the
+bindings "inline" with the component's source code.
+
+However, a primary goal of `cargo component` is to try to imagine what
+first-class support for WebAssembly components might look like for Rust
+and that means being able to reference WebAssembly components via
+`Cargo.toml` and have WebAssembly component dependencies used in the
+same way as Rust crate dependencies.
+
+That is why `cargo component` is effectively a drop-in replacement for
+`cargo`, but for producing WebAssembly components. It doesn't use
+procedural macros or `build.rs` to generate bindings. Instead, it
+generates them into external crates that are automatically provided
+to the Rust compiler when building your component's project.
+
+This allows for the experience Rust developers are accustomed to:
+
+* add a dependency on a WebAssembly component to `Cargo.toml`
+* reference it like a normal external crate (via `<name>::...`)
+* build using `cargo component build` and out pops your component!
+
+This approach does come with some downsides, however. Commands like
+`cargo metadata` and `cargo check` used by many tools (e.g.
+`rust-analyzer`) simply don't work because they aren't aware of the
+generated bindings. That is why replacement commands such as
+`cargo component metadata` and `cargo component check` exist.
+
+The hope is that one day (in the not too distant future...) that
+WebAssembly components might become an important part of the Rust
+ecosystem such that `cargo` itself might support them.
+
+Until that time, there's `cargo component`!
+
+## Status
+
+A quick note on the implementation status of the component model
+proposal.
+
+At this time of this writing, no WebAssembly runtimes have fully
+implemented the component model proposal.
+
+[Wasmtime](https://github.com/bytecodealliance/wasmtime)
+has implementation efforts underway to support it, but it's still a
+_work-in-progress_.
+
+Until runtime support grows and additional tools are implemented
+for linking components together, the usefulness of `cargo component`
+today is effectively limited to creating components that runtime
+and tooling developers can use to test their implementations.
+
 ## Installation
 
 To install the `cargo component` subcommand, first you'll want to install
@@ -104,7 +219,9 @@ To configure rust-analyzer to use the `cargo-component` executable, set the
 "rust-analyzer.server.extraEnv": { "CARGO": "cargo-component" }
 ```
 
-For Visual Studio Code, this can be done in a `.vscode/settings.json` file.
+By default, `cargo component new` will configure Visual Studio Code to use `cargo component` by
+creating a `.vscode/settings.json` file for you. To prevent this, pass `--editor none` to
+`cargo component new`.
 
 Please check the documentation for rust-analyzer regarding how to set settings for other IDEs.
 
