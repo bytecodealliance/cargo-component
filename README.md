@@ -20,6 +20,13 @@
 `cargo component` is a `cargo` subcommand for creating [WebAssembly components](https://github.com/WebAssembly/component-model)
 using Rust as the component's implementation language.
 
+### Notice
+
+`cargo component` is considered to be experimental and is _not_ currently
+stable in terms of the code it supports building.
+
+Upgrading `cargo component` may cause build errors in the future.
+
 ### Motivation
 
 Today, developers that target WebAssembly typically compile a monolithic
