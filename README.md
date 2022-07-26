@@ -137,6 +137,16 @@ for linking components together, the usefulness of `cargo component`
 today is effectively limited to creating components that runtime
 and tooling developers can use to test their implementations.
 
+## WASI Support
+
+The current WASI preview does not yet support the WebAssembly component model.
+
+For that reason, `cargo component` currently targets `wasm32-unknown-unknown`
+by default.
+
+Once a WASI preview is available that supports the component model, `cargo component`
+will target WASI by default at that time.
+
 ## Installation
 
 To install the `cargo component` subcommand, first you'll want to install
