@@ -144,8 +144,10 @@ The current WASI preview does not yet support the WebAssembly component model.
 For that reason, `cargo component` currently targets `wasm32-unknown-unknown`
 by default.
 
-Once a WASI preview is available that supports the component model, `cargo component`
+Once a WASI preview is available that [supports the component model][1], `cargo component`
 will target WASI by default at that time.
+
+[1]: https://github.com/WebAssembly/meetings/blob/main/wasi/2022/presentations/2022-06-30-gohman-wasi-preview2.pdf
 
 ## Installation
 
