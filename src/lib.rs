@@ -28,101 +28,72 @@ mod target;
 pub mod commands;
 
 const WIT_BINDGEN_REPO: &str = "https://github.com/bytecodealliance/wit-bindgen";
-const METADATA_PATH: &str = "package.metadata";
-const COMPONENT_PATH: &str = "package.metadata.component";
-const DEPENDENCIES_PATH: &str = "package.metadata.component.dependencies";
+const METADATA_SECTION_PATH: &str = "package.metadata";
+const COMPONENT_SECTION_PATH: &str = "package.metadata.component";
+const IMPORTS_SECTION_PATH: &str = "package.metadata.component.imports";
+const EXPORTS_SECTION_PATH: &str = "package.metadata.component.exports";
 
 /// Represents a dependency on a WebAssembly interface file.
 #[derive(Debug)]
 pub struct InterfaceDependency {
-    /// The version string for the interface.
-    pub version: String,
     /// The path to the interface definition file.
     pub path: PathBuf,
     /// The interface definition.
     pub interface: Interface,
 }
 
-enum Dependency {
-    Default { path: PathBuf, interface: Interface },
-    Export(InterfaceDependency),
-    Import(InterfaceDependency),
-}
-
-impl Dependency {
-    fn new(config: &Config, dir: &Path, name: &str, value: &Value) -> Result<Self> {
-        match value {
+impl InterfaceDependency {
+    fn new(
+        config: &Config,
+        manifest_dir: &Path,
+        name: &str,
+        value: &Value,
+        section: &str,
+    ) -> Result<Self> {
+        let path = match value {
             Value::String(s) => {
-                // Setting is of the form "<name>" = "<version>"
-                // TODO: remove this in the future when version references (i.e. registry
-                // references) are supported.
-                bail!("referencing `{name}` by version `{s}` is not yet supported in section `{DEPENDENCIES_PATH}`")
+                // Setting of the form: `dependency = "<path>|<version>"
+                // Currently, we assume the value is a path to a wit file
+                // In the future, this might be a version number from a registry
+                manifest_dir.join(s)
             }
             Value::Table(t) => {
-                // Setting is of the form `<name> = { ...}`
-                let mut version = None;
+                // Setting is of the form: `<name> = { ...}`
                 let mut path = None;
-                let mut export = None;
-                let mut interface = None;
 
                 for (k, v) in t {
                     match k.as_str() {
-                        "version" => {
-                            version = Some(v.as_str().ok_or_else(|| {
-                                anyhow!("expected a string for `version` of dependency `{name}` in section `{DEPENDENCIES_PATH}`")
-                            })?);
-                        }
                         "path" => {
-                            let p = dir.join(v.as_str().ok_or_else(|| {
-                                    anyhow!("expected a string for `path` of dependency `{name}` in section `{DEPENDENCIES_PATH}`")
-                                })?);
-
-                            let i = Interface::parse_file(&p).with_context(|| {
-                                format!("failed to parse interface file `{path}` for dependency `{name}`", path = p.display())
-                            })?;
-
-                            path = Some(p);
-                            interface = Some(i);
+                            path = Some(manifest_dir.join(v.as_str().ok_or_else(|| {
+                                    anyhow!("expected a string for `path` of dependency `{name}` in section `{section}`")
+                                })?));
                         }
-                        "export" => {
-                            export = Some(v.as_bool().ok_or_else(|| {
-                                anyhow!("expected a boolean for `export` of dependency `{name}` in section `{DEPENDENCIES_PATH}`")
-                            })?);
-                        }
-                        k => config.shell().warn(format!("unsupported key `{k}` in reference `{name}` in section `{DEPENDENCIES_PATH}`"))?,
+                        k => config.shell().warn(format!(
+                            "unsupported key `{k}` in reference `{name}` in section `{section}`"
+                        ))?,
                     }
                 }
 
-                match (version, path, export) {
-                    (Some(version), Some(path), export) => {
-                        let mut interface = interface.unwrap();
-                        interface.module = Some(format!("{name}-{version}", name = interface.name));
-                        interface.name = name.to_string();
-
-                        let file = InterfaceDependency {
-                            version: version.to_string(),
-                            path,
-                            interface,
-                        };
-
-                        if let Some(true) = export {
-                            Ok(Self::Export(file))
-                        } else {
-                            Ok(Self::Import(file))
-                        }
-                    }
-                    (None, Some(path), Some(true)) => {
-                        let mut interface = interface.unwrap();
-                        interface.name = name.to_string();
-
-                        Ok(Self::Default { path, interface })
-                    }
-                    (None, _, _) => bail!("setting `version` is missing for dependency `{name}` in section `{DEPENDENCIES_PATH}`"),
-                    (_, None, _) => bail!("setting `path` is missing for dependency `{name}` in section `{DEPENDENCIES_PATH}`"),
-                }
+                path.ok_or_else(|| {
+                    anyhow!(
+                        "setting `path` is missing for dependency `{name}` in section `{section}`"
+                    )
+                })?
             }
-            _ => bail!("expected a string or table for dependency `{name}` in section `{DEPENDENCIES_PATH}`"),
-        }
+            _ => bail!("expected a string or table for dependency `{name}` in section `{section}`"),
+        };
+
+        let mut interface = Interface::parse_file(&path).with_context(|| {
+            format!(
+                "failed to parse interface file `{path}` for dependency `{name}`",
+                path = path.display()
+            )
+        })?;
+
+        interface.module = Some(name.to_string());
+        interface.name = name.to_string();
+
+        Ok(Self { path, interface })
     }
 }
 
@@ -131,8 +102,8 @@ impl Dependency {
 pub struct ComponentMetadata {
     /// The last modified time of the component metadata.
     pub last_modified: SystemTime,
-    /// The default interface for the component.
-    pub interface: Option<InterfaceDependency>,
+    /// The default exported interface for the component.
+    pub default: Option<InterfaceDependency>,
     /// The import dependencies for the component.
     pub imports: Vec<InterfaceDependency>,
     /// The export dependencies for the component.
@@ -142,13 +113,13 @@ pub struct ComponentMetadata {
 impl ComponentMetadata {
     /// Creates a new component metadata for the given package.
     pub fn from_package(config: &Config, package: &Package) -> Result<Self> {
-        let path = package.manifest_path();
-        let last_modified = last_modified_time(path)?;
-        let dir = path.parent().unwrap();
+        let manifest_path = package.manifest_path();
+        let last_modified = last_modified_time(manifest_path)?;
+        let manifest_dir = manifest_path.parent().unwrap();
 
         log::debug!(
             "searching for component metadata in manifest `{path}`",
-            path = path.display()
+            path = manifest_path.display()
         );
 
         let mut names: HashSet<InternedString> = package
@@ -160,76 +131,113 @@ impl ComponentMetadata {
 
         let metadata = package.manifest().custom_metadata().ok_or_else(|| {
             anyhow!(
-                "manifest `{path}` does not contain a `{METADATA_PATH}` section",
-                path = path.display(),
+                "manifest `{path}` does not contain a `{METADATA_SECTION_PATH}` section",
+                path = manifest_path.display(),
             )
         })?;
 
         let component = metadata.get("component").ok_or_else(|| {
             anyhow!(
-                "manifest `{path}` does not contain a `{COMPONENT_PATH}` section",
-                path = path.display(),
+                "manifest `{path}` does not contain a `{COMPONENT_SECTION_PATH}` section",
+                path = manifest_path.display(),
             )
         })?;
 
-        let mut interface = None;
-        let mut imports = Vec::new();
-        let mut exports = Vec::new();
-        if let Some(dependencies) = component.get("dependencies") {
-            let dependencies = dependencies.as_table().ok_or_else(|| {
-                anyhow!(
-                    "setting `{DEPENDENCIES_PATH}` in manifest `{path}` is required to be a table",
-                    path = path.display()
-                )
-            })?;
-
-            for (k, v) in dependencies {
-                if !names.insert(InternedString::new(k)) {
-                    bail!("duplicate dependency named `{k}` in section `{DEPENDENCIES_PATH}`");
-                }
-
-                match Dependency::new(config, dir, k, v)? {
-                    Dependency::Default { path, interface: i } => {
-                        log::debug!(
-                            "found default interface dependency `{path}`",
-                            path = path.display()
-                        );
-                        if interface.is_some() {
-                            bail!("a default interface cannot be specified more than once in section `{DEPENDENCIES_PATH}`");
-                        }
-
-                        interface = Some(InterfaceDependency {
-                            version: package.version().to_string(),
-                            path,
-                            interface: i,
-                        });
-                    }
-                    Dependency::Export(i) => {
-                        log::debug!(
-                            "found export interface dependency `{path}` ({version})",
-                            path = i.path.display(),
-                            version = i.version
-                        );
-                        exports.push(i);
-                    }
-                    Dependency::Import(i) => {
-                        log::debug!(
-                            "found import interface dependency `{path}` ({version})",
-                            path = i.path.display(),
-                            version = i.version
-                        );
-                        imports.push(i);
-                    }
-                }
-            }
+        // Warn if there's a legacy `dependencies` section for now
+        if component.get("dependencies").is_some() {
+            config.shell().warn(format!(
+                "manifest `{path}` contains a `{COMPONENT_SECTION_PATH}.dependencies` section and needs to be upgraded",
+                path = manifest_path.display(),
+            ))?;
         }
+
+        let imports = Self::read_dependencies(
+            manifest_path,
+            config,
+            manifest_dir,
+            &mut names,
+            component,
+            "imports",
+            IMPORTS_SECTION_PATH,
+        )?;
+        let mut exports = Self::read_dependencies(
+            manifest_path,
+            config,
+            manifest_dir,
+            &mut names,
+            component,
+            "exports",
+            EXPORTS_SECTION_PATH,
+        )?;
+
+        let default = match component.get("default") {
+            Some(v) => {
+                let name = v.as_str().ok_or_else(|| {
+                    anyhow!("expected a string for `default` in section `{COMPONENT_SECTION_PATH}`")
+                })?;
+
+                let index = exports.iter().position(|e| e.interface.name == name).ok_or_else(|| {
+                    anyhow!("default interface `{name}` does not exist in section `{EXPORTS_SECTION_PATH}`")
+                })?;
+
+                // Remove the default interface from the exports list and clear its module name as
+                // it will be exported from the component itself
+                let mut default = exports.swap_remove(index);
+                default.interface.module = None;
+
+                Some(default)
+            }
+            None => None,
+        };
+
+        // TODO: find default export
 
         Ok(Self {
             last_modified,
-            interface,
+            default,
             imports,
             exports,
         })
+    }
+
+    fn read_dependencies(
+        manifest_path: &Path,
+        config: &Config,
+        manifest_dir: &Path,
+        names: &mut HashSet<InternedString>,
+        metadata: &Value,
+        name: &str,
+        section: &str,
+    ) -> Result<Vec<InterfaceDependency>> {
+        match metadata.get(name) {
+            Some(v) => {
+                let dependencies = v.as_table().ok_or_else(|| {
+                    anyhow!(
+                        "section `{section}` manifest `{path}` is required to be a table",
+                        path = manifest_path.display()
+                    )
+                })?;
+
+                let mut interfaces = Vec::with_capacity(dependencies.len());
+                for (k, v) in dependencies {
+                    if !names.insert(InternedString::new(k)) {
+                        bail!("duplicate dependency named `{k}` in section `{section}`");
+                    }
+
+                    let interface = InterfaceDependency::new(config, manifest_dir, k, v, section)?;
+
+                    log::debug!(
+                        "found interface dependency `{path}`",
+                        path = interface.path.display(),
+                    );
+
+                    interfaces.push(interface);
+                }
+
+                Ok(interfaces)
+            }
+            None => Ok(Vec::new()),
+        }
     }
 }
 
@@ -292,7 +300,7 @@ pub fn generate_dependencies(
     let last_modified_exe = last_modified_time(std::env::current_exe()?)?;
 
     metadata
-        .interface
+        .default
         .iter()
         .map(|i| (Direction::Export, i))
         .chain(metadata.imports.iter().map(|i| (Direction::Import, i)))
@@ -345,8 +353,9 @@ fn generate_dependency(
     last_modified_exe: SystemTime,
     force_generation: bool,
 ) -> Result<cargo::core::Dependency> {
+    // TODO: when sourcing dependencies from a registry, use actual version information.
+    let version = "0.1.0";
     let name = &dependency.interface.name;
-    let version = &dependency.version;
     let path = &dependency.path;
 
     let package_dir = target_dir.join(name);
@@ -375,7 +384,7 @@ fn generate_dependency(
 
     if force_generation || manifest_modified || input_modified || exe_modified {
         log::debug!(
-            "generating dependency `{name}` ({version}) at `{path}` because {reason}",
+            "generating dependency `{name}` at `{path}` because {reason}",
             path = package_dir.display(),
             reason = if force_generation {
                 "generation was forced"
@@ -492,13 +501,13 @@ fn create_component(
     }
 
     let ComponentMetadata {
-        interface,
+        default,
         imports,
         exports,
         ..
     } = metadata;
 
-    let interface = interface.map(to_interface);
+    let interface = default.map(to_interface);
     let imports: Vec<_> = imports.into_iter().map(to_interface).collect();
     let exports: Vec<_> = exports.into_iter().map(to_interface).collect();
     let module = fs::read(&dep_path).with_context(|| {
