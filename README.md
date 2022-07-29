@@ -202,8 +202,8 @@ The name of the crate is dependent upon the name specified in `Cargo.toml`:
 ```toml
 # ...
 
-[package.metadata.component.dependencies]
-interface = { path = "interface.wit", export = true }
+[package.metadata.component.exports]
+interface = "interface.wit"
 ```
 
 ## Usage
@@ -224,35 +224,35 @@ More commands will be added over time.
 
 ## Specifying Dependencies
 
-Component dependencies are interfaces defined in [wit](https://github.com/bytecodealliance/wit-bindgen)
-that are listed in a special section in the project's `Cargo.toml` file: 
+Dependencies are interfaces defined in [wit](https://github.com/bytecodealliance/wit-bindgen)
+that are listed in special sections in the project's `Cargo.toml` file.
+
+To import interfaces from your component, use the
+`[package.metadata.component.imports]` table.
+
+To export interfaces from your component, use the
+`[package.metadata.component.exports]` table.
+
+Dependencies are specified much like normal dependencies in `Cargo.toml`:
 
 ```toml
-[package.metadata.component.dependencies]
-```
-
-Dependencies are specified much like normal path dependencies in `Cargo.toml`:
-
-```toml
-binding-name = { version = "0.1.0", path = "path/to/interface.wit" }
-```
-
-By default, dependencies specified this way are for _imported_ interfaces.
-
-To specify an _exported_ interface, use the `export` key set to `true`:
-
-```toml
-binding-name = { version = "0.1.0", path = "path/to/interface.wit", export = true }
+binding-name = "path/to/interface.wit"
 ```
 
 To export a _default_ interface (i.e. one where the interface's functions
-are directly exported by the component itself), omit the `version` key:
+are directly exported by the component itself), set the `default` key to
+the name of the entry in the `[package.metadata.component.exports]` table.
 
 ```toml
-binding-name = { path = "path/to/interface.wit", export = true }
+[package.metadata.component]
+default = "foo"
 ```
 
-Only one _default_ interface may be specified.
+The `cargo component new` command generates a component project that initially
+only exports a default interface.
+
+Use the `cargo component add` command to easily add dependencies to your
+`Cargo.toml`.
 
 **Support for specifying version dependencies (e.g. `dep = "0.1.0"`) from a component registry will eventually be supported.**
 
