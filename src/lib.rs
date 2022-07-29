@@ -28,6 +28,7 @@ mod target;
 pub mod commands;
 
 const WIT_BINDGEN_REPO: &str = "https://github.com/bytecodealliance/wit-bindgen";
+const METADATA_PATH: &str = "package.metadata";
 const COMPONENT_PATH: &str = "package.metadata.component";
 const DEPENDENCIES_PATH: &str = "package.metadata.component.dependencies";
 
@@ -55,12 +56,7 @@ impl Dependency {
                 // Setting is of the form "<name>" = "<version>"
                 // TODO: remove this in the future when version references (i.e. registry
                 // references) are supported.
-                bail!(
-                    "referencing `{}` by version `{}` is not yet supported in section `{}`",
-                    name,
-                    s,
-                    DEPENDENCIES_PATH,
-                )
+                bail!("referencing `{name}` by version `{s}` is not yet supported in section `{DEPENDENCIES_PATH}`")
             }
             Value::Table(t) => {
                 // Setting is of the form `<name> = { ...}`
@@ -73,28 +69,16 @@ impl Dependency {
                     match k.as_str() {
                         "version" => {
                             version = Some(v.as_str().ok_or_else(|| {
-                                anyhow!(
-                                    "expected a string for `version` of dependency `{}` in section `{}`",
-                                    name,
-                                    DEPENDENCIES_PATH
-                                )
+                                anyhow!("expected a string for `version` of dependency `{name}` in section `{DEPENDENCIES_PATH}`")
                             })?);
                         }
                         "path" => {
                             let p = dir.join(v.as_str().ok_or_else(|| {
-                                    anyhow!(
-                                        "expected a string for `path` of dependency `{}` in section `{}`",
-                                        name,
-                                        DEPENDENCIES_PATH
-                                    )
+                                    anyhow!("expected a string for `path` of dependency `{name}` in section `{DEPENDENCIES_PATH}`")
                                 })?);
 
                             let i = Interface::parse_file(&p).with_context(|| {
-                                format!(
-                                    "failed to parse interface file `{}` for dependency `{}`",
-                                    p.display(),
-                                    name
-                                )
+                                format!("failed to parse interface file `{path}` for dependency `{name}`", path = p.display())
                             })?;
 
                             path = Some(p);
@@ -102,17 +86,10 @@ impl Dependency {
                         }
                         "export" => {
                             export = Some(v.as_bool().ok_or_else(|| {
-                                anyhow!(
-                                    "expected a boolean for `export` of dependency `{}` in section `{}`",
-                                    name,
-                                    DEPENDENCIES_PATH
-                                )
+                                anyhow!("expected a boolean for `export` of dependency `{name}` in section `{DEPENDENCIES_PATH}`")
                             })?);
                         }
-                        k => config.shell().warn(format!(
-                            "unsupported key `{}` in reference `{}` in section `{}`",
-                            k, name, DEPENDENCIES_PATH
-                        ))?,
+                        k => config.shell().warn(format!("unsupported key `{k}` in reference `{name}` in section `{DEPENDENCIES_PATH}`"))?,
                     }
                 }
 
@@ -140,23 +117,11 @@ impl Dependency {
 
                         Ok(Self::Default { path, interface })
                     }
-                    (None, _, _) => bail!(
-                        "setting `version` is missing for dependency `{}` in section `{}`",
-                        name,
-                        DEPENDENCIES_PATH,
-                    ),
-                    (_, None, _) => bail!(
-                        "setting `path` is missing for dependency `{}` in section `{}`",
-                        name,
-                        DEPENDENCIES_PATH,
-                    ),
+                    (None, _, _) => bail!("setting `version` is missing for dependency `{name}` in section `{DEPENDENCIES_PATH}`"),
+                    (_, None, _) => bail!("setting `path` is missing for dependency `{name}` in section `{DEPENDENCIES_PATH}`"),
                 }
             }
-            _ => bail!(
-                "expected a string or table for dependency `{}` in section `{}`",
-                name,
-                DEPENDENCIES_PATH
-            ),
+            _ => bail!("expected a string or table for dependency `{name}` in section `{DEPENDENCIES_PATH}`"),
         }
     }
 }
@@ -195,17 +160,15 @@ impl ComponentMetadata {
 
         let metadata = package.manifest().custom_metadata().ok_or_else(|| {
             anyhow!(
-                "manifest `{}` does not contain a `{}` section",
-                path.display(),
-                COMPONENT_PATH,
+                "manifest `{path}` does not contain a `{METADATA_PATH}` section",
+                path = path.display(),
             )
         })?;
 
         let component = metadata.get("component").ok_or_else(|| {
             anyhow!(
-                "manifest `{}` does not contain a `{}` section",
-                path.display(),
-                COMPONENT_PATH,
+                "manifest `{path}` does not contain a `{COMPONENT_PATH}` section",
+                path = path.display(),
             )
         })?;
 
@@ -215,19 +178,14 @@ impl ComponentMetadata {
         if let Some(dependencies) = component.get("dependencies") {
             let dependencies = dependencies.as_table().ok_or_else(|| {
                 anyhow!(
-                    "setting `{}` in manifest `{}` is required to be a table",
-                    DEPENDENCIES_PATH,
-                    path.display()
+                    "setting `{DEPENDENCIES_PATH}` in manifest `{path}` is required to be a table",
+                    path = path.display()
                 )
             })?;
 
             for (k, v) in dependencies {
                 if !names.insert(InternedString::new(k)) {
-                    bail!(
-                        "duplicate dependency named `{}` in section `{}`",
-                        k,
-                        DEPENDENCIES_PATH
-                    );
+                    bail!("duplicate dependency named `{k}` in section `{DEPENDENCIES_PATH}`");
                 }
 
                 match Dependency::new(config, dir, k, v)? {
@@ -237,10 +195,7 @@ impl ComponentMetadata {
                             path = path.display()
                         );
                         if interface.is_some() {
-                            bail!(
-                                "a default interface cannot be specified more than once in section `{}`",
-                                DEPENDENCIES_PATH
-                            );
+                            bail!("a default interface cannot be specified more than once in section `{DEPENDENCIES_PATH}`");
                         }
 
                         interface = Some(InterfaceDependency {
@@ -304,12 +259,17 @@ fn update_dependencies(
 fn last_modified_time(path: impl AsRef<Path>) -> Result<SystemTime> {
     let path = path.as_ref();
     path.metadata()
-        .with_context(|| format!("failed to read metadata for `{}`", path.display()))?
+        .with_context(|| {
+            format!(
+                "failed to read metadata for `{path}`",
+                path = path.display()
+            )
+        })?
         .modified()
         .with_context(|| {
             format!(
-                "failed to retrieve last modified time for `{}`",
-                path.display()
+                "failed to retrieve last modified time for `{path}`",
+                path = path.display()
             )
         })
 }
@@ -355,14 +315,21 @@ fn is_wasm_module(path: impl AsRef<Path>) -> Result<bool> {
     let path = path.as_ref();
 
     let mut file = File::open(path)
-        .with_context(|| format!("failed to open `{}` for read", path.display()))?;
+        .with_context(|| format!("failed to open `{path}` for read", path = path.display()))?;
 
     let mut bytes = [0u8; 8];
-    file.read(&mut bytes)
-        .with_context(|| format!("failed to read file header for `{}`", path.display()))?;
+    file.read(&mut bytes).with_context(|| {
+        format!(
+            "failed to read file header for `{path}`",
+            path = path.display()
+        )
+    })?;
 
     if bytes[0..4] != [0x0, b'a', b's', b'm'] {
-        bail!("expected `{}` to be a WebAssembly module", path.display());
+        bail!(
+            "expected `{path}` to be a WebAssembly module",
+            path = path.display()
+        );
     }
 
     // Check for the module header version
@@ -386,8 +353,8 @@ fn generate_dependency(
 
     fs::create_dir_all(&package_dir).with_context(|| {
         format!(
-            "failed to create package directory `{}`",
-            package_dir.display()
+            "failed to create package directory `{path}`",
+            path = package_dir.display()
         )
     })?;
 
@@ -441,12 +408,17 @@ edition = "2021"
 "#
             ),
         )
-        .with_context(|| format!("failed to create manifest `{}`", manifest_path.display()))?;
+        .with_context(|| {
+            format!(
+                "failed to create manifest `{path}`",
+                path = manifest_path.display()
+            )
+        })?;
 
         fs::create_dir_all(&source_dir).with_context(|| {
             format!(
-                "failed to create source directory `{}`",
-                source_dir.display()
+                "failed to create source directory `{path}`",
+                path = source_dir.display()
             )
         })?;
 
@@ -464,7 +436,12 @@ edition = "2021"
             &source_path,
             files.iter().map(|(_, bytes)| bytes).next().unwrap(),
         )
-        .with_context(|| format!("failed to create source file `{}`", source_path.display()))?;
+        .with_context(|| {
+            format!(
+                "failed to create source file `{path}`",
+                path = source_path.display()
+            )
+        })?;
     } else {
         log::debug!(
             "dependency `{name}` ({version}) at `{path}` is up-to-date",
@@ -524,8 +501,12 @@ fn create_component(
     let interface = interface.map(to_interface);
     let imports: Vec<_> = imports.into_iter().map(to_interface).collect();
     let exports: Vec<_> = exports.into_iter().map(to_interface).collect();
-    let module = fs::read(&dep_path)
-        .with_context(|| anyhow!("failed to read output module `{}`", dep_path.display()))?;
+    let module = fs::read(&dep_path).with_context(|| {
+        anyhow!(
+            "failed to read output module `{path}`",
+            path = dep_path.display()
+        )
+    })?;
 
     let mut encoder = ComponentEncoder::default()
         .module(&module)
@@ -537,12 +518,17 @@ fn create_component(
         encoder = encoder.interface(interface);
     }
 
-    fs::write(&dep_path, encoder.encode()?)
-        .with_context(|| anyhow!("failed to write output component `{}`", dep_path.display()))?;
+    fs::write(&dep_path, encoder.encode()?).with_context(|| {
+        anyhow!(
+            "failed to write output component `{path}`",
+            path = dep_path.display()
+        )
+    })?;
 
-    config
-        .shell()
-        .status("Creating", format!("component {}", target_path.display()))?;
+    config.shell().status(
+        "Creating",
+        format!("component {path}", path = target_path.display()),
+    )?;
 
     // Finally, link the dep path to the target path to create the final target
     link_or_copy(dep_path, target_path)
