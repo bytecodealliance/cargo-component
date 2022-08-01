@@ -57,10 +57,10 @@ fn checks_for_duplicate_exports() -> Result<()> {
     let project = Project::new("foo")?;
 
     project
-        .cargo_component("add --path interface.wit --default export")
+        .cargo_component("add --path interface.wit --direct-export export")
         .assert()
         .stderr(contains(
-            "a default interface has already been specified in the manifest",
+            "a directly exported interface has already been specified in the manifest",
         ))
         .failure();
 

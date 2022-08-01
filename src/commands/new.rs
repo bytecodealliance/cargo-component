@@ -151,7 +151,7 @@ impl NewCommand {
 
         let mut component = Table::new();
         component.set_implicit(true);
-        component["default"] = value("interface");
+        component["direct-interface-export"] = value("interface");
         component["exports"] = Item::Table(exports);
 
         let mut metadata = Table::new();

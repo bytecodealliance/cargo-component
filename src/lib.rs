@@ -102,8 +102,8 @@ impl InterfaceDependency {
 pub struct ComponentMetadata {
     /// The last modified time of the component metadata.
     pub last_modified: SystemTime,
-    /// The default exported interface for the component.
-    pub default: Option<InterfaceDependency>,
+    /// The directly exported interface for the component.
+    pub direct_export: Option<InterfaceDependency>,
     /// The import dependencies for the component.
     pub imports: Vec<InterfaceDependency>,
     /// The export dependencies for the component.
@@ -170,31 +170,29 @@ impl ComponentMetadata {
             EXPORTS_SECTION_PATH,
         )?;
 
-        let default = match component.get("default") {
+        let direct_export = match component.get("direct-interface-export") {
             Some(v) => {
                 let name = v.as_str().ok_or_else(|| {
-                    anyhow!("expected a string for `default` in section `{COMPONENT_SECTION_PATH}`")
+                    anyhow!("expected a string for `direct-interface-export` in section `{COMPONENT_SECTION_PATH}`")
                 })?;
 
                 let index = exports.iter().position(|e| e.interface.name == name).ok_or_else(|| {
-                    anyhow!("default interface `{name}` does not exist in section `{EXPORTS_SECTION_PATH}`")
+                    anyhow!("direct interface export `{name}` does not exist in section `{EXPORTS_SECTION_PATH}`")
                 })?;
 
-                // Remove the default interface from the exports list and clear its module name as
+                // Remove the direct interface from the exports list and clear its module name as
                 // it will be exported from the component itself
-                let mut default = exports.swap_remove(index);
-                default.interface.module = None;
+                let mut export = exports.swap_remove(index);
+                export.interface.module = None;
 
-                Some(default)
+                Some(export)
             }
             None => None,
         };
 
-        // TODO: find default export
-
         Ok(Self {
             last_modified,
-            default,
+            direct_export,
             imports,
             exports,
         })
@@ -300,7 +298,7 @@ pub fn generate_dependencies(
     let last_modified_exe = last_modified_time(std::env::current_exe()?)?;
 
     metadata
-        .default
+        .direct_export
         .iter()
         .map(|i| (Direction::Export, i))
         .chain(metadata.imports.iter().map(|i| (Direction::Import, i)))
@@ -501,13 +499,13 @@ fn create_component(
     }
 
     let ComponentMetadata {
-        default,
+        direct_export,
         imports,
         exports,
         ..
     } = metadata;
 
-    let interface = default.map(to_interface);
+    let direct_export = direct_export.map(to_interface);
     let imports: Vec<_> = imports.into_iter().map(to_interface).collect();
     let exports: Vec<_> = exports.into_iter().map(to_interface).collect();
     let module = fs::read(&dep_path).with_context(|| {
@@ -523,8 +521,8 @@ fn create_component(
         .exports(&exports)
         .validate(true);
 
-    if let Some(interface) = &interface {
-        encoder = encoder.interface(interface);
+    if let Some(direct_export) = &direct_export {
+        encoder = encoder.interface(direct_export);
     }
 
     fs::write(&dep_path, encoder.encode()?).with_context(|| {

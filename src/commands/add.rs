@@ -38,9 +38,9 @@ pub struct AddCommand {
     #[clap(long = "export")]
     pub export: bool,
 
-    /// Sets the dependency as the default interface (implies `--export`).
-    #[clap(long = "default")]
-    pub default: bool,
+    /// Sets the dependency as the directly exported interface (implies `--export`).
+    #[clap(long = "direct-export")]
+    pub direct_export: bool,
 
     /// Path to the manifest to add a dependency to
     #[clap(long = "manifest-path", value_name = "PATH")]
@@ -58,7 +58,7 @@ pub struct AddCommand {
 impl AddCommand {
     /// Executes the command
     pub fn exec(mut self, config: &mut Config) -> Result<()> {
-        if self.default {
+        if self.direct_export {
             self.export = true;
         }
 
@@ -121,8 +121,8 @@ impl AddCommand {
                 )
             })?;
 
-        if self.default {
-            component["default"] = value(&self.name);
+        if self.direct_export {
+            component["direct-interface-export"] = value(&self.name);
         }
 
         let deps = if self.export {
@@ -197,8 +197,8 @@ impl AddCommand {
             );
         }
 
-        if self.default && metadata.default.is_some() {
-            bail!("a default interface has already been specified in the manifest");
+        if self.direct_export && metadata.direct_export.is_some() {
+            bail!("a directly exported interface has already been specified in the manifest");
         }
 
         Ok(())
