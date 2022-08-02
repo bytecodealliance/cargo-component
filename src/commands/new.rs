@@ -146,20 +146,13 @@ impl NewCommand {
         doc["lib"] = table();
         doc["lib"]["crate-type"] = value(Value::from_iter(["cdylib"].into_iter()));
 
-        let interface = InlineTable::from_iter(
-            [
-                ("path", Value::from("interface.wit")),
-                ("export", Value::from(true)),
-            ]
-            .into_iter(),
-        );
-
-        let mut dependencies = Table::new();
-        dependencies["interface"] = Item::Value(Value::InlineTable(interface));
+        let mut exports = Table::new();
+        exports["interface"] = value("interface.wit");
 
         let mut component = Table::new();
         component.set_implicit(true);
-        component["dependencies"] = Item::Table(dependencies);
+        component["direct-interface-export"] = value("interface");
+        component["exports"] = Item::Table(exports);
 
         let mut metadata = Table::new();
         metadata.set_implicit(true);
