@@ -168,7 +168,7 @@ updated to install the crates.io package once a proper release is made.
 Use `cargo component new` to create a simple "hello world" style component.
 
 This will generate an `interface.wit` file that describes the component's
-default interface:
+directly exported interface:
 
 ```wit
 say-something: func() -> string
@@ -239,17 +239,18 @@ Dependencies are specified much like normal dependencies in `Cargo.toml`:
 binding-name = "path/to/interface.wit"
 ```
 
-To export a _default_ interface (i.e. one where the interface's functions
-are directly exported by the component itself), set the `default` key to
-the name of the entry in the `[package.metadata.component.exports]` table.
+To _directly_ export an interface (i.e. one where the interface's functions
+are exported from the component rather than as an instance export), set the
+`direct-interface-export` key to the name of the entry in the
+`[package.metadata.component.exports]` table.
 
 ```toml
 [package.metadata.component]
-default = "foo"
+direct-interface-export = "foo"
 ```
 
 The `cargo component new` command generates a component project that initially
-only exports a default interface.
+only exports an interface directly.
 
 Use the `cargo component add` command to easily add dependencies to your
 `Cargo.toml`.
