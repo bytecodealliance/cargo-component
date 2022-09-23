@@ -4,15 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-anyhow = "1.0.59"
-cargo = "0.63.1"
-cargo-util = "0.2.0"
-clap = { version = "3.2.16", features = ["derive"] }
+anyhow = "1.0.65"
+cargo = "0.65.0"
+cargo-util = "0.2.1"
+clap = { version = "3.2.22", features = ["derive"] }
 toml_edit = { version = "0.14.4", features = ["easy"] }
-wit-parser = { git = "https://github.com/bytecodealliance/wit-bindgen", rev = "f7f95ba" }
-wit-bindgen-gen-core = { git = "https://github.com/bytecodealliance/wit-bindgen", rev = "f7f95ba" }
-wit-bindgen-gen-rust-wasm = { git = "https://github.com/bytecodealliance/wit-bindgen", rev = "f7f95ba" }
-wit-component = { git = "https://github.com/bytecodealliance/wit-bindgen", rev = "f7f95ba" }
+wit-parser = { git = "https://github.com/bytecodealliance/wit-bindgen", rev = "5e90ee0" }
+wit-bindgen-core = { git = "https://github.com/bytecodealliance/wit-bindgen", rev = "5e90ee0" }
+wit-bindgen-gen-guest-rust = { git = "https://github.com/bytecodealliance/wit-bindgen", rev = "5e90ee0" }
+wit-component = { git = "https://github.com/bytecodealliance/wit-bindgen", rev = "5e90ee0" }
 pretty_env_logger = { version = "0.4.0", optional = true }
 log = "0.4.17"
 
@@ -22,4 +22,4 @@ default = ["pretty_env_logger"]
 [dev-dependencies]
 assert_cmd = "2.0.4"
 predicates = "2.1.1"
-wasmparser = { git = "https://github.com/bytecodealliance/wasm-tools", branch = "main" }
+wasmparser = "0.91.0"

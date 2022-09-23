@@ -38,7 +38,7 @@ pub struct CheckCommand {
 
     /// Number of parallel jobs, defaults to # of CPUs
     #[clap(long = "jobs", short = 'j', value_name = "N")]
-    pub jobs: Option<u32>,
+    pub jobs: Option<i32>,
 
     /// Require Cargo.lock and cache are up to date
     #[clap(long = "frozen")]

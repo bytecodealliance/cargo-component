@@ -25,7 +25,7 @@ pub struct BuildCommand {
 
     /// Number of parallel jobs, defaults to # of CPUs
     #[clap(long = "jobs", short = 'j', value_name = "N")]
-    pub jobs: Option<u32>,
+    pub jobs: Option<i32>,
 
     /// Build only this package's library
     #[clap(long = "lib")]
