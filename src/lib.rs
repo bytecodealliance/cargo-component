@@ -18,8 +18,8 @@ use std::{
     time::SystemTime,
 };
 use toml_edit::easy::Value;
-use wit_bindgen_gen_core::{Direction, Files, Generator};
-use wit_bindgen_gen_rust_wasm::Opts;
+use wit_bindgen_core::{Direction, Files, Generator};
+use wit_bindgen_gen_guest_rust::Opts;
 use wit_component::ComponentEncoder;
 use wit_parser::Interface;
 
@@ -411,7 +411,7 @@ version = "{version}"
 edition = "2021"
 
 [dependencies]
-"wit-bindgen-rust" = {{ git = "{WIT_BINDGEN_REPO}", default_features = false }}
+"wit-bindgen-guest-rust" = {{ git = "{WIT_BINDGEN_REPO}", default_features = false }}
 "#
             ),
         )

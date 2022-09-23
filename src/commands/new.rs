@@ -160,7 +160,7 @@ impl NewCommand {
         metadata["component"] = Item::Table(component);
 
         doc["package"]["metadata"] = Item::Table(metadata);
-        doc["dependencies"]["wit-bindgen-rust"] = value(InlineTable::from_iter(
+        doc["dependencies"]["wit-bindgen-guest-rust"] = value(InlineTable::from_iter(
             [
                 ("git", Value::from(WIT_BINDGEN_REPO)),
                 ("default_features", Value::from(false)),

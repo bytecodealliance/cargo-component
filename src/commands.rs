@@ -122,7 +122,7 @@ struct CompileOptions {
     exclude: Vec<String>,
     packages: Vec<String>,
     targets: Vec<String>,
-    jobs: Option<u32>,
+    jobs: Option<i32>,
     message_format: Option<String>,
     release: bool,
     features: Vec<String>,
