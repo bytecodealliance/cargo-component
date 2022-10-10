@@ -43,7 +43,7 @@ impl ClippyCommand {
         log::debug!("executing clippy command");
 
         config.configure(
-            self.options.verbose,
+            u32::from(self.options.verbose),
             self.options.quiet,
             self.options.color.as_deref(),
             self.options.frozen,

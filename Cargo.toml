@@ -7,7 +7,7 @@ edition = "2021"
 anyhow = "1.0.65"
 cargo = "0.65.0"
 cargo-util = "0.2.1"
-clap = { version = "3.2.22", features = ["derive"] }
+clap = { version = "4.0.12", features = ["derive"] }
 toml_edit = { version = "0.14.4", features = ["easy"] }
 wit-parser = { git = "https://github.com/bytecodealliance/wit-bindgen", rev = "5e90ee0" }
 wit-bindgen-core = { git = "https://github.com/bytecodealliance/wit-bindgen", rev = "5e90ee0" }

@@ -1,7 +1,7 @@
 use crate::commands::{workspace, CompileOptions};
 use anyhow::Result;
 use cargo::{core::compiler::CompileMode, Config};
-use clap::Args;
+use clap::{ArgAction, Args};
 use std::path::PathBuf;
 
 /// Compile a WebAssembly component and all of its dependencies
@@ -67,10 +67,9 @@ pub struct BuildCommand {
     #[clap(
         long = "verbose",
         short = 'v',
-        takes_value = false,
-        parse(from_occurrences)
+        action = ArgAction::Count
     )]
-    pub verbose: u32,
+    pub verbose: u8,
 
     /// Coloring: auto, always, never
     #[clap(long = "color", value_name = "WHEN")]
@@ -111,7 +110,7 @@ impl BuildCommand {
         log::debug!("executing compile command");
 
         config.configure(
-            self.verbose,
+            u32::from(self.verbose),
             self.quiet,
             self.color.as_deref(),
             self.frozen,

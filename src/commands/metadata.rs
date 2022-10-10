@@ -1,7 +1,7 @@
 use crate::{commands::workspace, metadata};
 use anyhow::Result;
 use cargo::{core::resolver::CliFeatures, ops::OutputMetadataOptions, Config};
-use clap::Args;
+use clap::{value_parser, ArgAction, Args};
 use std::path::PathBuf;
 
 /// Output the resolved dependencies of a package, the concrete used versions
@@ -32,10 +32,9 @@ pub struct MetadataCommand {
     #[clap(
         long = "verbose",
         short = 'v',
-        takes_value = false,
-        parse(from_occurrences)
+        action = ArgAction::Count
     )]
-    pub verbose: u32,
+    pub verbose: u8,
 
     /// Coloring: auto, always, never
     #[clap(long = "color", value_name = "WHEN")]
@@ -54,7 +53,11 @@ pub struct MetadataCommand {
     pub manifest_path: Option<PathBuf>,
 
     /// Format version
-    #[clap(long = "format-version", value_name = "VERSION", possible_values = ["1"])]
+    #[clap(
+        long = "format-version",
+        value_name = "VERSION",
+        value_parser = value_parser!(u32).range(1..=1)
+    )]
     pub format_version: Option<u32>,
 
     /// Require Cargo.lock is up to date
@@ -76,7 +79,7 @@ impl MetadataCommand {
         log::debug!("executing metadata command");
 
         config.configure(
-            self.verbose,
+            u32::from(self.verbose),
             self.quiet,
             self.color.as_deref(),
             self.frozen,

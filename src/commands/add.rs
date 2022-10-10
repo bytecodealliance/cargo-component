@@ -2,7 +2,7 @@ use super::workspace;
 use crate::ComponentMetadata;
 use anyhow::{bail, Context, Result};
 use cargo::{core::package::Package, ops::Packages, Config};
-use clap::Args;
+use clap::{ArgAction, Args};
 use std::{fs, path::PathBuf};
 use toml_edit::{table, value, Document};
 
@@ -17,10 +17,9 @@ pub struct AddCommand {
     #[clap(
         long = "verbose",
         short = 'v',
-        takes_value = false,
-        parse(from_occurrences)
+        action = ArgAction::Count
     )]
-    pub verbose: u32,
+    pub verbose: u8,
 
     /// Coloring: auto, always, never
     #[clap(long = "color", value_name = "WHEN")]
@@ -63,7 +62,7 @@ impl AddCommand {
         }
 
         config.configure(
-            self.verbose,
+            u32::from(self.verbose),
             self.quiet,
             self.color.as_deref(),
             false,

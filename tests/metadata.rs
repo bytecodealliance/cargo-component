@@ -27,3 +27,18 @@ fn it_prints_metadata() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn it_rejects_invalid_format_versions() -> Result<()> {
+    let project = Project::new("foo")?;
+
+    for arg in ["bad", "1.42", "0", "42"] {
+        project
+            .cargo_component(format!("metadata --format-version {}", arg).as_str())
+            .assert()
+            .stderr(contains("Invalid value"))
+            .failure();
+    }
+
+    Ok(())
+}
