@@ -3,7 +3,7 @@ use cargo::{
     ops::{self, NewOptions, VersionControl},
     Config,
 };
-use clap::Args;
+use clap::{ArgAction, Args};
 use std::{fs, path::Path};
 use toml_edit::{table, value, Document, InlineTable, Item, Table, Value};
 
@@ -20,17 +20,16 @@ pub struct NewCommand {
     /// control system (git, hg, pijul, or fossil) or do not
     /// initialize any version control at all (none), overriding
     /// a global configuration.
-    #[clap(long = "vcs", value_name = "VCS", possible_values = ["git", "hg", "pijul", "fossil", "none"])]
+    #[clap(long = "vcs", value_name = "VCS", value_parser = ["git", "hg", "pijul", "fossil", "none"])]
     pub vcs: Option<String>,
 
     /// Use verbose output (-vv very verbose/build.rs output)
     #[clap(
         long = "verbose",
         short = 'v',
-        takes_value = false,
-        parse(from_occurrences)
+        action = ArgAction::Count
     )]
-    pub verbose: u32,
+    pub verbose: u8,
 
     ///  Use a library template [default]
     #[clap(long = "lib")]
@@ -41,7 +40,7 @@ pub struct NewCommand {
     pub color: Option<String>,
 
     /// Edition to set for the generated crate
-    #[clap(long = "edition", value_name = "YEAR", possible_values = ["2015", "2018", "2021"])]
+    #[clap(long = "edition", value_name = "YEAR", value_parser = ["2015", "2018", "2021"])]
     pub edition: Option<String>,
 
     /// Require Cargo.lock and cache are up to date
@@ -61,7 +60,7 @@ pub struct NewCommand {
     pub offline: bool,
 
     /// Code editor to use for rust-analyzer integration, defaults to `vscode`
-    #[clap(long = "editor", value_name = "EDITOR", possible_values = ["vscode", "none"])]
+    #[clap(long = "editor", value_name = "EDITOR", value_parser = ["vscode", "none"])]
     pub editor: Option<String>,
 
     /// The path for the generated package.
@@ -75,7 +74,7 @@ impl NewCommand {
         log::debug!("executing new command");
 
         config.configure(
-            self.verbose,
+            u32::from(self.verbose),
             self.quiet,
             self.color.as_deref(),
             self.frozen,
