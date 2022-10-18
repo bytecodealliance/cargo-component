@@ -24,7 +24,7 @@ fn it_checks_a_new_project() -> Result<()> {
     project
         .cargo_component("clippy")
         .assert()
-        .stderr(contains("Checking interface v0.1.0"))
+        .stderr(contains("Checking foo-interface v0.1.0"))
         .success();
 
     Ok(())
@@ -42,7 +42,7 @@ fn it_finds_errors() -> Result<()> {
     project
         .cargo_component("clippy")
         .assert()
-        .stderr(contains("Checking interface v0.1.0").and(contains(
+        .stderr(contains("Checking foo-interface v0.1.0").and(contains(
             "expected struct `std::string::String`, found `&str`",
         )))
         .failure();
@@ -65,7 +65,53 @@ fn it_finds_clippy_warnings() -> Result<()> {
     project
         .cargo_component("clippy")
         .assert()
-        .stderr(contains("Checking interface v0.1.0").and(contains("clippy::needless_return")))
+        .stderr(contains("Checking foo-interface v0.1.0").and(contains("clippy::needless_return")))
+        .success();
+
+    Ok(())
+}
+
+#[test]
+fn it_checks_a_workspace() -> Result<()> {
+    let project = project()?
+        .file(
+            "Cargo.toml",
+            r#"[workspace]
+members = ["foo", "bar", "baz"]
+"#,
+        )?
+        .file(
+            "baz/Cargo.toml",
+            r#"[package]
+name = "baz"
+version = "0.1.0"
+edition = "2021"
+    
+[dependencies]
+"#,
+        )?
+        .file("baz/src/lib.rs", "")?
+        .build()?;
+
+    project
+        .cargo_component("new foo")
+        .assert()
+        .stderr(contains("Created component `foo` package"))
+        .success();
+
+    project
+        .cargo_component("new bar")
+        .assert()
+        .stderr(contains("Created component `bar` package"))
+        .success();
+
+    project
+        .cargo_component("clippy")
+        .assert()
+        .stderr(
+            contains("Checking foo-interface v0.1.0")
+                .and(contains("Checking bar-interface v0.1.0")),
+        )
         .success();
 
     Ok(())

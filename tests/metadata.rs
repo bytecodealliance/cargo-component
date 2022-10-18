@@ -1,7 +1,7 @@
 use crate::support::*;
 use anyhow::Result;
 use assert_cmd::prelude::*;
-use predicates::str::contains;
+use predicates::{prelude::PredicateBooleanExt, str::contains};
 
 mod support;
 
@@ -22,7 +22,7 @@ fn it_prints_metadata() -> Result<()> {
     project
         .cargo_component("metadata --format-version 1")
         .assert()
-        .stdout(contains("interface 0.1.0"))
+        .stdout(contains("foo-interface 0.1.0"))
         .success();
 
     Ok(())
@@ -39,6 +39,49 @@ fn it_rejects_invalid_format_versions() -> Result<()> {
             .stderr(contains("Invalid value"))
             .failure();
     }
+
+    Ok(())
+}
+
+#[test]
+fn it_prints_workspace_metadata() -> Result<()> {
+    let project = project()?
+        .file(
+            "Cargo.toml",
+            r#"[workspace]
+members = ["foo", "bar", "baz"]
+"#,
+        )?
+        .file(
+            "baz/Cargo.toml",
+            r#"[package]
+name = "baz"
+version = "0.1.0"
+edition = "2021"
+    
+[dependencies]
+"#,
+        )?
+        .file("baz/src/lib.rs", "")?
+        .build()?;
+
+    project
+        .cargo_component("new foo")
+        .assert()
+        .stderr(contains("Created component `foo` package"))
+        .success();
+
+    project
+        .cargo_component("new bar")
+        .assert()
+        .stderr(contains("Created component `bar` package"))
+        .success();
+
+    project
+        .cargo_component("metadata --format-version 1")
+        .assert()
+        .stdout(contains("foo-interface 0.1.0").and(contains("bar-interface 0.1.0")))
+        .success();
 
     Ok(())
 }

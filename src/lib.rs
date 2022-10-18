@@ -4,9 +4,9 @@
 
 use anyhow::{anyhow, bail, Context, Result};
 use cargo::{
-    core::{compiler::Compilation, Manifest, Package, SourceId, Summary, Workspace},
+    core::{Manifest, Package, SourceId, Summary, Workspace},
     ops::{self, CompileOptions, ExportInfo, OutputMetadataOptions},
-    util::interning::InternedString,
+    util::{interning::InternedString, Filesystem},
     Config,
 };
 use cargo_util::paths::link_or_copy;
@@ -28,7 +28,6 @@ mod target;
 pub mod commands;
 
 const WIT_BINDGEN_REPO: &str = "https://github.com/bytecodealliance/wit-bindgen";
-const METADATA_SECTION_PATH: &str = "package.metadata";
 const COMPONENT_SECTION_PATH: &str = "package.metadata.component";
 const IMPORTS_SECTION_PATH: &str = "package.metadata.component.imports";
 const EXPORTS_SECTION_PATH: &str = "package.metadata.component.exports";
@@ -100,6 +99,8 @@ impl InterfaceDependency {
 /// Represents cargo metadata for a WebAssembly component.
 #[derive(Debug)]
 pub struct ComponentMetadata {
+    /// The package name of the component.
+    pub name: String,
     /// The last modified time of the component metadata.
     pub last_modified: SystemTime,
     /// The directly exported interface for the component.
@@ -112,7 +113,9 @@ pub struct ComponentMetadata {
 
 impl ComponentMetadata {
     /// Creates a new component metadata for the given package.
-    pub fn from_package(config: &Config, package: &Package) -> Result<Self> {
+    ///
+    /// Returns `Ok(None)` if the package does not have a component metadata section.
+    pub fn from_package(config: &Config, package: &Package) -> Result<Option<Self>> {
         let manifest_path = package.manifest_path();
         let last_modified = last_modified_time(manifest_path)?;
         let manifest_dir = manifest_path.parent().unwrap();
@@ -129,19 +132,15 @@ impl ComponentMetadata {
             .map(cargo::core::Dependency::name_in_toml)
             .collect();
 
-        let metadata = package.manifest().custom_metadata().ok_or_else(|| {
-            anyhow!(
-                "manifest `{path}` does not contain a `{METADATA_SECTION_PATH}` section",
-                path = manifest_path.display(),
-            )
-        })?;
+        let metadata = match package.manifest().custom_metadata() {
+            Some(metadata) => metadata,
+            None => return Ok(None),
+        };
 
-        let component = metadata.get("component").ok_or_else(|| {
-            anyhow!(
-                "manifest `{path}` does not contain a `{COMPONENT_SECTION_PATH}` section",
-                path = manifest_path.display(),
-            )
-        })?;
+        let component = match metadata.get("component") {
+            Some(component) => component,
+            None => return Ok(None),
+        };
 
         let imports = Self::read_dependencies(
             manifest_path,
@@ -182,12 +181,13 @@ impl ComponentMetadata {
             None => None,
         };
 
-        Ok(Self {
+        Ok(Some(Self {
+            name: package.name().to_string(),
             last_modified,
             direct_export,
             imports,
             exports,
-        })
+        }))
     }
 
     fn read_dependencies(
@@ -272,22 +272,40 @@ fn last_modified_time(path: impl AsRef<Path>) -> Result<SystemTime> {
         })
 }
 
-/// Generates dependency crates for the given component metadata.
-///
-/// This function is responsible for generating the bindings for the component's imports
-/// and exports before a compilation step.
-pub fn generate_dependencies(
+fn generate_workspace_bindings(
     config: &Config,
     workspace: &mut Workspace,
+    force_generation: bool,
+) -> Result<Vec<ComponentMetadata>> {
+    let mut metadata = Vec::new();
+    let bindgen_dir = workspace.target_dir().join("bindgen");
+
+    for package in workspace.members_mut() {
+        let component_metadata = match ComponentMetadata::from_package(config, package)? {
+            Some(metadata) => metadata,
+            None => continue,
+        };
+        let dependencies =
+            generate_dependencies(config, &bindgen_dir, &component_metadata, force_generation)?;
+        update_dependencies(config, package.manifest_mut(), dependencies)?;
+        metadata.push(component_metadata);
+    }
+
+    Ok(metadata)
+}
+
+fn generate_dependencies(
+    config: &Config,
+    target_dir: &Filesystem,
     metadata: &ComponentMetadata,
     force_generation: bool,
 ) -> Result<Vec<cargo::core::Dependency>> {
-    let target_dir = workspace.target_dir().join("bindgen");
     target_dir.create_dir()?;
 
     let _lock = target_dir.open_rw(".lock", config, "bindings cache")?;
     let target_path = target_dir.as_path_unlocked();
     let last_modified_exe = last_modified_time(std::env::current_exe()?)?;
+    let pkg_name = &metadata.name;
 
     metadata
         .direct_export
@@ -298,6 +316,7 @@ pub fn generate_dependencies(
         .map(|(dir, dep)| {
             generate_dependency(
                 config,
+                pkg_name,
                 dep,
                 dir,
                 target_path,
@@ -334,8 +353,10 @@ fn is_wasm_module(path: impl AsRef<Path>) -> Result<bool> {
     Ok(bytes[4..] == [0x01, 0x00, 0x00, 0x00])
 }
 
+#[allow(clippy::too_many_arguments)]
 fn generate_dependency(
     config: &Config,
+    pkg_name: &str,
     dependency: &InterfaceDependency,
     dir: Direction,
     target_dir: &Path,
@@ -345,10 +366,10 @@ fn generate_dependency(
 ) -> Result<cargo::core::Dependency> {
     // TODO: when sourcing dependencies from a registry, use actual version information.
     let version = "0.1.0";
-    let name = &dependency.interface.name;
+    let name = format!("{pkg_name}-{name}", name = &dependency.interface.name);
     let path = &dependency.path;
 
-    let package_dir = target_dir.join(name);
+    let package_dir = target_dir.join(&name);
 
     fs::create_dir_all(&package_dir).with_context(|| {
         format!(
@@ -448,12 +469,19 @@ edition = "2021"
         );
     }
 
-    cargo::core::Dependency::parse(name, Some(version), SourceId::for_path(&package_dir)?)
+    let mut dep =
+        cargo::core::Dependency::parse(name, Some(version), SourceId::for_path(&package_dir)?)?;
+
+    // Set the explicit name in toml to the name of the interface.
+    // Without this, dependencies might conflict between two different components
+    // in the workspace.
+    dep.set_explicit_name_in_toml(&dependency.interface.name);
+    Ok(dep)
 }
 
 fn create_component(
     config: &Config,
-    result: Compilation,
+    target_path: &Path,
     metadata: ComponentMetadata,
 ) -> Result<()> {
     fn to_interface(mut dep: InterfaceDependency) -> Interface {
@@ -464,11 +492,6 @@ fn create_component(
         dep.interface
     }
 
-    if result.cdylibs.len() != 1 {
-        bail!("expected compilation output to be a single cdylib");
-    }
-
-    let target_path = &result.cdylibs[0].path;
     let dep_path = target_path
         .parent()
         .unwrap()
@@ -542,17 +565,24 @@ pub fn compile(
     options: &CompileOptions,
     force_generation: bool,
 ) -> Result<()> {
-    let metadata = ComponentMetadata::from_package(config, workspace.current()?)?;
-    let dependencies = generate_dependencies(config, &mut workspace, &metadata, force_generation)?;
-
-    update_dependencies(
-        config,
-        workspace.current_mut()?.manifest_mut(),
-        dependencies,
-    )?;
-
+    let metadata = generate_workspace_bindings(config, &mut workspace, force_generation)?;
     let result = ops::compile(&workspace, options)?;
-    create_component(config, result, metadata)?;
+
+    for m in metadata {
+        let path = result
+            .cdylibs
+            .iter()
+            .find(|o| o.unit.pkg.name() == m.name.as_str())
+            .map(|o| &o.path)
+            .ok_or_else(|| {
+                anyhow!(
+                    "failed to find output for component package `{}`",
+                    m.name.as_str()
+                )
+            })?;
+
+        create_component(config, path, m)?;
+    }
 
     Ok(())
 }
@@ -565,36 +595,18 @@ pub fn metadata(
     mut workspace: Workspace,
     options: &OutputMetadataOptions,
 ) -> Result<ExportInfo> {
-    let component_metadata = ComponentMetadata::from_package(config, workspace.current()?)?;
-    let dependencies = generate_dependencies(config, &mut workspace, &component_metadata, false)?;
-
-    update_dependencies(
-        config,
-        workspace.current_mut()?.manifest_mut(),
-        dependencies,
-    )?;
-
+    generate_workspace_bindings(config, &mut workspace, false)?;
     ops::output_metadata(&workspace, options)
 }
 
 /// Check a component for errors with the given workspace and compile options.
-///
-/// It is expected that the current package contains a `package.metadata.component` section.
 pub fn check(
     config: &Config,
     mut workspace: Workspace,
     options: &CompileOptions,
     force_generation: bool,
 ) -> Result<()> {
-    let metadata = ComponentMetadata::from_package(config, workspace.current()?)?;
-    let dependencies = generate_dependencies(config, &mut workspace, &metadata, force_generation)?;
-
-    update_dependencies(
-        config,
-        workspace.current_mut()?.manifest_mut(),
-        dependencies,
-    )?;
-
+    generate_workspace_bindings(config, &mut workspace, force_generation)?;
     ops::compile(&workspace, options)?;
     Ok(())
 }

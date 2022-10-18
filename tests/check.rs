@@ -24,7 +24,7 @@ fn it_checks_a_new_project() -> Result<()> {
     project
         .cargo_component("check")
         .assert()
-        .stderr(contains("Checking interface v0.1.0"))
+        .stderr(contains("Checking foo-interface v0.1.0"))
         .success();
 
     Ok(())
@@ -43,10 +43,53 @@ fn it_finds_errors() -> Result<()> {
         .cargo_component("check")
         .assert()
         .stderr(
-            contains("Checking interface v0.1.0")
+            contains("Checking foo-interface v0.1.0")
                 .and(contains("expected struct `String`, found `&str`")),
         )
         .failure();
+
+    Ok(())
+}
+
+#[test]
+fn it_checks_a_workspace() -> Result<()> {
+    let project = project()?
+        .file(
+            "Cargo.toml",
+            r#"[workspace]
+members = ["foo", "bar", "baz"]
+"#,
+        )?
+        .file(
+            "baz/Cargo.toml",
+            r#"[package]
+name = "baz"
+version = "0.1.0"
+edition = "2021"
+    
+[dependencies]
+"#,
+        )?
+        .file("baz/src/lib.rs", "")?
+        .build()?;
+
+    project
+        .cargo_component("new foo")
+        .assert()
+        .stderr(contains("Created component `foo` package"))
+        .success();
+
+    project
+        .cargo_component("new bar")
+        .assert()
+        .stderr(contains("Created component `bar` package"))
+        .success();
+
+    project
+        .cargo_component("check")
+        .assert()
+        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .success();
 
     Ok(())
 }
