@@ -44,3 +44,49 @@ fn it_builds_release() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn it_builds_a_workspace() -> Result<()> {
+    let project = project()?
+        .file(
+            "Cargo.toml",
+            r#"[workspace]
+members = ["foo", "bar", "baz"]
+"#,
+        )?
+        .file(
+            "baz/Cargo.toml",
+            r#"[package]
+name = "baz"
+version = "0.1.0"
+edition = "2021"
+    
+[dependencies]
+"#,
+        )?
+        .file("baz/src/lib.rs", "")?
+        .build()?;
+
+    project
+        .cargo_component("new foo")
+        .assert()
+        .stderr(contains("Created component `foo` package"))
+        .success();
+
+    project
+        .cargo_component("new bar")
+        .assert()
+        .stderr(contains("Created component `bar` package"))
+        .success();
+
+    project
+        .cargo_component("build")
+        .assert()
+        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .success();
+
+    validate_component(&project.debug_wasm("foo"))?;
+    validate_component(&project.debug_wasm("bar"))?;
+
+    Ok(())
+}

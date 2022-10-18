@@ -81,7 +81,13 @@ impl AddCommand {
             ws.current()?
         };
 
-        let component_metadata = ComponentMetadata::from_package(config, package)?;
+        let component_metadata = match ComponentMetadata::from_package(config, package)? {
+            Some(metadata) => metadata,
+            None => bail!(
+                "manifest `{path}` is not a WebAssembly component package",
+                path = package.manifest_path().display(),
+            ),
+        };
 
         self.validate(package, &component_metadata)?;
         self.add(package)?;
