@@ -80,7 +80,10 @@ edition = "2021"
     project
         .cargo_component("metadata --format-version 1")
         .assert()
-        .stdout(contains("foo-interface 0.1.0").and(contains("bar-interface 0.1.0")))
+        .stdout(
+            contains("foo-interface 0.1.0")
+                .and(contains("bar-interface 0.1.0").and(contains("baz 0.1.0"))),
+        )
         .success();
 
     Ok(())
