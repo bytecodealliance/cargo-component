@@ -143,14 +143,6 @@ impl ComponentMetadata {
             )
         })?;
 
-        // Warn if there's a legacy `dependencies` section for now
-        if component.get("dependencies").is_some() {
-            config.shell().warn(format!(
-                "manifest `{path}` contains a `{COMPONENT_SECTION_PATH}.dependencies` section and needs to be upgraded",
-                path = manifest_path.display(),
-            ))?;
-        }
-
         let imports = Self::read_dependencies(
             manifest_path,
             config,
