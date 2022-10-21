@@ -179,17 +179,17 @@ The component will export a `say-something` function returning a string.
 The implementation of the component will be in `src/lib.rs`:
 
 ```rust
-use interface::Interface;
+use bindings::interface;
 
 struct Component;
 
-impl Interface for Component {
+impl interface::Interface for Component {
     fn say_something() -> String {
         "Hello, World!".to_string()
     }
 }
 
-interface::export!(Component);
+bindings::export!(Component);
 ```
 
 Here `interface` is the bindings crate that `cargo component` generated for you.
@@ -241,12 +241,12 @@ binding-name = "path/to/interface.wit"
 
 To _directly_ export an interface (i.e. one where the interface's functions
 are exported from the component rather than as an instance export), set the
-`direct-interface-export` key to the name of the entry in the
+`direct-export` key to the name of the entry in the
 `[package.metadata.component.exports]` table.
 
 ```toml
 [package.metadata.component]
-direct-interface-export = "foo"
+direct-export = "foo"
 ```
 
 The `cargo component new` command generates a component project that initially

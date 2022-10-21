@@ -127,7 +127,7 @@ impl AddCommand {
             })?;
 
         if self.direct_export {
-            component["direct-interface-export"] = value(&self.name);
+            component["direct-export"] = value(&self.name);
         }
 
         let deps = if self.export {

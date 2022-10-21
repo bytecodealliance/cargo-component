@@ -24,7 +24,7 @@ fn it_checks_a_new_project() -> Result<()> {
     project
         .cargo_component("clippy")
         .assert()
-        .stderr(contains("Checking foo-interface v0.1.0"))
+        .stderr(contains("Checking foo-bindings v0.1.0"))
         .success();
 
     Ok(())
@@ -42,7 +42,7 @@ fn it_finds_errors() -> Result<()> {
     project
         .cargo_component("clippy")
         .assert()
-        .stderr(contains("Checking foo-interface v0.1.0").and(contains(
+        .stderr(contains("Checking foo-bindings v0.1.0").and(contains(
             "expected struct `std::string::String`, found `&str`",
         )))
         .failure();
@@ -65,7 +65,7 @@ fn it_finds_clippy_warnings() -> Result<()> {
     project
         .cargo_component("clippy")
         .assert()
-        .stderr(contains("Checking foo-interface v0.1.0").and(contains("clippy::needless_return")))
+        .stderr(contains("Checking foo-bindings v0.1.0").and(contains("clippy::needless_return")))
         .success();
 
     Ok(())
@@ -109,8 +109,7 @@ edition = "2021"
         .cargo_component("clippy")
         .assert()
         .stderr(
-            contains("Checking foo-interface v0.1.0")
-                .and(contains("Checking bar-interface v0.1.0")),
+            contains("Checking foo-bindings v0.1.0").and(contains("Checking bar-bindings v0.1.0")),
         )
         .success();
 

@@ -24,7 +24,7 @@ fn it_checks_a_new_project() -> Result<()> {
     project
         .cargo_component("check")
         .assert()
-        .stderr(contains("Checking foo-interface v0.1.0"))
+        .stderr(contains("Checking foo-bindings v0.1.0"))
         .success();
 
     Ok(())
@@ -43,7 +43,7 @@ fn it_finds_errors() -> Result<()> {
         .cargo_component("check")
         .assert()
         .stderr(
-            contains("Checking foo-interface v0.1.0")
+            contains("Checking foo-bindings v0.1.0")
                 .and(contains("expected struct `String`, found `&str`")),
         )
         .failure();
