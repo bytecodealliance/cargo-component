@@ -3,46 +3,30 @@
 version = 3
 
 [[package]]
-name = "backend"
-version = "0.1.0"
-dependencies = [
- "wit-bindgen-guest-rust",
-]
-
-[[package]]
 name = "bitflags"
 version = "1.3.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
-name = "cache"
-version = "0.1.0"
-dependencies = [
- "wit-bindgen-guest-rust",
-]
-
-[[package]]
-name = "origin"
-version = "0.1.0"
-dependencies = [
- "wit-bindgen-guest-rust",
-]
-
-[[package]]
 name = "service"
 version = "0.1.0"
 dependencies = [
- "backend",
- "cache",
- "origin",
+ "service-bindings",
+ "wit-bindgen-guest-rust",
+]
+
+[[package]]
+name = "service-bindings"
+version = "0.1.0"
+dependencies = [
  "wit-bindgen-guest-rust",
 ]
 
 [[package]]
 name = "wit-bindgen-guest-rust"
-version = "0.2.0"
-source = "git+https://github.com/bytecodealliance/wit-bindgen#2c3b7fede8eb5448801328bd6c523f130a06b2a7"
+version = "0.3.0"
+source = "git+https://github.com/bytecodealliance/wit-bindgen#c5f82a40e4d3ed4a74fdec54603420ccfc2cdf4f"
 dependencies = [
  "bitflags",
 ]

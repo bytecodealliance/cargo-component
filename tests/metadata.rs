@@ -22,7 +22,7 @@ fn it_prints_metadata() -> Result<()> {
     project
         .cargo_component("metadata --format-version 1")
         .assert()
-        .stdout(contains("foo-interface 0.1.0"))
+        .stdout(contains("foo-bindings 0.1.0"))
         .success();
 
     Ok(())
@@ -81,8 +81,8 @@ edition = "2021"
         .cargo_component("metadata --format-version 1")
         .assert()
         .stdout(
-            contains("foo-interface 0.1.0")
-                .and(contains("bar-interface 0.1.0").and(contains("baz 0.1.0"))),
+            contains("foo-bindings 0.1.0")
+                .and(contains("bar-bindings 0.1.0").and(contains("baz 0.1.0"))),
         )
         .success();
 

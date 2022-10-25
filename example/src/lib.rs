@@ -1,8 +1,8 @@
-use backend::Backend;
+use bindings::{backend, cache, origin};
 
 struct Component;
 
-impl Backend for Component {
+impl backend::Backend for Component {
     fn fetch(url: String) -> Vec<u8> {
         if let Some(data) = cache::get(&url) {
             return data;
@@ -14,4 +14,4 @@ impl Backend for Component {
     }
 }
 
-backend::export!(Component);
+bindings::export!(Component);

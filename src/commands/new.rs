@@ -150,7 +150,7 @@ impl NewCommand {
 
         let mut component = Table::new();
         component.set_implicit(true);
-        component["direct-interface-export"] = value("interface");
+        component["direct-export"] = value("interface");
         component["exports"] = Item::Table(exports);
 
         let mut metadata = Table::new();
@@ -176,17 +176,17 @@ impl NewCommand {
     }
 
     fn update_source_file(&self, out_dir: &Path) -> Result<()> {
-        const DEFAULT_SOURCE_FILE: &str = r#"use interface::Interface;
+        const DEFAULT_SOURCE_FILE: &str = r#"use bindings::interface;
 
 struct Component;
 
-impl Interface for Component {
+impl interface::Interface for Component {
     fn say_something() -> String {
         "Hello, World!".to_string()
     }
 }
 
-interface::export!(Component);
+bindings::export!(Component);
 "#;
 
         let source_path = out_dir.join("src/lib.rs");

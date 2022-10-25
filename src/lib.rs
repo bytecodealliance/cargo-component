@@ -4,9 +4,9 @@
 
 use anyhow::{anyhow, bail, Context, Result};
 use cargo::{
-    core::{Manifest, Package, SourceId, Summary, Workspace},
+    core::{Package, SourceId, Summary, Workspace},
     ops::{self, CompileOptions, ExportInfo, OutputMetadataOptions},
-    util::{interning::InternedString, Filesystem},
+    util::interning::InternedString,
     Config,
 };
 use cargo_util::paths::link_or_copy;
@@ -18,9 +18,9 @@ use std::{
     time::SystemTime,
 };
 use toml_edit::easy::Value;
-use wit_bindgen_core::{Direction, Files, Generator};
+use wit_bindgen_core::Files;
 use wit_bindgen_gen_guest_rust::Opts;
-use wit_component::ComponentEncoder;
+use wit_component::{ComponentEncoder, ComponentInterfaces};
 use wit_parser::Interface;
 
 mod target;
@@ -89,7 +89,6 @@ impl InterfaceDependency {
             )
         })?;
 
-        interface.module = Some(name.to_string());
         interface.name = name.to_string();
 
         Ok(Self { path, interface })
@@ -161,22 +160,19 @@ impl ComponentMetadata {
             EXPORTS_SECTION_PATH,
         )?;
 
-        let direct_export = match component.get("direct-interface-export") {
+        let direct_export = match component.get("direct-export") {
             Some(v) => {
                 let name = v.as_str().ok_or_else(|| {
-                    anyhow!("expected a string for `direct-interface-export` in section `{COMPONENT_SECTION_PATH}`")
+                    anyhow!("expected a string for `direct-export` in section `{COMPONENT_SECTION_PATH}`")
                 })?;
 
                 let index = exports.iter().position(|e| e.interface.name == name).ok_or_else(|| {
                     anyhow!("direct interface export `{name}` does not exist in section `{EXPORTS_SECTION_PATH}`")
                 })?;
 
-                // Remove the direct interface from the exports list and clear its module name as
+                // Remove the direct interface from the exports list as
                 // it will be exported from the component itself
-                let mut export = exports.swap_remove(index);
-                export.interface.module = None;
-
-                Some(export)
+                Some(exports.swap_remove(index))
             }
             None => None,
         };
@@ -229,29 +225,22 @@ impl ComponentMetadata {
             None => Ok(Vec::new()),
         }
     }
-}
 
-fn update_dependencies(
-    config: &Config,
-    manifest: &mut Manifest,
-    dependencies: Vec<cargo::core::Dependency>,
-) -> Result<()> {
-    let dependencies = manifest
-        .dependencies()
-        .iter()
-        .cloned()
-        .chain(dependencies)
-        .collect();
-
-    *manifest.summary_mut() = Summary::new(
-        config,
-        manifest.package_id(),
-        dependencies,
-        manifest.original().features().unwrap_or(&BTreeMap::new()),
-        manifest.links(),
-    )?;
-
-    Ok(())
+    fn to_interfaces(&self) -> ComponentInterfaces {
+        ComponentInterfaces {
+            default: self.direct_export.as_ref().map(|d| d.interface.clone()),
+            imports: self
+                .imports
+                .iter()
+                .map(|d| (d.interface.name.clone(), d.interface.clone()))
+                .collect(),
+            exports: self
+                .exports
+                .iter()
+                .map(|d| (d.interface.name.clone(), d.interface.clone()))
+                .collect(),
+        }
+    }
 }
 
 fn last_modified_time(path: impl AsRef<Path>) -> Result<SystemTime> {
@@ -279,101 +268,81 @@ fn generate_workspace_bindings(
 ) -> Result<Vec<ComponentMetadata>> {
     let mut metadata = Vec::new();
     let bindgen_dir = workspace.target_dir().join("bindgen");
+    bindgen_dir.create_dir()?;
+
+    let _lock = bindgen_dir.open_rw(".lock", config, "bindings cache")?;
+    let last_modified_exe = last_modified_time(std::env::current_exe()?)?;
 
     for package in workspace.members_mut() {
         let component_metadata = match ComponentMetadata::from_package(config, package)? {
             Some(metadata) => metadata,
             None => continue,
         };
-        let dependencies =
-            generate_dependencies(config, &bindgen_dir, &component_metadata, force_generation)?;
-        update_dependencies(config, package.manifest_mut(), dependencies)?;
+
+        let dependency = generate_package_bindings(
+            config,
+            &component_metadata,
+            bindgen_dir.as_path_unlocked(),
+            last_modified_exe,
+            force_generation,
+        )?;
+
+        let manifest = package.manifest_mut();
+        let dependencies = manifest
+            .dependencies()
+            .iter()
+            .cloned()
+            .chain([dependency])
+            .collect();
+
+        *manifest.summary_mut() = Summary::new(
+            config,
+            manifest.package_id(),
+            dependencies,
+            manifest.original().features().unwrap_or(&BTreeMap::new()),
+            manifest.links(),
+        )?;
+
         metadata.push(component_metadata);
     }
 
     Ok(metadata)
 }
 
-fn generate_dependencies(
-    config: &Config,
-    target_dir: &Filesystem,
+fn bindings_outdated(
     metadata: &ComponentMetadata,
-    force_generation: bool,
-) -> Result<Vec<cargo::core::Dependency>> {
-    target_dir.create_dir()?;
-
-    let _lock = target_dir.open_rw(".lock", config, "bindings cache")?;
-    let target_path = target_dir.as_path_unlocked();
-    let last_modified_exe = last_modified_time(std::env::current_exe()?)?;
-    let pkg_name = &metadata.name;
-
-    metadata
+    last_modified_output: SystemTime,
+) -> Result<bool> {
+    for dependency in metadata
         .direct_export
         .iter()
-        .map(|i| (Direction::Export, i))
-        .chain(metadata.imports.iter().map(|i| (Direction::Import, i)))
-        .chain(metadata.exports.iter().map(|i| (Direction::Export, i)))
-        .map(|(dir, dep)| {
-            generate_dependency(
-                config,
-                pkg_name,
-                dep,
-                dir,
-                target_path,
-                metadata.last_modified,
-                last_modified_exe,
-                force_generation,
-            )
-        })
-        .collect::<Result<_>>()
-}
-
-fn is_wasm_module(path: impl AsRef<Path>) -> Result<bool> {
-    let path = path.as_ref();
-
-    let mut file = File::open(path)
-        .with_context(|| format!("failed to open `{path}` for read", path = path.display()))?;
-
-    let mut bytes = [0u8; 8];
-    file.read(&mut bytes).with_context(|| {
-        format!(
-            "failed to read file header for `{path}`",
-            path = path.display()
-        )
-    })?;
-
-    if bytes[0..4] != [0x0, b'a', b's', b'm'] {
-        bail!(
-            "expected `{path}` to be a WebAssembly module",
-            path = path.display()
-        );
+        .chain(metadata.imports.iter())
+        .chain(metadata.exports.iter())
+    {
+        if last_modified_time(&dependency.path)? > last_modified_output {
+            return Ok(true);
+        }
     }
 
-    // Check for the module header version
-    Ok(bytes[4..] == [0x01, 0x00, 0x00, 0x00])
+    Ok(false)
 }
 
-#[allow(clippy::too_many_arguments)]
-fn generate_dependency(
+fn generate_package_bindings(
     config: &Config,
-    pkg_name: &str,
-    dependency: &InterfaceDependency,
-    dir: Direction,
-    target_dir: &Path,
-    last_modified_manifest: SystemTime,
+    metadata: &ComponentMetadata,
+    bindgen_dir: &Path,
     last_modified_exe: SystemTime,
     force_generation: bool,
 ) -> Result<cargo::core::Dependency> {
     // TODO: when sourcing dependencies from a registry, use actual version information.
     let version = "0.1.0";
-    let name = format!("{pkg_name}-{name}", name = &dependency.interface.name);
-    let path = &dependency.path;
+    let name = format!("{pkg}-bindings", pkg = metadata.name);
 
-    let package_dir = target_dir.join(&name);
+    let package_dir = bindgen_dir.join(&name);
 
     fs::create_dir_all(&package_dir).with_context(|| {
         format!(
-            "failed to create package directory `{path}`",
+            "failed to create package bindings directory `{path}`",
             path = package_dir.display()
         )
     })?;
@@ -382,31 +351,31 @@ fn generate_dependency(
     let source_dir = package_dir.join("src");
     let source_path = source_dir.join("lib.rs");
 
-    let last_modified_input = last_modified_time(path)?;
     let last_modified_output = source_path
         .is_file()
         .then(|| last_modified_time(&source_path))
         .transpose()?
         .unwrap_or(SystemTime::UNIX_EPOCH);
 
-    let manifest_modified = last_modified_manifest > last_modified_output;
-    let input_modified = last_modified_input > last_modified_output;
+    let manifest_modified = metadata.last_modified > last_modified_output;
     let exe_modified = last_modified_exe > last_modified_output;
 
-    if force_generation || manifest_modified || input_modified || exe_modified {
+    if force_generation
+        || manifest_modified
+        || exe_modified
+        || bindings_outdated(metadata, last_modified_output)?
+    {
         log::debug!(
-            "generating dependency `{name}` at `{path}` because {reason}",
+            "generating bindings package `{name}` at `{path}` because {reason}",
             path = package_dir.display(),
             reason = if force_generation {
                 "generation was forced"
             } else if manifest_modified {
                 "the manifest was modified"
-            } else if input_modified {
-                "the input file was modified"
-            } else if exe_modified {
+            } else if last_modified_exe > last_modified_output {
                 "the cargo-component executable was modified"
             } else {
-                "of an unknown reason"
+                "an input file was modified"
             }
         );
 
@@ -444,13 +413,25 @@ edition = "2021"
 
         let opts = Opts {
             rustfmt: true,
-            standalone: true,
+            macro_export: true,
+            macro_call_prefix: Some("bindings::".to_string()),
+            export_macro_name: Some("export".to_string()),
             ..Default::default()
         };
 
         let mut generator = opts.build();
         let mut files = Files::default();
-        generator.generate_one(&dependency.interface, dir, &mut files);
+
+        let interface = metadata.to_interfaces();
+        generator.generate(
+            interface
+                .default
+                .as_ref()
+                .map(|i| i.name.as_str())
+                .unwrap_or(&metadata.name),
+            &metadata.to_interfaces(),
+            &mut files,
+        );
 
         fs::write(
             &source_path,
@@ -472,26 +453,37 @@ edition = "2021"
     let mut dep =
         cargo::core::Dependency::parse(name, Some(version), SourceId::for_path(&package_dir)?)?;
 
-    // Set the explicit name in toml to the name of the interface.
-    // Without this, dependencies might conflict between two different components
-    // in the workspace.
-    dep.set_explicit_name_in_toml(&dependency.interface.name);
+    // Set the explicit name in toml to the crate name expected in user source
+    dep.set_explicit_name_in_toml("bindings");
     Ok(dep)
 }
 
-fn create_component(
-    config: &Config,
-    target_path: &Path,
-    metadata: ComponentMetadata,
-) -> Result<()> {
-    fn to_interface(mut dep: InterfaceDependency) -> Interface {
-        if let Some(module) = dep.interface.module.take() {
-            dep.interface.name = module;
-        }
+fn is_wasm_module(path: impl AsRef<Path>) -> Result<bool> {
+    let path = path.as_ref();
 
-        dep.interface
+    let mut file = File::open(path)
+        .with_context(|| format!("failed to open `{path}` for read", path = path.display()))?;
+
+    let mut bytes = [0u8; 8];
+    file.read(&mut bytes).with_context(|| {
+        format!(
+            "failed to read file header for `{path}`",
+            path = path.display()
+        )
+    })?;
+
+    if bytes[0..4] != [0x0, b'a', b's', b'm'] {
+        bail!(
+            "expected `{path}` to be a WebAssembly module",
+            path = path.display()
+        );
     }
 
+    // Check for the module header version
+    Ok(bytes[4..] == [0x01, 0x00, 0x00, 0x00])
+}
+
+fn create_component(config: &Config, target_path: &Path) -> Result<()> {
     let dep_path = target_path
         .parent()
         .unwrap()
@@ -513,36 +505,9 @@ fn create_component(
         return Ok(());
     }
 
-    let ComponentMetadata {
-        direct_export,
-        imports,
-        exports,
-        ..
-    } = metadata;
-
-    let direct_export = direct_export.map(to_interface);
-    let imports: Vec<_> = imports.into_iter().map(to_interface).collect();
-    let exports: Vec<_> = exports.into_iter().map(to_interface).collect();
     let module = fs::read(&dep_path).with_context(|| {
         anyhow!(
             "failed to read output module `{path}`",
-            path = dep_path.display()
-        )
-    })?;
-
-    let mut encoder = ComponentEncoder::default()
-        .module(&module)
-        .imports(&imports)
-        .exports(&exports)
-        .validate(true);
-
-    if let Some(direct_export) = &direct_export {
-        encoder = encoder.interface(direct_export);
-    }
-
-    fs::write(&dep_path, encoder.encode()?).with_context(|| {
-        anyhow!(
-            "failed to write output component `{path}`",
             path = dep_path.display()
         )
     })?;
@@ -551,6 +516,15 @@ fn create_component(
         "Creating",
         format!("component {path}", path = target_path.display()),
     )?;
+
+    let encoder = ComponentEncoder::default().module(&module)?.validate(true);
+
+    fs::write(&dep_path, encoder.encode()?).with_context(|| {
+        anyhow!(
+            "failed to write output component `{path}`",
+            path = dep_path.display()
+        )
+    })?;
 
     // Finally, link the dep path to the target path to create the final target
     link_or_copy(dep_path, target_path)
@@ -581,7 +555,7 @@ pub fn compile(
                 )
             })?;
 
-        create_component(config, path, m)?;
+        create_component(config, path)?;
     }
 
     Ok(())

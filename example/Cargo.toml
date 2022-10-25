@@ -9,6 +9,9 @@ crate-type = ["cdylib"]
 [dependencies]
 wit-bindgen-guest-rust = { git = "https://github.com/bytecodealliance/wit-bindgen", default_features = false }
 
+[package.metadata.component]
+direct-export = "backend"
+
 [package.metadata.component.imports]
 cache = "cache.wit"
 origin = "backend.wit"
