@@ -12,21 +12,13 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 name = "service"
 version = "0.1.0"
 dependencies = [
- "service-bindings",
- "wit-bindgen-guest-rust",
-]
-
-[[package]]
-name = "service-bindings"
-version = "0.1.0"
-dependencies = [
  "wit-bindgen-guest-rust",
 ]
 
 [[package]]
 name = "wit-bindgen-guest-rust"
 version = "0.3.0"
-source = "git+https://github.com/bytecodealliance/wit-bindgen#c5f82a40e4d3ed4a74fdec54603420ccfc2cdf4f"
+source = "git+https://github.com/bytecodealliance/wit-bindgen#aed92eb1cf11cb6b5474cc2a88c808b440198bc6"
 dependencies = [
  "bitflags",
 ]
