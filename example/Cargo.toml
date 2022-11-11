@@ -7,7 +7,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-wit-bindgen-guest-rust = { git = "https://github.com/bytecodealliance/wit-bindgen", default_features = false }
+wit-bindgen-guest-rust = { git = "https://github.com/bytecodealliance/wit-bindgen", features = ["realloc"], default_features = false }
 
 [package.metadata.component]
 direct-export = "backend"

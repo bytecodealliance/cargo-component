@@ -393,7 +393,7 @@ version = "{version}"
 edition = "2021"
 
 [dependencies]
-"wit-bindgen-guest-rust" = {{ git = "{WIT_BINDGEN_REPO}", default_features = false }}
+"wit-bindgen-guest-rust" = {{ git = "{WIT_BINDGEN_REPO}", features = ["realloc"], default_features = false }}
 "#
             ),
         )
