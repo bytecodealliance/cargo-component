@@ -153,10 +153,10 @@ will target WASI by default at that time.
 
 To install the `cargo component` subcommand, first you'll want to install
 [the latest stable Rust](https://www.rust-lang.org/tools/install) and then
-you'll execute to  install the subcommand from the root of this repository:
+you'll execute to  install the subcommand:
 
 ```
-cargo install --locked --path .
+cargo install --git https://github.com/bytecodealliance/cargo-component
 ```
 
 The [currently published crate](https://crates.io/crates/cargo-component)
