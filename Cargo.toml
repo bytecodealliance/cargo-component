@@ -5,9 +5,9 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.66"
-cargo = "0.65.0"
-cargo-util = "0.2.1"
-clap = { version = "4.0.18", features = ["derive"] }
+cargo = "0.66.0"
+cargo-util = "0.2.2"
+clap = { version = "4.0.23", features = ["derive"] }
 toml_edit = { version = "0.14.4", features = ["easy"] }
 wit-parser = { git = "https://github.com/bytecodealliance/wit-bindgen", rev = "bd89607" }
 wit-bindgen-core = { git = "https://github.com/bytecodealliance/wit-bindgen", rev = "bd89607" }
@@ -20,6 +20,6 @@ log = "0.4.17"
 default = ["pretty_env_logger"]
 
 [dev-dependencies]
-assert_cmd = "2.0.5"
-predicates = "2.1.1"
-wasmparser = "0.92.0"
+assert_cmd = "2.0.6"
+predicates = "2.1.3"
+wasmparser = "0.94.0"

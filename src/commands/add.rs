@@ -106,7 +106,7 @@ impl AddCommand {
 
     fn add(&self, pkg: &Package) -> Result<()> {
         let manifest_path = pkg.manifest_path();
-        let manifest = fs::read_to_string(&manifest_path).with_context(|| {
+        let manifest = fs::read_to_string(manifest_path).with_context(|| {
             format!("failed to read manifest file `{}`", manifest_path.display())
         })?;
 
@@ -141,7 +141,7 @@ impl AddCommand {
         if self.dry_run {
             println!("{}", document);
         } else {
-            fs::write(&manifest_path, document.to_string()).with_context(|| {
+            fs::write(manifest_path, document.to_string()).with_context(|| {
                 format!(
                     "failed to write manifest file `{path}`",
                     path = manifest_path.display()
