@@ -31,7 +31,7 @@ fn it_creates_the_expected_files() -> Result<()> {
     let proj_dir = root.join("foo");
 
     assert!(proj_dir.join("Cargo.toml").is_file());
-    assert!(proj_dir.join("foo.wit").is_file());
+    assert!(proj_dir.join("world.wit").is_file());
     assert!(proj_dir.join("src").join("lib.rs").is_file());
     assert!(proj_dir.join(".vscode").join("settings.json").is_file());
 
@@ -51,7 +51,7 @@ fn it_supports_editor_option() -> Result<()> {
     let proj_dir = root.join("foo");
 
     assert!(proj_dir.join("Cargo.toml").is_file());
-    assert!(proj_dir.join("foo.wit").is_file());
+    assert!(proj_dir.join("world.wit").is_file());
     assert!(proj_dir.join("src").join("lib.rs").is_file());
     assert!(!proj_dir.join(".vscode").is_dir());
 

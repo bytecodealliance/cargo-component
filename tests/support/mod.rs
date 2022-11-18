@@ -22,7 +22,7 @@ pub fn root() -> Result<PathBuf> {
     path.pop(); // remove `debug` or `release`
     path.push("tests");
     fs::create_dir_all(&path)?;
-    Ok(path.join(&format!("t{}", id)))
+    Ok(path.join(format!("t{id}")))
 }
 
 pub fn create_root() -> Result<PathBuf> {
@@ -49,7 +49,7 @@ pub fn cargo_component(args: &str) -> Command {
 }
 
 pub fn project() -> Result<ProjectBuilder> {
-    ProjectBuilder::new(create_root()?)
+    Ok(ProjectBuilder::new(create_root()?))
 }
 
 pub struct Project {
@@ -61,10 +61,10 @@ pub struct ProjectBuilder {
 }
 
 impl ProjectBuilder {
-    pub fn new(root: PathBuf) -> Result<Self> {
-        Ok(Self {
+    pub fn new(root: PathBuf) -> Self {
+        Self {
             project: Project { root },
-        })
+        }
     }
 
     pub fn root(&self) -> PathBuf {
@@ -78,18 +78,16 @@ impl ProjectBuilder {
         Ok(self)
     }
 
-    pub fn build(&mut self) -> Result<Project> {
-        Ok(Project {
+    pub fn build(&mut self) -> Project {
+        Project {
             root: self.project.root.clone(),
-        })
+        }
     }
 }
 
 impl Project {
     pub fn new(name: &str) -> Result<Self> {
-        let root = root()?;
-        drop(fs::remove_dir_all(&root));
-        fs::create_dir_all(&root)?;
+        let root = create_root()?;
 
         cargo_component(&format!("new {name}"))
             .current_dir(&root)
@@ -120,14 +118,14 @@ impl Project {
         self.build_dir()
             .join("wasm32-unknown-unknown")
             .join("debug")
-            .join(format!("{}.wasm", name))
+            .join(format!("{name}.wasm"))
     }
 
     pub fn release_wasm(&self, name: &str) -> PathBuf {
         self.build_dir()
             .join("wasm32-unknown-unknown")
             .join("release")
-            .join(format!("{}.wasm", name))
+            .join(format!("{name}.wasm"))
     }
 
     pub fn cargo_component(&self, cmd: &str) -> Command {
@@ -138,7 +136,8 @@ impl Project {
 }
 
 pub fn validate_component(path: &Path) -> Result<()> {
-    let bytes = fs::read(path).with_context(|| format!("failed to read `{}`", path.display()))?;
+    let bytes = fs::read(path)
+        .with_context(|| format!("failed to read `{path}`", path = path.display()))?;
 
     // Validate the bytes as either a component or a module
     Validator::new_with_features(WasmFeatures {

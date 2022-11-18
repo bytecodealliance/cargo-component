@@ -1,6 +1,9 @@
-use crate::commands::{workspace, CompileOptions};
+use crate::{
+    commands::{workspace, CompileOptions},
+    Config,
+};
 use anyhow::Result;
-use cargo::{core::compiler::CompileMode, Config};
+use cargo::core::compiler::CompileMode;
 use clap::{ArgAction, Args};
 use std::path::PathBuf;
 
@@ -106,10 +109,10 @@ pub struct BuildCommand {
 
 impl BuildCommand {
     /// Executes the command.
-    pub fn exec(self, config: &mut Config) -> Result<()> {
+    pub async fn exec(self, config: &mut Config) -> Result<()> {
         log::debug!("executing compile command");
 
-        config.configure(
+        config.cargo_mut().configure(
             u32::from(self.verbose),
             self.quiet,
             self.color.as_deref(),
@@ -125,7 +128,7 @@ impl BuildCommand {
         let workspace = workspace(self.manifest_path.as_deref(), config)?;
         let options = CompileOptions::from(self).into_cargo_options(config, CompileMode::Build)?;
 
-        crate::compile(config, workspace, &options, force_generation)
+        crate::compile(config, workspace, &options, force_generation).await
     }
 }
 

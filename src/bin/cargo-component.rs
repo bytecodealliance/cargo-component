@@ -1,7 +1,11 @@
 use anyhow::Result;
-use cargo::{CliError, Config};
-use cargo_component::commands::{
-    AddCommand, BuildCommand, CheckCommand, ClippyCommand, MetadataCommand, NewCommand,
+use cargo::CliError;
+use cargo_component::{
+    commands::{
+        AddCommand, BuildCommand, CheckCommand, ClippyCommand, MetadataCommand, NewCommand,
+        RegistryCommand,
+    },
+    config::Config,
 };
 use clap::Parser;
 
@@ -29,22 +33,25 @@ pub enum Command {
     Check(CheckCommand),
     Add(AddCommand),
     Clippy(ClippyCommand),
+    Registry(RegistryCommand),
 }
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     #[cfg(feature = "pretty_env_logger")]
-    pretty_env_logger::init_custom_env("CARGO_LOG");
+    pretty_env_logger::init_custom_env("CARGO_COMPONENT_LOG");
 
     let mut config = Config::default()?;
 
     if let Err(e) = match CargoComponent::parse() {
         CargoComponent::Component(cmd) | CargoComponent::Command(cmd) => match cmd {
-            Command::New(cmd) => cmd.exec(&mut config),
-            Command::Build(cmd) => cmd.exec(&mut config),
-            Command::Metadata(cmd) => cmd.exec(&mut config),
-            Command::Check(cmd) => cmd.exec(&mut config),
-            Command::Add(cmd) => cmd.exec(&mut config),
-            Command::Clippy(cmd) => cmd.exec(&mut config),
+            Command::New(cmd) => cmd.exec(&mut config).await,
+            Command::Build(cmd) => cmd.exec(&mut config).await,
+            Command::Metadata(cmd) => cmd.exec(&mut config).await,
+            Command::Check(cmd) => cmd.exec(&mut config).await,
+            Command::Add(cmd) => cmd.exec(&mut config).await,
+            Command::Clippy(cmd) => cmd.exec(&mut config).await,
+            Command::Registry(cmd) => cmd.exec(&mut config).await,
         },
     } {
         cargo::exit_with_error(

@@ -167,12 +167,12 @@ updated to install the crates.io package once a proper release is made.
 
 Use `cargo component new <name>` to create a new component.
 
-Assuming you used the name `hello` for your component, it will create a `./hello.wit`
-file describing the component's directly-exported interface:
+This will create a `world.wit` file describing the world that the
+component will target:
 
 ```wit
-interface hello {
-  hello-world: func() -> string
+default world component {
+  export hello-world: func() -> string
 }
 ```
 
@@ -181,11 +181,9 @@ The component will export a `hello-world` function returning a string.
 The implementation of the component will be in `src/lib.rs`:
 
 ```rust
-use bindings::hello;
-
 struct Component;
 
-impl hello::Hello for Component {
+impl bindings::Component for Component {
     fn hello_world() -> String {
         "Hello, World!".to_string()
     }
@@ -199,87 +197,43 @@ Here `bindings` is the bindings crate that `cargo component` generated for you.
 The `export!` macro informs the bindings that the `Component` type exports
 all interfaces listed in `Cargo.toml`.
 
-The name of each binding sub-module is dependent upon the names specified in
-`Cargo.toml`:
-
-```toml
-# ...
-
-[package.metadata.component.exports]
-hello = "hello.wit"
-```
-
-This will generate a `bindings::hello` module that contains the `Hello` trait
-implemented by the component above.
-
 ## Usage
 
 The `cargo component` subcommand has some analogous commands to cargo itself:
 
 * `cargo component new` — creates a new WebAssembly component Rust project.
-* `cargo component add` — adds a component interface dependency to a cargo manifest file.
+* `cargo component add` — adds a component interface dependency to a cargo 
+  manifest file.
 * `cargo component build` — builds a WebAssembly component from a Rust project
   using the `wasm32-unknown-unknown` target by default.
-* `cargo component metadata` — prints package metadata as `cargo metadata` would,
-  except it also includes the metadata of generated bindings.
+* `cargo component metadata` — prints package metadata as `cargo metadata` 
+  would, except it also includes the metadata of generated bindings.
 * `cargo component check` — checks the local package and all of its dependencies
   (including generated bindings) for errors.
-* `cargo component clippy` — same as `cargo clippy` but also checks generated bindings.
+* `cargo component clippy` — same as `cargo clippy` but also checks generated 
+  bindings.
 
 More commands will be added over time.
-
-## Specifying Dependencies
-
-Dependencies are interfaces defined in [wit](https://github.com/bytecodealliance/wit-bindgen)
-that are listed in special sections in the project's `Cargo.toml` file.
-
-To import interfaces from your component, use the
-`[package.metadata.component.imports]` table.
-
-To export interfaces from your component, use the
-`[package.metadata.component.exports]` table.
-
-Dependencies are specified much like normal dependencies in `Cargo.toml`:
-
-```toml
-binding-name = "path/to/interface.wit"
-```
-
-To _directly_ export an interface (i.e. one where the interface's functions
-are exported from the component rather than as an instance export), set the
-`direct-export` key to the name of the entry in the
-`[package.metadata.component.exports]` table.
-
-```toml
-[package.metadata.component]
-direct-export = "foo"
-```
-
-The `cargo component new` command generates a component project that initially
-only exports an interface directly.
-
-Use the `cargo component add` command to easily add dependencies to your
-`Cargo.toml`.
-
-**Support for specifying version dependencies (e.g. `dep = "0.1.0"`) from a component registry will eventually be supported.**
 
 ## Using `rust-analyzer`
 
 [rust-analyzer](https://github.com/rust-analyzer/rust-analyzer) is an extremely
-useful tool for analyzing Rust code and is used in many different editors to provide
-code completion and other features.
+useful tool for analyzing Rust code and is used in many different editors to 
+provide code completion and other features.
 
-rust-analyzer depends on `cargo metadata` and `cargo check` to discover workspace
-information and to check for errors.
+rust-analyzer depends on `cargo metadata` and `cargo check` to discover 
+workspace information and to check for errors.
 
 Because `cargo component` generates code for dependencies that `cargo` itself is
-unaware of, rust-analyzer will not detect or parse the generated bindings; additionally,
-diagnostics will highlight any use of the generated bindings as errors.
+unaware of, rust-analyzer will not detect or parse the generated bindings; 
+additionally, diagnostics will highlight any use of the generated bindings as 
+errors.
 
-To solve this problem, rust-analyzer must be configured to use the `cargo-component`
-executable as the `cargo` command. By doing so, the `cargo component metadata` and
-`cargo component check` subcommands will inform rust-analyzer of the generated bindings
-as if they were normal crate dependencies.
+To solve this problem, rust-analyzer must be configured to use the 
+`cargo-component` executable as the `cargo` command. By doing so, the `cargo 
+component metadata` and `cargo component check` subcommands will inform 
+rust-analyzer of the generated bindings as if they were normal crate 
+dependencies.
 
 To configure rust-analyzer to use the `cargo-component` executable, set the
 `rust-analyzer.server.extraEnv` setting to the following:
@@ -288,15 +242,17 @@ To configure rust-analyzer to use the `cargo-component` executable, set the
 "rust-analyzer.server.extraEnv": { "CARGO": "cargo-component" }
 ```
 
-By default, `cargo component new` will configure Visual Studio Code to use `cargo component` by
-creating a `.vscode/settings.json` file for you. To prevent this, pass `--editor none` to
-`cargo component new`.
+By default, `cargo component new` will configure Visual Studio Code to use 
+`cargo component` by creating a `.vscode/settings.json` file for you. To 
+prevent this, pass `--editor none` to `cargo component new`.
 
-Please check the documentation for rust-analyzer regarding how to set settings for other IDEs.
+Please check the documentation for rust-analyzer regarding how to set settings 
+for other IDEs.
 
 ## Contributing to `cargo component`
 
-`cargo component` is a [Bytecode Alliance](https://bytecodealliance.org/) project, and follows
+`cargo component` is a [Bytecode Alliance](https://bytecodealliance.org/) 
+project, and follows
 the Bytecode Alliance's [Code of Conduct](CODE_OF_CONDUCT.md) and
 [Organizational Code of Conduct](ORG_CODE_OF_CONDUCT.md).
 
@@ -304,6 +260,8 @@ the Bytecode Alliance's [Code of Conduct](CODE_OF_CONDUCT.md) and
 
 1. The `cargo component` subcommand is written in Rust, so you'll want
   [Rust installed](https://www.rust-lang.org/tools/install) first.
+2. A [protobuf compiler](http://google.github.io/proto-lens/installing-protoc.html)
+  is required to be installed for registry support.
 
 ### Getting the Code
 
@@ -325,8 +283,8 @@ You'll be adding tests primarily to the `tests/` directory.
 
 ### Submitting Changes
 
-Changes to `cargo component` are managed through pull requests (PRs). Everyone is
-welcome to submit a pull request! We'll try to get to reviewing it or
+Changes to `cargo component` are managed through pull requests (PRs). Everyone 
+is welcome to submit a pull request! We'll try to get to reviewing it or
 responding to it in at most a few days.
 
 ### Code Formatting
@@ -339,8 +297,8 @@ command. This is checked on CI.
 The CI for the `cargo component` repository is relatively significant. It tests
 changes on Windows, macOS, and Linux.
 
-It also performs a "dry run" of the release process to ensure that release binaries
-can be built and are ready to be published (_coming soon_).
+It also performs a "dry run" of the release process to ensure that release 
+binaries can be built and are ready to be published (_coming soon_).
 
 ### Publishing (_coming soon_)
 

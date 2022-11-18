@@ -1,7 +1,10 @@
 use super::CheckCommand;
-use crate::commands::{workspace, CompileOptions};
+use crate::{
+    commands::{workspace, CompileOptions},
+    Config,
+};
 use anyhow::{anyhow, Result};
-use cargo::{core::compiler::CompileMode, Config};
+use cargo::core::compiler::CompileMode;
 use cargo_util::paths::resolve_executable;
 use clap::Args;
 use std::{
@@ -39,10 +42,10 @@ pub struct ClippyCommand {
 
 impl ClippyCommand {
     /// Executes the command.
-    pub fn exec(self, config: &mut Config) -> Result<()> {
+    pub async fn exec(self, config: &mut Config) -> Result<()> {
         log::debug!("executing clippy command");
 
-        config.configure(
+        config.cargo_mut().configure(
             u32::from(self.options.verbose),
             self.options.quiet,
             self.options.color.as_deref(),
@@ -64,7 +67,7 @@ impl ClippyCommand {
             .clippy_options
             .into_iter()
             .chain(self.no_deps.then(|| "--no-deps".to_string()))
-            .map(|arg| format!("{}__CLIPPY_HACKERY__", arg))
+            .map(|arg| format!("{arg}__CLIPPY_HACKERY__"))
             .collect();
         env::set_var("CLIPPY_ARGS", clippy_args);
 
@@ -72,7 +75,7 @@ impl ClippyCommand {
         // This is the magic that turns `cargo check` into `cargo clippy`
         env::set_var("RUSTC_WORKSPACE_WRAPPER", Self::driver_path()?);
 
-        crate::check(config, workspace, &options, force_generation)
+        crate::check(config, workspace, &options, force_generation).await
     }
 
     fn driver_path() -> Result<PathBuf> {

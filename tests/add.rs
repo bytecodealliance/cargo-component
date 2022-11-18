@@ -3,6 +3,7 @@ use anyhow::Result;
 use assert_cmd::prelude::*;
 use predicates::{prelude::*, str::contains};
 use std::fs;
+use toml_edit::{value, Document, InlineTable, Value};
 
 mod support;
 
@@ -17,10 +18,10 @@ fn help() {
 }
 
 #[test]
-fn requires_path_and_name() {
+fn requires_package() {
     cargo_component("add")
         .assert()
-        .stderr(contains("--path <PATH>").and(contains("<name>")))
+        .stderr(contains("cargo component add <PACKAGE>"))
         .failure();
 }
 
@@ -28,10 +29,10 @@ fn requires_path_and_name() {
 fn validate_name_does_not_conflict_with_package() -> Result<()> {
     let project = Project::new("foo")?;
     project
-        .cargo_component("add --path foo.wit foo")
+        .cargo_component("add bar/foo")
         .assert()
         .stderr(contains(
-            "cannot add dependency `foo` as it conflicts with the package name",
+            "cannot add dependency `foo` as it conflicts with the component's package name",
         ))
         .failure();
 
@@ -39,13 +40,27 @@ fn validate_name_does_not_conflict_with_package() -> Result<()> {
 }
 
 #[test]
-fn validate_the_interface_file_exists() -> Result<()> {
+fn validate_the_package_exists() -> Result<()> {
     let project = Project::new("foo")?;
+    let manifest_path = project.root().join("Cargo.toml");
+    let manifest = fs::read_to_string(&manifest_path)?;
+    let mut doc: Document = manifest.parse()?;
+    doc["package"]["metadata"]["component"]["registries"]["default"] = value(
+        InlineTable::from_iter([("path", Value::from("registry"))].into_iter()),
+    );
+    fs::write(manifest_path, doc.to_string())?;
+
     project
-        .cargo_component("add --path bar.wit bar")
+        .cargo_component("registry new registry")
+        .assert()
+        .stderr(contains("Creating local component registry"))
+        .success();
+
+    project
+        .cargo_component("add foo/bar")
         .assert()
         .stderr(contains(
-            "interface file `bar.wit` does not exist or is not a file",
+            "package `foo/bar` does not exist in local registry",
         ))
         .failure();
 
@@ -53,66 +68,48 @@ fn validate_the_interface_file_exists() -> Result<()> {
 }
 
 #[test]
-fn checks_for_duplicate_exports() -> Result<()> {
+fn validate_the_version_exists() -> Result<()> {
     let project = Project::new("foo")?;
+    let manifest_path = project.root().join("Cargo.toml");
+    let manifest = fs::read_to_string(&manifest_path)?;
+    let mut doc: Document = manifest.parse()?;
+    doc["package"]["metadata"]["component"]["registries"]["default"] = value(
+        InlineTable::from_iter([("path", Value::from("registry"))].into_iter()),
+    );
+    fs::write(manifest_path, doc.to_string())?;
 
     project
-        .cargo_component("add --path foo.wit --direct-export export")
+        .cargo_component("registry publish -r registry --id foo/bar -v 1.0.0 world.wit")
+        .assert()
+        .stderr(contains("Publishing version 1.0.0 of package `foo/bar`"))
+        .success();
+
+    project
+        .cargo_component("add --version 2.0.0 foo/bar")
         .assert()
         .stderr(contains(
-            "a directly exported interface has already been specified in the manifest",
+            "package `foo/bar` has no release that satisfies version requirement `^2.0.0`",
         ))
-        .failure();
-
-    project
-        .cargo_component("add --path foo.wit --export export")
-        .assert()
-        .success();
-
-    project
-        .cargo_component("add --path foo.wit import")
-        .assert()
-        .success();
-
-    project
-        .cargo_component("add --path foo.wit --export export")
-        .assert()
-        .stderr(contains("an export with name `export` already exists"))
-        .failure();
-
-    project
-        .cargo_component("add --path foo.wit --export import")
-        .assert()
-        .stderr(contains("an import with name `import` already exists"))
         .failure();
 
     Ok(())
 }
 
 #[test]
-fn checks_for_duplicate_imports() -> Result<()> {
+fn checks_for_duplicate_dependencies() -> Result<()> {
     let project = Project::new("foo")?;
+    let manifest_path = project.root().join("Cargo.toml");
+    let manifest = fs::read_to_string(&manifest_path)?;
+    let mut doc: Document = manifest.parse()?;
+    doc["package"]["metadata"]["component"]["dependencies"]["bar"] = value("foo/bar:1.2.3");
+    fs::write(manifest_path, doc.to_string())?;
 
     project
-        .cargo_component("add --path foo.wit import")
+        .cargo_component("add foo/bar")
         .assert()
-        .success();
-
-    project
-        .cargo_component("add --path foo.wit --export export")
-        .assert()
-        .success();
-
-    project
-        .cargo_component("add --path foo.wit import")
-        .assert()
-        .stderr(contains("an import with name `import` already exists"))
-        .failure();
-
-    project
-        .cargo_component("add --path foo.wit export")
-        .assert()
-        .stderr(contains("an export with name `export` already exists"))
+        .stderr(contains(
+            "cannot add dependency `bar` as it conflicts with an existing dependency",
+        ))
         .failure();
 
     Ok(())
@@ -121,15 +118,30 @@ fn checks_for_duplicate_imports() -> Result<()> {
 #[test]
 fn prints_modified_manifest_for_dry_run() -> Result<()> {
     let project = Project::new("foo")?;
+    let manifest_path = project.root().join("Cargo.toml");
+    let manifest = fs::read_to_string(&manifest_path)?;
+    let mut doc: Document = manifest.parse()?;
+    doc["package"]["metadata"]["component"]["registries"]["default"] = value(
+        InlineTable::from_iter([("path", Value::from("registry"))].into_iter()),
+    );
+    fs::write(manifest_path, doc.to_string())?;
 
     project
-        .cargo_component("add --dry-run --path foo.wit import")
+        .cargo_component("registry publish -r registry --id foo/bar -v 1.2.3 world.wit")
         .assert()
-        .stdout(contains(r#"import = "foo.wit""#))
+        .stderr(contains("Publishing version 1.2.3 of package `foo/bar`"))
         .success();
 
-    // Assert the dependency was not added to the manifest
-    assert!(!fs::read_to_string(project.root().join("Cargo.toml"))?.contains("import"));
+    project
+        .cargo_component("add --dry-run foo/bar")
+        .assert()
+        .stderr(contains(r#"Added dependency `bar` with version `1.2.3`"#))
+        .success();
+
+    let manifest = fs::read_to_string(project.root().join("Cargo.toml"))?;
+
+    // Assert the dependency was added to the manifest
+    assert!(!contains(r#"bar = "foo/baz:1.2.3""#).eval(&manifest));
 
     Ok(())
 }
