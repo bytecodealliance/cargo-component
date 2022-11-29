@@ -14,6 +14,107 @@ use toml_edit::{table, value, Document, InlineTable, Item, Table, Value};
 
 use crate::WIT_BINDGEN_REPO;
 
+fn is_wit_keyword(s: &str) -> bool {
+    // TODO: move this into wit-parser?
+    matches!(
+        s,
+        "use"
+            | "type"
+            | "func"
+            | "u8"
+            | "u16"
+            | "u32"
+            | "u64"
+            | "s8"
+            | "s16"
+            | "s32"
+            | "s64"
+            | "float32"
+            | "float64"
+            | "char"
+            | "record"
+            | "list"
+            | "flags"
+            | "variant"
+            | "enum"
+            | "union"
+            | "bool"
+            | "string"
+            | "option"
+            | "result"
+            | "future"
+            | "stream"
+            | "as"
+            | "from"
+            | "static"
+            | "interface"
+            | "tuple"
+            | "implements"
+            | "import"
+            | "export"
+            | "world"
+            | "default"
+    )
+}
+
+fn is_rust_keyword(s: &str) -> bool {
+    // TODO: source this from somewhere?
+    matches!(
+        s,
+        "as" 
+            | "async"
+            | "await"
+            | "break"
+            | "const"
+            | "continue"
+            | "crate"
+            | "dyn"
+            | "else"
+            | "enum"
+            | "extern"
+            | "false"
+            | "fn"
+            | "for"
+            | "if"
+            | "impl"
+            | "in"
+            | "let"
+            | "loop"
+            | "match"
+            | "mod"
+            | "move"
+            | "mut"
+            | "pub"
+            | "ref"
+            | "return"
+            | "self"
+            | "static"
+            | "struct"
+            | "super"
+            | "trait"
+            | "true"
+            | "type"
+            | "unsafe"
+            | "use"
+            | "where"
+            | "while"
+            // Reserved for future use
+            | "abstract"
+            | "become"
+            | "box"
+            | "do"
+            | "final"
+            | "macro"
+            | "override"
+            | "priv"
+            | "try"
+            | "typeof"
+            | "unsized"
+            | "virtual"
+            | "yield"
+    )
+}
+
 /// Create a new WebAssembly component package at <path>
 #[derive(Args)]
 pub struct NewCommand {
@@ -103,11 +204,7 @@ impl<'a> PackageName<'a> {
         wit_parser::validate_id(&kebab)
             .with_context(|| format!("component name `{package}` is not a legal WIT identifier"))?;
 
-        if Self::is_wit_keyword(&kebab) {
-            bail!("component name `{package}` cannot be used as it is a WIT keyword");
-        }
-
-        if Self::is_rust_keyword(&snake) {
+        if is_rust_keyword(&snake) {
             bail!("component name `{package}` cannot be used as it is a Rust keyword");
         }
 
@@ -117,107 +214,6 @@ impl<'a> PackageName<'a> {
             snake,
             camel,
         })
-    }
-
-    fn is_wit_keyword(s: &str) -> bool {
-        // TODO: move this into wit-parser?
-        matches!(
-            s,
-            "use"
-                | "type"
-                | "func"
-                | "u8"
-                | "u16"
-                | "u32"
-                | "u64"
-                | "s8"
-                | "s16"
-                | "s32"
-                | "s64"
-                | "float32"
-                | "float64"
-                | "char"
-                | "record"
-                | "list"
-                | "flags"
-                | "variant"
-                | "enum"
-                | "union"
-                | "bool"
-                | "string"
-                | "option"
-                | "result"
-                | "future"
-                | "stream"
-                | "as"
-                | "from"
-                | "static"
-                | "interface"
-                | "tuple"
-                | "implements"
-                | "import"
-                | "export"
-                | "world"
-                | "default"
-        )
-    }
-
-    fn is_rust_keyword(s: &str) -> bool {
-        // TODO: source this from somewhere?
-        matches!(
-            s,
-            "as" 
-                | "async"
-                | "await"
-                | "break"
-                | "const"
-                | "continue"
-                | "crate"
-                | "dyn"
-                | "else"
-                | "enum"
-                | "extern"
-                | "false"
-                | "fn"
-                | "for"
-                | "if"
-                | "impl"
-                | "in"
-                | "let"
-                | "loop"
-                | "match"
-                | "mod"
-                | "move"
-                | "mut"
-                | "pub"
-                | "ref"
-                | "return"
-                | "self"
-                | "static"
-                | "struct"
-                | "super"
-                | "trait"
-                | "true"
-                | "type"
-                | "unsafe"
-                | "use"
-                | "where"
-                | "while"
-                // Reserved for future use
-                | "abstract"
-                | "become"
-                | "box"
-                | "do"
-                | "final"
-                | "macro"
-                | "override"
-                | "priv"
-                | "try"
-                | "typeof"
-                | "unsized"
-                | "virtual"
-                | "yield"
-        )
     }
 }
 
@@ -368,10 +364,11 @@ bindings::export!(Component);
         fs::write(
             &interface_path,
             format!(
-                r#"interface {kebab} {{
+                r#"interface {percent}{kebab} {{
     hello-world: func() -> string
 }}
 "#,
+                percent = if is_wit_keyword(&name.kebab) { "%" } else { "" },
                 kebab = name.kebab,
             ),
         )

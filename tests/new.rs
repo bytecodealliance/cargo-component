@@ -93,21 +93,6 @@ fn it_supports_name_option() -> Result<()> {
 }
 
 #[test]
-fn it_rejects_wit_keywords() -> Result<()> {
-    let root = create_root()?;
-
-    cargo_component("new foo --name interface")
-        .current_dir(&root)
-        .assert()
-        .stderr(contains(
-            "component name `interface` cannot be used as it is a WIT keyword",
-        ))
-        .failure();
-
-    Ok(())
-}
-
-#[test]
 fn it_rejects_rust_keywords() -> Result<()> {
     let root = create_root()?;
 

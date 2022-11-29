@@ -90,3 +90,17 @@ edition = "2021"
 
     Ok(())
 }
+
+#[test]
+fn it_supports_wit_keywords() -> Result<()> {
+    let project = Project::new("interface")?;
+    project
+        .cargo_component("build --release")
+        .assert()
+        .stderr(contains("Finished release [optimized] target(s)"))
+        .success();
+
+    validate_component(&project.release_wasm("interface"))?;
+
+    Ok(())
+}
