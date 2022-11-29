@@ -10,6 +10,7 @@ use cargo::{
     Config,
 };
 use cargo_util::paths::link_or_copy;
+use heck::ToSnakeCase;
 use std::{
     collections::{BTreeMap, HashSet},
     fs::{self, File},
@@ -20,8 +21,8 @@ use std::{
 use toml_edit::easy::Value;
 use wit_bindgen_core::Files;
 use wit_bindgen_gen_guest_rust::Opts;
-use wit_component::{ComponentEncoder, ComponentInterfaces};
-use wit_parser::Interface;
+use wit_component::ComponentEncoder;
+use wit_parser::{Docs, Interface, World};
 
 mod target;
 
@@ -226,8 +227,15 @@ impl ComponentMetadata {
         }
     }
 
-    fn to_interfaces(&self) -> ComponentInterfaces {
-        ComponentInterfaces {
+    fn to_world(&self) -> World {
+        World {
+            // Use the name of the default interface if there is one
+            name: self
+                .direct_export
+                .as_ref()
+                .map(|d| d.interface.name.clone())
+                .unwrap_or_else(|| self.name.clone()),
+            docs: Docs::default(),
             default: self.direct_export.as_ref().map(|d| d.interface.clone()),
             imports: self
                 .imports
@@ -336,7 +344,7 @@ fn generate_package_bindings(
 ) -> Result<cargo::core::Dependency> {
     // TODO: when sourcing dependencies from a registry, use actual version information.
     let version = "0.1.0";
-    let name = format!("{pkg}-bindings", pkg = metadata.name);
+    let name = format!("{pkg}-bindings", pkg = metadata.name.to_snake_case());
 
     let package_dir = bindgen_dir.join(&name);
 
@@ -422,16 +430,8 @@ edition = "2021"
         let mut generator = opts.build();
         let mut files = Files::default();
 
-        let interface = metadata.to_interfaces();
-        generator.generate(
-            interface
-                .default
-                .as_ref()
-                .map(|i| i.name.as_str())
-                .unwrap_or(&metadata.name),
-            &metadata.to_interfaces(),
-            &mut files,
-        );
+        let world = metadata.to_world();
+        generator.generate(&world, &mut files);
 
         fs::write(
             &source_path,

@@ -31,7 +31,7 @@ fn it_creates_the_expected_files() -> Result<()> {
     let proj_dir = root.join("foo");
 
     assert!(proj_dir.join("Cargo.toml").is_file());
-    assert!(proj_dir.join("interface.wit").is_file());
+    assert!(proj_dir.join("foo.wit").is_file());
     assert!(proj_dir.join("src").join("lib.rs").is_file());
     assert!(proj_dir.join(".vscode").join("settings.json").is_file());
 
@@ -51,7 +51,7 @@ fn it_supports_editor_option() -> Result<()> {
     let proj_dir = root.join("foo");
 
     assert!(proj_dir.join("Cargo.toml").is_file());
-    assert!(proj_dir.join("interface.wit").is_file());
+    assert!(proj_dir.join("foo.wit").is_file());
     assert!(proj_dir.join("src").join("lib.rs").is_file());
     assert!(!proj_dir.join(".vscode").is_dir());
 
@@ -88,6 +88,36 @@ fn it_supports_name_option() -> Result<()> {
     let proj_dir = root.join("foo");
 
     assert!(fs::read_to_string(proj_dir.join("Cargo.toml"))?.contains("name = \"bar\""));
+
+    Ok(())
+}
+
+#[test]
+fn it_rejects_wit_keywords() -> Result<()> {
+    let root = create_root()?;
+
+    cargo_component("new foo --name interface")
+        .current_dir(&root)
+        .assert()
+        .stderr(contains(
+            "component name `interface` cannot be used as it is a WIT keyword",
+        ))
+        .failure();
+
+    Ok(())
+}
+
+#[test]
+fn it_rejects_rust_keywords() -> Result<()> {
+    let root = create_root()?;
+
+    cargo_component("new foo --name fn")
+        .current_dir(&root)
+        .assert()
+        .stderr(contains(
+            "component name `fn` cannot be used as it is a Rust keyword",
+        ))
+        .failure();
 
     Ok(())
 }
