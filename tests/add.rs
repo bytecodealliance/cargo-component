@@ -57,7 +57,7 @@ fn checks_for_duplicate_exports() -> Result<()> {
     let project = Project::new("foo")?;
 
     project
-        .cargo_component("add --path interface.wit --direct-export export")
+        .cargo_component("add --path foo.wit --direct-export export")
         .assert()
         .stderr(contains(
             "a directly exported interface has already been specified in the manifest",
@@ -65,23 +65,23 @@ fn checks_for_duplicate_exports() -> Result<()> {
         .failure();
 
     project
-        .cargo_component("add --path interface.wit --export export")
+        .cargo_component("add --path foo.wit --export export")
         .assert()
         .success();
 
     project
-        .cargo_component("add --path interface.wit import")
+        .cargo_component("add --path foo.wit import")
         .assert()
         .success();
 
     project
-        .cargo_component("add --path interface.wit --export export")
+        .cargo_component("add --path foo.wit --export export")
         .assert()
         .stderr(contains("an export with name `export` already exists"))
         .failure();
 
     project
-        .cargo_component("add --path interface.wit --export import")
+        .cargo_component("add --path foo.wit --export import")
         .assert()
         .stderr(contains("an import with name `import` already exists"))
         .failure();
@@ -94,23 +94,23 @@ fn checks_for_duplicate_imports() -> Result<()> {
     let project = Project::new("foo")?;
 
     project
-        .cargo_component("add --path interface.wit import")
+        .cargo_component("add --path foo.wit import")
         .assert()
         .success();
 
     project
-        .cargo_component("add --path interface.wit --export export")
+        .cargo_component("add --path foo.wit --export export")
         .assert()
         .success();
 
     project
-        .cargo_component("add --path interface.wit import")
+        .cargo_component("add --path foo.wit import")
         .assert()
         .stderr(contains("an import with name `import` already exists"))
         .failure();
 
     project
-        .cargo_component("add --path interface.wit export")
+        .cargo_component("add --path foo.wit export")
         .assert()
         .stderr(contains("an export with name `export` already exists"))
         .failure();
@@ -123,9 +123,9 @@ fn prints_modified_manifest_for_dry_run() -> Result<()> {
     let project = Project::new("foo")?;
 
     project
-        .cargo_component("add --dry-run --path interface.wit import")
+        .cargo_component("add --dry-run --path foo.wit import")
         .assert()
-        .stdout(contains(r#"import = "interface.wit""#))
+        .stdout(contains(r#"import = "foo.wit""#))
         .success();
 
     // Assert the dependency was not added to the manifest

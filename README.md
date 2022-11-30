@@ -165,26 +165,28 @@ updated to install the crates.io package once a proper release is made.
 
 ## Getting Started
 
-Use `cargo component new` to create a simple "hello world" style component.
+Use `cargo component new <name>` to create a new component.
 
-This will generate an `interface.wit` file that describes the component's
-directly exported interface:
+Assuming you used the name `hello` for your component, it will create a `./hello.wit`
+file describing the component's directly-exported interface:
 
 ```wit
-say-something: func() -> string
+interface hello {
+  hello-world: func() -> string
+}
 ```
 
-The component will export a `say-something` function returning a string.
+The component will export a `hello-world` function returning a string.
 
 The implementation of the component will be in `src/lib.rs`:
 
 ```rust
-use bindings::interface;
+use bindings::hello;
 
 struct Component;
 
-impl interface::Interface for Component {
-    fn say_something() -> String {
+impl hello::Hello for Component {
+    fn hello_world() -> String {
         "Hello, World!".to_string()
     }
 }
@@ -192,19 +194,23 @@ impl interface::Interface for Component {
 bindings::export!(Component);
 ```
 
-Here `interface` is the bindings crate that `cargo component` generated for you.
+Here `bindings` is the bindings crate that `cargo component` generated for you.
 
-The `export!` macro informs the bindings that the `Component` type implements
-the interface.
+The `export!` macro informs the bindings that the `Component` type exports
+all interfaces listed in `Cargo.toml`.
 
-The name of the crate is dependent upon the name specified in `Cargo.toml`:
+The name of each binding sub-module is dependent upon the names specified in
+`Cargo.toml`:
 
 ```toml
 # ...
 
 [package.metadata.component.exports]
-interface = "interface.wit"
+hello = "hello.wit"
 ```
+
+This will generate a `bindings::hello` module that contains the `Hello` trait
+implemented by the component above.
 
 ## Usage
 

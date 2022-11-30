@@ -1,2 +1,5 @@
-/// Fetch the content bytes of the given URL.
-fetch: func(url: string) -> list<u8>
+/// An example backend interface.
+interface backend {
+    /// Fetch the content bytes of the given URL.
+    fetch: func(url: string) -> list<u8>
+}

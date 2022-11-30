@@ -26,7 +26,7 @@ dependencies = [
 [[package]]
 name = "wit-bindgen-guest-rust"
 version = "0.3.0"
-source = "git+https://github.com/bytecodealliance/wit-bindgen#064bd1a79342a51ab1ed5c0ea30674eda6773f5e"
+source = "git+https://github.com/bytecodealliance/wit-bindgen#4bd4371084c9fe57ae236238386d8a5f91217b50"
 dependencies = [
  "bitflags",
 ]
