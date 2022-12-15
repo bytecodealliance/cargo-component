@@ -358,7 +358,7 @@ document packages only; `regex` and `transcoder` are not imported automatically
 as in the previous example.
 
 The resulting type for this component will the same as the previous example, 
-but it will also export a `parse` function of type `string -> result<_, string>`
+but it will also export a `parse` function of type `(string) -> result<_, string>`
 as specified in the world.
 
 The wit document package names of `wasi`, `regex`, and `transcoder` map 
@@ -366,3 +366,112 @@ directly to the names of the dependencies in `[package.metadata.component.depend
 
 Referencing a package in the wit document that is not defined in the `[package.metadata.component.dependencies]`
 table is an error.
+
+### Exporting only functions from a component
+
+An example `Cargo.toml`:
+
+```toml
+[package]
+name = "my-component"
+version = "1.2.3"
+
+[dependencies]
+# Rust crate dependencies here
+
+[package.metadata.component]
+package = "my-org/my-component"
+world = "./component.wit"
+```
+
+An example `component.wit`:
+
+```wit
+world my-component {
+  greet: func(name: string) -> string
+}
+```
+
+Here this component has no component registry dependencies and only exports a 
+single function named `greet` with type `(string) -> string`.
+
+### Exporting an interface directly from a component
+
+An example `Cargo.toml`:
+
+```toml
+[package]
+name = "my-component"
+version = "1.2.3"
+
+[dependencies]
+# Rust crate dependencies here
+
+[package.metadata.component]
+package = "my-org/my-component"
+world = "./component.wit"
+
+[package.metadata.component.dependencies]
+http-types = "http/types:1.2.3"
+```
+
+An example `component.wit`:
+
+```wit
+world my-component {
+  import downstream: http-types.handler
+  
+  include http-types.handler # proposed wit syntax
+}
+```
+
+In this example, the authored component doesn't target any particular world.
+
+It imports a purely abstract HTTP `handler` interface from wit package `http/types`
+with name `downstream`. As this import comes from a wit package and not a 
+component package, it offers no hints to any composition tooling as to what 
+implementation of the downstream "handler" to link with in the future.
+
+It then exports the same handler interface directly from the component by including its exports.
+
+This allows the component to act as a middleware for some other HTTP handler: 
+it may forward requests to the downstream handler (possibly post-processing the 
+response) or it may respond to the request itself.
+
+### Exporting a named interface from a component
+
+An example `Cargo.toml`:
+
+```toml
+[package]
+name = "my-component"
+version = "1.2.3"
+
+[dependencies]
+# Rust crate dependencies here
+
+[package.metadata.component]
+package = "my-org/my-component"
+world = "./component.wit"
+
+[package.metadata.component.dependencies]
+http-types = "http/types:1.2.3"
+```
+
+An example `component.wit`:
+
+```wit
+world my-component {
+  import downstream: http-types.handler
+
+  handler: http-types.handler
+}
+```
+
+This example is nearly identical to the previous, except instead of directly 
+exporting the handler functions from the component, it exports an instance 
+named `handler` that exports the functions.
+
+The difference lies in the wit syntax: the former example uses the `include` 
+syntax to indicate the interface's exports should be included in the world's 
+exports and this example exports the interface with the name `handler`.
