@@ -102,7 +102,7 @@ This design proposes the following tables in `Cargo.toml`:
   table below).
 
   As packages in a component registry are namespaced (unlike Rust crate 
-  registries), the short-form differs from what is supported by `cargo`:
+  registries), the shorthand form differs from what is supported by `cargo`:
 
   ```toml
   name = "<package-id>:<version>"
@@ -137,9 +137,16 @@ This design proposes the following tables in `Cargo.toml`:
   name = "<registry-url>"
   ```
 
+  This is the shorthand form of:
+
+  ```toml
+  name = { url = "<registry-url>" }
+  ```
+
   Dependencies may specify a specific registry to use by specifying the `registry` field:
 
   ```toml
+  [package.metadata.component.dependencies]
   foo = { package = "ns/foo", version = "0.1.0", registry = "my-registry" }
   ```
 
@@ -148,12 +155,21 @@ This design proposes the following tables in `Cargo.toml`:
   override the built-in default in `cargo-component` (expected to be a 
   future Bytecode Alliance component registry instance).
 
-  A registry URL may use the `file://` scheme to point at local directory that 
-  may have vendored packages. This "local registry" will be the first supported 
-  registry implementation in `cargo-component` while the implementation of 
+  A local filesystem registry (i.e. a directory containing vendored packages 
+  and their package logs) may be specified using the `path` field of a registry 
+  entry:
+
+  ```toml
+  name = { path = "<path>" }
+  ```
+
+  Local filesystem registries will be the first supported registry 
+  implementation in `cargo-component` while the implementation of 
   component registries is still in progress.
 
-  It should be possible to specify the registries at the workspace root `Cargo.toml` as well, allowing for a single set of registries to be used across a workspace.
+  It should be possible to specify the registries at the workspace root `Cargo.toml`
+  as well, allowing for a single set of registries to be used across a 
+  workspace.
 
 #### The `targets` field
 
