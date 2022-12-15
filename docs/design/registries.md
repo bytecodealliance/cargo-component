@@ -95,7 +95,7 @@ This design proposes the following tables in `Cargo.toml`:
   Specifying dependencies from a registry is done in the general form of:
 
   ```toml
-  <name> = { package = "<package-id>", version = "<version>", registry = "<registry>" }
+  name = { package = "<package-id>", version = "<version>", registry = "<registry>" }
   ```
 
   The `registry` field is optional and defaults to `default` (see the `[package.metadata.component.registries]`
@@ -105,19 +105,19 @@ This design proposes the following tables in `Cargo.toml`:
   registries), the short-form differs from what is supported by `cargo`:
 
   ```toml
-  <name> = "<package-id>:<version>"
+  name = "<package-id>:<version>"
   ```
 
   Which is equivalent to:
 
   ```toml
-  <name> = { package = "<package-id>", version = "<version>" }
+  name = { package = "<package-id>", version = "<version>" }
   ```
 
   Local wit documents and components are specified using the `path` field:
 
   ```toml
-  <name> = { path = "<path>" }
+  name = { path = "<path>" }
   ```
 
   In the future, it may be possible to specify a path to a directory containing 
@@ -134,7 +134,7 @@ This design proposes the following tables in `Cargo.toml`:
   registry client implementation):
 
   ```toml
-  <name> = "<registry-url>"
+  name = "<registry-url>"
   ```
 
   Dependencies may specify a specific registry to use by specifying the `registry` field:
@@ -166,7 +166,7 @@ dependencies by default.
 The syntax of the value is identical to referencing a world from a package in a 
 `wit` document:
 
-```toml
+```
 "<package-name>.<world-name>"
 ```
 
