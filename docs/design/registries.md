@@ -480,7 +480,7 @@ An example `component.wit`:
 world my-component {
   import downstream: http-types.handler
 
-  handler: http-types.handler
+  export handler: http-types.handler
 }
 ```
 
