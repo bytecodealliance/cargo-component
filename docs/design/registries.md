@@ -404,7 +404,7 @@ An example `component.wit`:
 
 ```wit
 world my-component {
-  greet: func(name: string) -> string
+  export greet: func(name: string) -> string
 }
 ```
 
