@@ -365,7 +365,7 @@ world my-component {
   
   import transcoder: transcoder
   
-  parse: func(x: string) -> result<_, string>
+  export parse: func(x: string) -> result<_, string>
 }
 ```
 
