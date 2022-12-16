@@ -29,7 +29,7 @@ The design follows these goals:
 
 * **Don't force wit on users**
 
-  * The design should enable users to use on components from a registry without 
+  * The design should enable users to use components from a registry without
     forcing them to immediately learn wit.
 
 * **Fully support the component model**
