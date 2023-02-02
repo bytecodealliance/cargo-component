@@ -322,7 +322,7 @@ Because the `targets` specifies a local wit document, the dependencies are
 interpreted as wit external packages only; `regex` and `transcoder` are not 
 imported automatically as in the previous example.
 
-The resulting type for this component will the same as the previous example, 
+The resulting type for this component will be the same as the previous example, 
 but it will also export a `parse` function of type `(string) -> result<_, string>`
 as specified in the world.
 
