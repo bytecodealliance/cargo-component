@@ -78,12 +78,8 @@ This design proposes the following tables in `Cargo.toml`:
 
   * `targets` - a target world for the component being authored; this causes 
     bindings to be generated for the specified world's imports and exports.
-    
-  * `world` - a path to a wit document specifying a world definition for the 
-    component being authored; it must contain a `world` with the same name as 
-    the current crate name.
 
-  The `targets` and `world` fields are mutually exclusive.
+  See below for more information on the `targets` field.
 
 * `[package.metadata.component.dependencies]`
 
@@ -176,88 +172,53 @@ This design proposes the following tables in `Cargo.toml`:
 The `targets` field in `[package.metadata.component]` is used to specify a 
 world the component is intended to target.
 
-If not specified, the component will only import from component package 
-dependencies by default.
+Specifying the target is done in the general form of:
 
-The syntax of the value is identical to referencing a world from a package in a 
-`wit` document:
-
-```
-"<package-name>.<world-name>"
+```toml
+targets = { dependency = "<dependency>", document = "<document>", world = "<world>" }
 ```
 
-Here `package-name` is the name of one of the dependencies in `[package.metadata.component.dependencies]`.
+If _only_ the `dependency` field is specified, the dependency must be a 
+component and it signifies that the component being authored will target the 
+same world as the dependency.
 
-Assuming an entry for a `wasi` dependency in `[package.metadata.component.dependencies]`
-and the package contains a world named `command`, a component being authored 
-may specify a value of `wasi.command` to target the `command` world, for 
-example.
+Otherwise, the specified dependency must be a wit package and the `document` 
+field is required. The `world` field remains optional; if not present the 
+default world of the specified document is used.
 
-Bindings will be automatically generated for the specified world's imports and 
-exports.
+The `targets` field has a shorthand form of `"<dependency>[.<document>[.<world>]]"`.
 
-It is an error to specify a name of a package that is not specified in the 
-dependencies table.
+For example, the following:
 
-It is also an error to specify a world name that is not defined in the 
-specified package.
+```toml
+targets = "wasi.cli.command"
+```
 
-#### The `world` field
+is equivalent to:
 
-The `world` field in `[package.metadata.component]` is used to specify the path 
-to a wit document defining the authored component's world; the document must contain a world with the same name as the current crate.
+```toml
+targets = { dependency = "wasi", document = "cli", world = "command" }
+```
 
-The field exists to grant developers explicit control over the _component type_ 
-(i.e. its imports and exports) of the component being authored.
+Components may target a local wit package by specifying the `path` field:
 
-The `world` field is mutually exclusive with the `targets` field as it 
-is expected that wit should be able to express the targeting relationship (i.e. 
-via a proposed `include` syntax, perhaps).
+```toml
+targets = { path = "<path>", world = "<world>" }
+```
 
-The presence of a `world` field alters the [behavior of dependencies](#dependency-behavior).
+The path will be parsed as a wit document and it may reference external packages
+as specified in the `package.metadata.component.dependencies` table. If `world` is omitted in this form, the document must define a default world.
 
-#### Dependency behavior
+Components that target a local wit document _will not_ automatically import
+from component package dependencies; it is expected that the document will
+fully describe the imports and exports of the component.
 
-The presence of a `world` field in `[package.metadata.component]` alters the 
-behavior of dependencies.
-
-When the `world` field _is not_ specified:
-
-* There should be at most one wit package dependency and it must 
-  be used in the `targets` field, if present; defining a dependency on a wit 
-  package not used in a `targets` field will result in an "unused dependency" 
-  warning from `cargo-component`.
-
-* Any number of component package dependencies are allowed; bindings will be 
-  generated to (instance) import the component's directly exported functions; 
-  the imports are _in addition to_ any imports from a targeted world.
-
-When the `world` field _is_ specified:
-
-* Any number of wit and component package dependencies are allowed.
-
-* The dependencies are mapped to package references in the specified wit 
-  document.
-
-* Component package dependencies are not automatically translated to imports as 
-  it is expected the the world being defined will describe how to import them.
-
-## Tooling to extract a world from `Cargo.toml`.
-
-It is expected that `cargo-component` will have a subcommand for extracting a 
-wit document from a `Cargo.toml` file that does not already contain a `world` 
-field.
-
-It would then add the `world` field to the `Cargo.toml` to point at the 
-extracted wit document.
-
-The extracted wit document should be semantically equivalent to the world 
-synthesized by `cargo-component` from the `targets` field and component package 
-dependencies when the `world` field is not present.
+Components that target a dependency's world will _additionally import_ from
+any component package dependencies in addition to the imports of the targeted world
 
 ## Examples
 
-### Targeting only a world from a registry
+### Targeting a world from a dependency
 
 An example `Cargo.toml`:
 
@@ -271,7 +232,7 @@ version = "1.2.3"
 
 [package.metadata.component]
 package = "my-org/my-component"
-targets = "wasi.command"
+targets = "wasi.cli.command"
 
 [package.metadata.component.dependencies]
 wasi = "webassembly/wasi:1.2.3"
@@ -284,9 +245,9 @@ by the `command` world and _must_ export what is expected to be exported
 by the `command` world via the generated bindings.
 
 In theory, the authored component could then simply run in any host that 
-supports the `wasi.command` world (e.g. a future wasmtime CLI).
+supports the `wasi.cli.command` world (e.g. a future Wasmtime CLI).
 
-### Targeting a world and using other components from a registry
+### Targeting a dependency's world and using other components from a registry
 
 An example `Cargo.toml`:
 
@@ -300,7 +261,7 @@ version = "1.2.3"
 
 [package.metadata.component]
 package = "my-org/my-component"
-targets = "wasi.command"
+targets = "wasi.cli.command"
 
 [package.metadata.component.dependencies]
 wasi = "webassembly/wasi:1.2.3"
@@ -308,7 +269,8 @@ regex = "fancy-components/regex:1.0.0"
 transcoder = "fancy-components/transcoder:1.0.0"
 ```
 
-In this example, the component still targets the `wasi.command` world as above.
+In this example, the component still targets the `wasi.cli.command` world as 
+above.
 
 However, it will also import an _instance_ named `regex` and an instance named 
 `transcoder` that export the functions directly exported by the `regex` and 
@@ -320,18 +282,6 @@ to instantiate those particular components and link them with this one by
 default. As they are instance imports, the authored component may still be 
 linked against alternative implementations provided they implement the expected 
 interfaces according to component model subtyping rules.
-
-Running the proposed command to generate a wit document from this `Cargo.toml` should create a wit file that looks something like:
-
-```wit
-world my-component {
-  include wasi.command # proposed syntax for including a world in another
-
-  import regex: regex
-  
-  import transcoder: transcoder
-}
-```
 
 ### Defining a custom world for a component
 
@@ -347,7 +297,7 @@ version = "1.2.3"
 
 [package.metadata.component]
 package = "my-org/my-component"
-world = "./component.wit"
+targets = { path = "component.wit" }
 
 [package.metadata.component.dependencies]
 wasi = "webassembly/wasi:1.2.3"
@@ -358,20 +308,19 @@ transcoder = "fancy-components/transcoder:1.0.0"
 An example `component.wit`:
 
 ```wit
-world my-component {
-  include wasi.command # proposed syntax for including a world in another
-
-  import regex: regex
+default world my-component {
+  include wasi.cli.command # a proposed syntax for including a world in another
   
-  import transcoder: transcoder
+  import regex: regex.root
+  import transcoder: transcoder.root
   
   export parse: func(x: string) -> result<_, string>
 }
 ```
 
-Because the `world` field is specified, the dependencies are interpreted as wit 
-document packages only; `regex` and `transcoder` are not imported automatically 
-as in the previous example.
+Because the `targets` specifies a local wit document, the dependencies are 
+interpreted as wit external packages only; `regex` and `transcoder` are not 
+imported automatically as in the previous example.
 
 The resulting type for this component will the same as the previous example, 
 but it will also export a `parse` function of type `(string) -> result<_, string>`
@@ -397,97 +346,16 @@ version = "1.2.3"
 
 [package.metadata.component]
 package = "my-org/my-component"
-world = "./component.wit"
+targets = { path = "component.wit" }
 ```
 
 An example `component.wit`:
 
 ```wit
-world my-component {
+default world my-component {
   export greet: func(name: string) -> string
 }
 ```
 
 Here this component has no component registry dependencies and only exports a 
 single function named `greet` with type `(string) -> string`.
-
-### Exporting an interface directly from a component
-
-An example `Cargo.toml`:
-
-```toml
-[package]
-name = "my-component"
-version = "1.2.3"
-
-[dependencies]
-# Rust crate dependencies here
-
-[package.metadata.component]
-package = "my-org/my-component"
-world = "./component.wit"
-
-[package.metadata.component.dependencies]
-http-types = "http/types:1.2.3"
-```
-
-An example `component.wit`:
-
-```wit
-world my-component {
-  import downstream: http-types.handler
-  
-  include http-types.handler # proposed wit syntax
-}
-```
-
-In this example, the authored component doesn't target any particular world.
-
-It imports a purely abstract HTTP `handler` interface from wit package `http/types`
-with name `downstream`. As this import comes from a wit package and not a 
-component package, it offers no hints to any composition tooling as to what 
-implementation of the downstream "handler" to link with in the future.
-
-It then exports the same handler interface directly from the component by including its exports.
-
-This allows the component to act as a middleware for some other HTTP handler: 
-it may forward requests to the downstream handler (possibly post-processing the 
-response) or it may respond to the request itself.
-
-### Exporting a named interface from a component
-
-An example `Cargo.toml`:
-
-```toml
-[package]
-name = "my-component"
-version = "1.2.3"
-
-[dependencies]
-# Rust crate dependencies here
-
-[package.metadata.component]
-package = "my-org/my-component"
-world = "./component.wit"
-
-[package.metadata.component.dependencies]
-http-types = "http/types:1.2.3"
-```
-
-An example `component.wit`:
-
-```wit
-world my-component {
-  import downstream: http-types.handler
-
-  export handler: http-types.handler
-}
-```
-
-This example is nearly identical to the previous, except instead of directly 
-exporting the handler functions from the component, it exports an instance 
-named `handler` that exports the functions.
-
-The difference lies in the wit syntax: the former example uses the `include` 
-syntax to indicate the interface's exports should be included in the world's 
-exports and this example exports the interface with the name `handler`.
