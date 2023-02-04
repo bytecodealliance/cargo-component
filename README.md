@@ -212,6 +212,8 @@ The `cargo component` subcommand has some analogous commands to cargo itself:
   (including generated bindings) for errors.
 * `cargo component clippy` — same as `cargo clippy` but also checks generated 
   bindings.
+* `cargo component registry` — a command for interacting with local component
+  registries.
 
 More commands will be added over time.
 
