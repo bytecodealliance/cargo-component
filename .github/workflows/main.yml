@@ -18,6 +18,8 @@ jobs:
     - name: Install Rust
       run: rustup update stable --no-self-update && rustup default stable && rustup target add wasm32-unknown-unknown
       shell: bash
+    - name: Install Protobuf Compiler
+      uses: arduino/setup-protoc@v1
     - name: Build cargo-component
       run: cargo build
     - name: Test cargo-component
@@ -30,6 +32,8 @@ jobs:
     - uses: actions/checkout@v2
     - name: Install Rust
       run: rustup update stable --no-self-update && rustup default stable && rustup target add wasm32-unknown-unknown
+    - name: Install Protobuf Compiler
+      uses: arduino/setup-protoc@v1
     - name: Install cargo-component (debug)
       run: cargo install --locked --debug --path .
     - name: Build the example component
@@ -42,6 +46,8 @@ jobs:
     - uses: actions/checkout@v2
     - name: Install Rust
       run: rustup update stable --no-self-update && rustup default stable
+    - name: Install Protobuf Compiler
+      uses: arduino/setup-protoc@v1
     - name: Install cargo-component
       run: cargo install --locked --path .
 
