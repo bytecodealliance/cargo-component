@@ -596,7 +596,7 @@ fn it_errors_on_missing_dependency() -> Result<()> {
         "1.0.0",
         None,
         None,
-        Some(("baz", "foo/baz:1.0.0")),
+        Some(("baz", "foo/baz@1.0.0")),
         "",
     )?;
     project
@@ -697,7 +697,7 @@ bindings::export!(Component);
         "1.0.0",
         None,
         None,
-        Some(("baz", "foo/baz:1.0.0")),
+        Some(("baz", "foo/baz@1.0.0")),
         source,
     )?;
     project
@@ -753,7 +753,7 @@ bindings::export!(Component);
     let mut manifest: Document = fs::read_to_string(&manifest_path)?.parse()?;
 
     let dependencies = &mut manifest["package"]["metadata"]["component"]["target"]["dependencies"];
-    dependencies["external-package"] = value("foo/bar:1.0.0");
+    dependencies["external-package"] = value("foo/bar@1.0.0");
 
     let registries = &mut manifest["package"]["metadata"]["component"]["registries"];
     registries["default"] = value(InlineTable::from_iter([(

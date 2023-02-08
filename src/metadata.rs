@@ -67,13 +67,13 @@ impl FromStr for RegistryPackage {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self> {
-        match s.rsplit_once(':') {
+        match s.rsplit_once('@') {
             Some((id, version)) => Ok(Self {
                 id: id.into(),
                 version: version.parse()?,
                 registry: None,
             }),
-            None => bail!("expected package with format `<package-id>:<version>`"),
+            None => bail!("expected package with format `<package-id>@<version>`"),
         }
     }
 }

@@ -101,7 +101,7 @@ fn checks_for_duplicate_dependencies() -> Result<()> {
     let manifest_path = project.root().join("Cargo.toml");
     let manifest = fs::read_to_string(&manifest_path)?;
     let mut doc: Document = manifest.parse()?;
-    doc["package"]["metadata"]["component"]["dependencies"]["bar"] = value("foo/bar:1.2.3");
+    doc["package"]["metadata"]["component"]["dependencies"]["bar"] = value("foo/bar@1.2.3");
     fs::write(manifest_path, doc.to_string())?;
 
     project
