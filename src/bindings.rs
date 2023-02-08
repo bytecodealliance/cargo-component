@@ -33,9 +33,7 @@ pub struct BindingsGenerator<'a> {
 
 impl<'a> BindingsGenerator<'a> {
     /// Creates a new bindings generator for the given bindings directory, component metadata, and
-    /// dependency resolutions.
-    ///
-    /// If `force` is true, bindings generation will be forced even if the bindings are up-to-date.
+    /// dependency resolution.
     pub fn new(
         bindings_dir: &'a Path,
         metadata: &'a ComponentMetadata,
@@ -59,6 +57,9 @@ impl<'a> BindingsGenerator<'a> {
     ///
     /// If this returns `Ok(None)`, then the bindings are up-to-date and
     /// do not need to be regenerated.
+    ///
+    ///
+    /// If `force` is true, bindings generation will be forced even if the bindings are up-to-date.
     pub fn reason(
         &self,
         last_modified_exe: SystemTime,
