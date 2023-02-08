@@ -107,7 +107,7 @@ This design proposes the following tables in `Cargo.toml`:
   registries), the shorthand form differs from what is supported by `cargo`:
 
   ```toml
-  name = "<package-id>:<version>"
+  name = "<package-id>@<version>"
   ```
 
   Which is equivalent to:
@@ -218,7 +218,7 @@ path = "<path>"
 world = "<world>"
 
 [package.metadata.component.target.dependencies]
-"<name>" = "<package-id>:<version>" # or any of the other forms of specifying a dependency
+"<name>" = "<package-id>@<version>" # or any of the other forms of specifying a dependency
 ...
 ```
 
