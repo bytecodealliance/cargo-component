@@ -20,6 +20,8 @@ jobs:
       shell: bash
     - name: Install Protobuf Compiler
       uses: arduino/setup-protoc@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Build cargo-component
       run: cargo build
     - name: Test cargo-component
@@ -34,6 +36,8 @@ jobs:
       run: rustup update stable --no-self-update && rustup default stable && rustup target add wasm32-unknown-unknown
     - name: Install Protobuf Compiler
       uses: arduino/setup-protoc@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Install cargo-component (debug)
       run: cargo install --locked --debug --path .
     - name: Build the example component
@@ -48,6 +52,8 @@ jobs:
       run: rustup update stable --no-self-update && rustup default stable
     - name: Install Protobuf Compiler
       uses: arduino/setup-protoc@v1
+      with:
+        repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Install cargo-component
       run: cargo install --locked --path .
 
