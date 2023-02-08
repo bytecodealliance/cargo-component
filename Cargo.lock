@@ -227,6 +227,7 @@ dependencies = [
  "cargo-util",
  "clap",
  "heck",
+ "hex 0.4.3",
  "home",
  "hyper",
  "indexmap",

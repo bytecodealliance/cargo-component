@@ -1,4 +1,5 @@
 //! Module for interacting with package log files.
+use crate::metadata::PackageId;
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{fmt, fs, path::Path};
@@ -67,6 +68,7 @@ impl fmt::Display for PackageType {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PackageLog {
     version: u32,
+    id: PackageId,
     #[serde(rename = "type")]
     ty: PackageType,
     entries: Vec<ProtoEnvelopeBody>,
@@ -76,9 +78,10 @@ pub struct PackageLog {
 
 impl PackageLog {
     /// Creates a new package log with the given package type.
-    pub fn new(ty: PackageType) -> Self {
+    pub fn new(id: PackageId, ty: PackageType) -> Self {
         Self {
             version: PACKAGE_LOG_VERSION,
+            id,
             ty,
             entries: Default::default(),
             validator: Default::default(),

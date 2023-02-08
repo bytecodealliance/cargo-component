@@ -30,6 +30,7 @@ serde_json = "1.0.91"
 async-trait = "0.1.64"
 wat = "1.0.57"
 indexmap = "1.9.2"
+hex = "0.4.3"
 
 [features]
 default = ["pretty_env_logger"]

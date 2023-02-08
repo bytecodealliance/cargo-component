@@ -19,18 +19,18 @@ use std::{
 };
 use url::Url;
 use warg_crypto::{
-    hash::{DynHash, HashAlgorithm},
+    hash::{DynHash, HashAlgorithm, Sha256},
     signing::PrivateKey,
 };
 use warg_protocol::{
     package::{PackageEntry, PackageRecord, ReleaseState, PACKAGE_RECORD_VERSION},
+    registry::LogId,
     ProtoEnvelope,
 };
 use wit_parser::{Resolve, UnresolvedPackage};
 
 const REGISTRY_KEY_FILE_NAME: &str = "local-signing.key";
 const PACKAGES_DIRECTORY_NAME: &str = "packages";
-const LOG_FILE_NAME: &str = "log.json";
 const CONTENTS_DIRECTORY_NAME: &str = "contents";
 
 fn generate_signing_key() -> SigningKey {
@@ -61,7 +61,7 @@ fn trim_ascii_start(mut bytes: &[u8]) -> &[u8] {
 /// * `packages` - The directory containing the packages.
 /// * `contents` - The directory containing package contents.
 ///
-/// Each package log is stored at `./logs/<package-ns>/<package-name>/log.json`.
+/// Each package log is stored at `./logs/<id>` where `<id>` is the warg protocol log ID.
 ///
 /// Package contents are stored in a `./contents/<algo>/<digest>` file.
 ///
@@ -251,7 +251,7 @@ impl LocalRegistry {
 
             log
         } else {
-            PackageLog::new(package_type)
+            PackageLog::new(id.clone(), package_type)
         };
 
         let mut entries = Vec::new();
@@ -345,12 +345,12 @@ impl LocalRegistry {
     }
 
     fn package_log_path(&self, id: &PackageId) -> PathBuf {
+        let id = LogId::package_log::<Sha256>(id.as_ref());
+
         self.root
             .as_path_unlocked()
             .join(PACKAGES_DIRECTORY_NAME)
-            .join(&id.namespace)
-            .join(&id.name)
-            .join(LOG_FILE_NAME)
+            .join(hex::encode(id.as_ref()))
     }
 
     fn contents_path(&self, content: &DynHash) -> PathBuf {

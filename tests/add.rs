@@ -18,10 +18,10 @@ fn help() {
 }
 
 #[test]
-fn requires_package() {
+fn requires_name_and_package() {
     cargo_component("add")
         .assert()
-        .stderr(contains("cargo component add <PACKAGE>"))
+        .stderr(contains("cargo component add <NAME> <PACKAGE>"))
         .failure();
 }
 
@@ -29,7 +29,7 @@ fn requires_package() {
 fn validate_name_does_not_conflict_with_package() -> Result<()> {
     let project = Project::new("foo")?;
     project
-        .cargo_component("add bar/foo")
+        .cargo_component("add foo bar")
         .assert()
         .stderr(contains(
             "cannot add dependency `foo` as it conflicts with the component's package name",
@@ -57,7 +57,7 @@ fn validate_the_package_exists() -> Result<()> {
         .success();
 
     project
-        .cargo_component("add foo/bar")
+        .cargo_component("add bar foo/bar")
         .assert()
         .stderr(contains(
             "package `foo/bar` does not exist in local registry",
@@ -85,7 +85,7 @@ fn validate_the_version_exists() -> Result<()> {
         .success();
 
     project
-        .cargo_component("add --version 2.0.0 foo/bar")
+        .cargo_component("add --version 2.0.0 bar foo/bar")
         .assert()
         .stderr(contains(
             "package `foo/bar` has no release that satisfies version requirement `^2.0.0`",
@@ -105,7 +105,7 @@ fn checks_for_duplicate_dependencies() -> Result<()> {
     fs::write(manifest_path, doc.to_string())?;
 
     project
-        .cargo_component("add foo/bar")
+        .cargo_component("add bar foo/bar")
         .assert()
         .stderr(contains(
             "cannot add dependency `bar` as it conflicts with an existing dependency",
@@ -133,7 +133,7 @@ fn prints_modified_manifest_for_dry_run() -> Result<()> {
         .success();
 
     project
-        .cargo_component("add --dry-run foo/bar")
+        .cargo_component("add --dry-run bar foo/bar")
         .assert()
         .stderr(contains(r#"Added dependency `bar` with version `1.2.3`"#))
         .success();

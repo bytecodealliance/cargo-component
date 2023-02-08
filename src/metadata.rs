@@ -4,7 +4,7 @@ use anyhow::{anyhow, bail, Result};
 use semver::{Version, VersionReq};
 use serde::{
     de::{self, value::MapAccessDeserializer, IntoDeserializer},
-    Deserialize,
+    Deserialize, Serialize,
 };
 use std::{borrow::Cow, collections::HashMap, fmt, path::PathBuf, str::FromStr, time::SystemTime};
 use url::Url;
@@ -12,51 +12,38 @@ use url::Url;
 /// Represents a unique package identifier in a registry.
 ///
 /// This identifier is unique within a specific registry.
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct PackageId {
-    /// The namespace of the package.
-    pub namespace: String,
-    /// The friendly name of the package.
-    pub name: String,
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct PackageId(String);
+
+impl PackageId {
+    /// Creates a new package id.
+    pub fn new(s: impl Into<String>) -> Self {
+        s.into().into()
+    }
 }
 
-impl FromStr for PackageId {
-    type Err = anyhow::Error;
+impl From<String> for PackageId {
+    fn from(s: String) -> Self {
+        Self(s)
+    }
+}
 
-    fn from_str(s: &str) -> Result<Self> {
-        match s.split_once('/') {
-            Some((namespace, name)) => {
-                if wit_parser::validate_id(namespace).is_err() {
-                    bail!("package namespace `{namespace}` is not a legal namespace");
-                }
+impl From<&str> for PackageId {
+    fn from(s: &str) -> Self {
+        Self(s.to_string())
+    }
+}
 
-                if wit_parser::validate_id(name).is_err() {
-                    bail!("package name `{name}` is not a legal name");
-                }
-
-                Ok(Self {
-                    namespace: namespace.to_owned(),
-                    name: name.to_owned(),
-                })
-            }
-            None => bail!("expected package name with format `<namespace>/<name>`"),
-        }
+impl AsRef<str> for PackageId {
+    fn as_ref(&self) -> &str {
+        &self.0
     }
 }
 
 impl fmt::Display for PackageId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{ns}/{name}", ns = self.namespace, name = self.name)
-    }
-}
-
-impl<'de> Deserialize<'de> for PackageId {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let s = String::deserialize(deserializer)?;
-        Self::from_str(&s).map_err(de::Error::custom)
+        write!(f, "{s}", s = self.0)
     }
 }
 
@@ -80,13 +67,13 @@ impl FromStr for RegistryPackage {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self> {
-        match s.split_once(':') {
+        match s.rsplit_once(':') {
             Some((id, version)) => Ok(Self {
-                id: id.parse()?,
+                id: id.into(),
                 version: version.parse()?,
                 registry: None,
             }),
-            None => bail!("expected package with format `<namespace>/<name>:<version>`"),
+            None => bail!("expected package with format `<package-id>:<version>`"),
         }
     }
 }
@@ -141,7 +128,7 @@ impl<'de> Deserialize<'de> for Dependency {
                     (Some(path), None, None, None) => Ok(Self::Value::Local(path)),
                     (None, Some(package), Some(version), registry) => {
                         Ok(Self::Value::Package(RegistryPackage {
-                            id: package.parse().map_err(de::Error::custom)?,
+                            id: package.into(),
                             version,
                             registry,
                         }))
@@ -266,7 +253,7 @@ impl Target {
     pub fn dependencies(&self) -> Cow<HashMap<String, Dependency>> {
         match self {
             Self::Package { package, .. } => Cow::Owned(HashMap::from_iter([(
-                package.id.name.clone(),
+                String::new(),
                 Dependency::Package(package.clone()),
             )])),
             Self::Local { dependencies, .. } => Cow::Borrowed(dependencies),
@@ -318,7 +305,7 @@ impl<'de> Deserialize<'de> for Target {
 
                         Ok(Target::Package {
                             package: RegistryPackage {
-                                id: package.parse().map_err(de::Error::custom)?,
+                                id: package.into(),
                                 version: entry
                                     .version
                                     .ok_or_else(|| de::Error::missing_field("version"))?,

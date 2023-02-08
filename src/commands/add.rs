@@ -31,10 +31,6 @@ pub struct AddCommand {
     #[clap(long = "color", value_name = "WHEN")]
     pub color: Option<String>,
 
-    /// Name to use for the dependency.
-    #[clap(long = "name", short = 'n', value_name = "NAME")]
-    pub name: Option<String>,
-
     /// Path to the manifest to add a dependency to
     #[clap(long = "manifest-path", value_name = "PATH")]
     pub manifest_path: Option<PathBuf>,
@@ -54,6 +50,10 @@ pub struct AddCommand {
     /// The version requirement of the dependency being added.
     #[clap(long = "version", value_name = "VERSION")]
     pub version: Option<VersionReq>,
+
+    /// Name to use for the dependency.
+    #[clap(value_name = "NAME")]
+    pub name: String,
 
     /// The package to add a dependency to.
     #[clap(value_name = "PACKAGE")]
@@ -100,7 +100,7 @@ impl AddCommand {
             "Added",
             format!(
                 "dependency `{name}` with version `{version}`",
-                name = self.name()
+                name = self.name
             ),
         )?;
 
@@ -152,7 +152,7 @@ impl AddCommand {
                 )
             })?;
 
-        dependencies[self.name()] = value(format!("{pkg}:{version}", pkg = self.package,));
+        dependencies[&self.name] = value(format!("{pkg}:{version}", pkg = self.package));
 
         if self.dry_run {
             println!("{document}");
@@ -169,24 +169,20 @@ impl AddCommand {
     }
 
     fn validate(&self, metadata: &ComponentMetadata) -> Result<()> {
-        let name = self.name();
-        if metadata.name == name {
+        if metadata.name == self.name {
             bail!(
-                "cannot add dependency `{name}` as it conflicts with the component's package name"
+                "cannot add dependency `{name}` as it conflicts with the component's package name",
+                name = self.name
             );
         }
 
-        if metadata.section.dependencies.contains_key(name) {
+        if metadata.section.dependencies.contains_key(&self.name) {
             bail!(
                 "cannot add dependency `{name}` as it conflicts with an existing dependency",
-                name = name
+                name = self.name
             );
         }
 
         Ok(())
-    }
-
-    fn name(&self) -> &str {
-        self.name.as_deref().unwrap_or(&self.package.name)
     }
 }

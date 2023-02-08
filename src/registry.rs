@@ -116,14 +116,6 @@ pub struct ResolvedDependency<'a> {
 }
 
 impl ResolvedDependency<'_> {
-    /// Gets the package name of the resolved dependency.
-    pub fn package_name(&self) -> &str {
-        match self.id {
-            Some(id) => &id.name,
-            None => self.name,
-        }
-    }
-
     /// Decodes the resolved dependency.
     pub fn decode(&self) -> Result<DecodedWasm> {
         let bytes = fs::read(&self.path).with_context(|| {
@@ -134,14 +126,13 @@ impl ResolvedDependency<'_> {
             )
         })?;
 
-        let mut decoded =
-            wit_component::decode(self.package_name(), &bytes).with_context(|| {
-                format!(
-                    "failed to decode content of dependency `{name}` at path `{path}`",
-                    name = self.name,
-                    path = self.path.display()
-                )
-            })?;
+        let mut decoded = wit_component::decode(self.name, &bytes).with_context(|| {
+            format!(
+                "failed to decode content of dependency `{name}` at path `{path}`",
+                name = self.name,
+                path = self.path.display()
+            )
+        })?;
 
         // Set the URL of the package to the resolved URL.
         let package = decoded.package();
