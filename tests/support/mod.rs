@@ -67,7 +67,7 @@ impl ProjectBuilder {
         }
     }
 
-    pub fn root(&self) -> PathBuf {
+    pub fn root(&self) -> &Path {
         self.project.root()
     }
 
@@ -106,8 +106,8 @@ impl Project {
         Ok(self)
     }
 
-    pub fn root(&self) -> PathBuf {
-        self.root.clone()
+    pub fn root(&self) -> &Path {
+        &self.root
     }
 
     pub fn build_dir(&self) -> PathBuf {

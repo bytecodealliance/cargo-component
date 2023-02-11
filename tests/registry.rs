@@ -1,6 +1,7 @@
 use crate::support::*;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use assert_cmd::prelude::*;
+use cargo_component::registry::LOCK_FILE_NAME;
 use predicates::str::contains;
 use std::{fs, path::Path};
 use toml_edit::{value, Document, InlineTable, Value};
@@ -211,6 +212,16 @@ bindings::export!(Component);
         .success();
     validate_component(&project.debug_wasm("component"))?;
 
+    let path = project.root().join(LOCK_FILE_NAME);
+    let contents = fs::read_to_string(&path)
+        .with_context(|| format!("failed to read lock file `{path}`", path = path.display()))?
+        .replace("\r\n", "\n");
+
+    assert!(
+        contents.contains("[[package]]\nid = \"foo/bar\"\n\n[package.requirements.\"^1.0.0\"]\nversion = \"1.0.0\"\n"),
+        "missing foo/bar dependency"
+    );
+
     Ok(())
 }
 
@@ -294,6 +305,16 @@ bindings::export!(Component);
         .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
         .success();
     validate_component(&project.debug_wasm("component"))?;
+
+    let path = project.root().join(LOCK_FILE_NAME);
+    let contents = fs::read_to_string(&path)
+        .with_context(|| format!("failed to read lock file `{path}`", path = path.display()))?
+        .replace("\r\n", "\n");
+
+    assert!(
+        contents.contains("[[package]]\nid = \"foo/bar\"\n\n[package.requirements.\"^1.0.0\"]\nversion = \"1.0.0\"\n"),
+        "missing foo/bar dependency"
+    );
 
     Ok(())
 }
@@ -429,6 +450,16 @@ bindings::export!(Component);
         .success();
     validate_component(&project.debug_wasm("component"))?;
 
+    let path = project.root().join(LOCK_FILE_NAME);
+    let contents = fs::read_to_string(&path)
+        .with_context(|| format!("failed to read lock file `{path}`", path = path.display()))?
+        .replace("\r\n", "\n");
+
+    assert!(
+        contents.contains("[[package]]\nid = \"foo/bar\"\n\n[package.requirements.\"^1.0.0\"]\nversion = \"1.0.0\"\n"),
+        "missing foo/bar dependency"
+    );
+
     Ok(())
 }
 
@@ -487,6 +518,16 @@ bindings::export!(Component);
         .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
         .success();
     validate_component(&project.debug_wasm("component"))?;
+
+    let path = project.root().join(LOCK_FILE_NAME);
+    let contents = fs::read_to_string(&path)
+        .with_context(|| format!("failed to read lock file `{path}`", path = path.display()))?
+        .replace("\r\n", "\n");
+
+    assert!(
+        contents.contains("[[package]]\nid = \"foo/bar\"\n\n[package.requirements.\"^1.0.0\"]\nversion = \"1.0.0\"\n"),
+        "missing foo/bar dependency"
+    );
 
     Ok(())
 }
@@ -707,6 +748,21 @@ bindings::export!(Component);
         .success();
     validate_component(&project.debug_wasm("component"))?;
 
+    let path = project.root().join(LOCK_FILE_NAME);
+    let contents = fs::read_to_string(&path)
+        .with_context(|| format!("failed to read lock file `{path}`", path = path.display()))?
+        .replace("\r\n", "\n");
+
+    assert!(
+        contents.contains("[[package]]\nid = \"foo/bar\"\n\n[package.requirements.\"^1.0.0\"]\nversion = \"1.0.0\"\n"),
+        "missing foo/bar dependency"
+    );
+
+    assert!(
+        contents.contains("[[package]]\nid = \"foo/baz\"\n\n[package.requirements.\"^1.0.0\"]\nversion = \"1.2.3\"\n"),
+        "missing foo/baz dependency"
+    );
+
     Ok(())
 }
 
@@ -772,6 +828,16 @@ bindings::export!(Component);
         .success();
     validate_component(&project.debug_wasm("component"))?;
 
+    let path = project.root().join(LOCK_FILE_NAME);
+    let contents = fs::read_to_string(&path)
+        .with_context(|| format!("failed to read lock file `{path}`", path = path.display()))?
+        .replace("\r\n", "\n");
+
+    assert!(
+        contents.contains("[[package]]\nid = \"foo/bar\"\n\n[package.requirements.\"^1.0.0\"]\nversion = \"1.0.0\"\n"),
+        "missing foo/bar dependency"
+    );
+
     Ok(())
 }
 
@@ -832,6 +898,21 @@ bindings::export!(Component);
         .success();
     validate_component(&project.debug_wasm("component"))?;
 
+    let lock_file_path = project.root().join(LOCK_FILE_NAME);
+    let orig_contents = fs::read_to_string(&lock_file_path)
+        .with_context(|| {
+            format!(
+                "failed to read lock file `{path}`",
+                path = lock_file_path.display()
+            )
+        })?
+        .replace("\r\n", "\n");
+
+    assert!(
+        orig_contents.contains("[[package]]\nid = \"foo/bar\"\n\n[package.requirements.\"^1.0.0\"]\nversion = \"1.0.0\"\n"),
+        "missing foo/bar dependency"
+    );
+
     cargo_component(&format!(
         "registry publish --registry {path} --id foo/bar --version 1.1.0 v11.wit",
         path = path.display()
@@ -846,6 +927,17 @@ bindings::export!(Component);
         .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
         .success();
     validate_component(&project.debug_wasm("component"))?;
+
+    let contents = fs::read_to_string(&lock_file_path)
+        .with_context(|| {
+            format!(
+                "failed to read lock file `{path}`",
+                path = lock_file_path.display()
+            )
+        })?
+        .replace("\r\n", "\n");
+
+    assert_eq!(orig_contents, contents, "expected no change to lock file");
 
     Ok(())
 }
