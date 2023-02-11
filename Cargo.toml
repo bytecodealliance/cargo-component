@@ -21,7 +21,6 @@ heck = "0.4.1"
 semver = "1.0.16"
 serde = { version = "1.0.152", features = ["derive"] }
 url = { version = "2.3.1", features = ["serde"] }
-hyper = { version = "0.14.24", features = ["http2", "client"] }
 tokio = { version = "1.25.0", default-features = false, features = ["macros", "rt-multi-thread"] }
 home = "0.5.4"
 p256 = "0.11.1"
