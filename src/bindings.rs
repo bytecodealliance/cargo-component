@@ -3,7 +3,7 @@
 use crate::{
     last_modified_time,
     metadata::{self, ComponentMetadata, Target},
-    registry::DependencyResolution,
+    registry::PackageDependencyResolution,
     WIT_BINDGEN_REPO,
 };
 use anyhow::{anyhow, bail, Context, Result};
@@ -24,33 +24,38 @@ use wit_parser::{
 
 /// A generator for bindings crates.
 pub struct BindingsGenerator<'a> {
-    metadata: &'a ComponentMetadata,
-    dependencies: DependencyResolution<'a>,
+    resolution: &'a PackageDependencyResolution,
     name: String,
     manifest_path: PathBuf,
     source_path: PathBuf,
 }
 
 impl<'a> BindingsGenerator<'a> {
-    /// Creates a new bindings generator for the given bindings directory, component metadata, and
+    /// Creates a new bindings generator for the given bindings directory and package
     /// dependency resolution.
     pub fn new(
         bindings_dir: &'a Path,
-        metadata: &'a ComponentMetadata,
-        dependencies: DependencyResolution<'a>,
+        resolution: &'a PackageDependencyResolution,
     ) -> Result<Self> {
-        let name = format!("{name}-bindings", name = metadata.name.to_snake_case());
-        let package_dir = bindings_dir.join(&metadata.name);
+        let name = format!(
+            "{name}-bindings",
+            name = resolution.metadata.name.to_snake_case()
+        );
+        let package_dir = bindings_dir.join(&resolution.metadata.name);
         let manifest_path = package_dir.join("Cargo.toml");
         let source_path = package_dir.join("src").join("lib.rs");
 
         Ok(Self {
-            metadata,
-            dependencies,
+            resolution,
             name,
             manifest_path,
             source_path,
         })
+    }
+
+    /// Gets the cargo metadata for the package that the bindings are generated for.
+    pub fn metadata(&self) -> &ComponentMetadata {
+        &self.resolution.metadata
     }
 
     /// Gets the reason for generating the bindings.
@@ -72,14 +77,14 @@ impl<'a> BindingsGenerator<'a> {
             .transpose()?
             .unwrap_or(SystemTime::UNIX_EPOCH);
 
-        let manifest_modified = self.metadata.modified_at > last_modified_output;
+        let metadata = self.metadata();
+        let manifest_modified = metadata.modified_at > last_modified_output;
         let exe_modified = last_modified_exe > last_modified_output;
-        let target_modified =
-            if let Some(Target::Local { path, .. }) = &self.metadata.section.target {
-                last_modified_time(path)? > last_modified_output
-            } else {
-                false
-            };
+        let target_modified = if let Some(Target::Local { path, .. }) = &metadata.section.target {
+            last_modified_time(path)? > last_modified_output
+        } else {
+            false
+        };
 
         if force
             || manifest_modified
@@ -191,13 +196,8 @@ publish = false
     }
 
     fn dependencies_are_newer(&self, last_modified_output: SystemTime) -> Result<bool> {
-        for dependency in self
-            .dependencies
-            .target
-            .values()
-            .chain(self.dependencies.component.values())
-        {
-            if last_modified_time(&dependency.path)? > last_modified_output {
+        for (_, dep) in self.resolution.deps() {
+            if last_modified_time(&dep.path)? > last_modified_output {
                 return Ok(true);
             }
         }
@@ -206,7 +206,7 @@ publish = false
     }
 
     fn create_target_world(&self) -> Result<(Resolve, WorldId)> {
-        let (mut merged, world_id) = match &self.metadata.section.target {
+        let (mut merged, world_id) = match &self.resolution.metadata.section.target {
             Some(Target::Package {
                 package,
                 document,
@@ -219,7 +219,7 @@ publish = false
         };
 
         // Merge all component dependencies as interface imports
-        for (name, dependency) in &self.dependencies.component {
+        for (name, dependency) in &self.resolution.component_dependencies {
             match dependency.decode()? {
                 DecodedWasm::WitPackage(_, _) => {
                     bail!("component dependency `{name}` is not a WebAssembly component")
@@ -248,10 +248,10 @@ publish = false
         world: Option<&str>,
     ) -> Result<(Resolve, WorldId)> {
         // We must have resolved a target package dependency at this point
-        assert_eq!(self.dependencies.target.len(), 1);
+        assert_eq!(self.resolution.target_dependencies.len(), 1);
 
         // Decode the target package dependency
-        let dependency = self.dependencies.target.values().next().unwrap();
+        let dependency = self.resolution.target_dependencies.values().next().unwrap();
         let decoded = dependency.decode()?;
         let package = decoded.package();
         let resolve = match decoded {
@@ -290,7 +290,7 @@ publish = false
 
         // Start by decoding and merging all of the target dependencies
         let mut dependencies = HashMap::new();
-        for (name, dependency) in &self.dependencies.target {
+        for (name, dependency) in &self.resolution.target_dependencies {
             let (resolve, package) = match dependency.decode()? {
                 DecodedWasm::WitPackage(resolve, package) => (resolve, package),
                 DecodedWasm::Component(..) => bail!("target dependency `{name}` is a WIT package"),
@@ -327,7 +327,7 @@ publish = false
 
     fn target_empty_world(&self) -> (Resolve, WorldId) {
         let mut resolve = Resolve::default();
-        let name = self.metadata.name.clone();
+        let name = self.resolution.metadata.name.clone();
         let package = resolve.packages.alloc(Package {
             name: name.clone(),
             url: None,

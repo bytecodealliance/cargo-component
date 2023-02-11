@@ -1,8 +1,7 @@
 use super::workspace;
 use crate::{
     metadata::{ComponentMetadata, PackageId},
-    registry::{self, DEFAULT_REGISTRY_NAME},
-    Config,
+    registry, Config,
 };
 use anyhow::{bail, Context, Result};
 use cargo::{core::package::Package, ops::Packages};
@@ -108,10 +107,13 @@ impl AddCommand {
     }
 
     fn resolve_version(&self, config: &Config, metadata: &ComponentMetadata) -> Result<String> {
-        let name = self.registry.as_deref().unwrap_or(DEFAULT_REGISTRY_NAME);
-        let registry = registry::create(config, name, &metadata.section.registries)?;
+        let registry = registry::create(
+            config,
+            self.registry.as_deref(),
+            &metadata.section.registries,
+        )?;
 
-        match registry.resolve(&self.package, self.version.as_ref())? {
+        match registry.resolve(&self.package, self.version.as_ref().unwrap_or(&VersionReq::STAR))? {
             Some(r) => Ok(self
                 .version
                 .as_ref()

@@ -775,9 +775,8 @@ bindings::export!(Component);
     Ok(())
 }
 
-// TODO: this test needs to be revised once we implement lock files
 #[test]
-fn it_uses_latest_package_versions() -> Result<()> {
+fn it_locks_to_a_specific_version() -> Result<()> {
     let root = create_root()?;
     let path = root.join("registry");
     fs::write(
@@ -791,9 +790,8 @@ fn it_uses_latest_package_versions() -> Result<()> {
     fs::write(
         root.join("v11.wit"),
         r#"default world foo {
-    import foo: func() -> string
+    import renamed: func() -> string
     export bar: func() -> string
-    export baz: func()
 }"#,
     )?;
 
@@ -841,22 +839,6 @@ bindings::export!(Component);
     .current_dir(&root)
     .assert()
     .success();
-
-    project.file(
-        "src/lib.rs",
-        r#"use bindings::{foo, Foo};
-    struct Component;
-    impl Foo for Component {
-        fn bar() -> String {
-            foo()
-        }
-        fn baz() {
-
-        }
-    }
-    bindings::export!(Component);
-"#,
-    )?;
 
     project
         .cargo_component("build")

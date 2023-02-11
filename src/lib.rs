@@ -2,7 +2,7 @@
 
 #![deny(missing_docs)]
 
-use crate::{config::Config, metadata::ComponentMetadata};
+use crate::config::Config;
 use anyhow::{anyhow, bail, Context, Result};
 use bindings::BindingsGenerator;
 use cargo::{
@@ -10,6 +10,7 @@ use cargo::{
     ops::{self, CompileOptions, ExportInfo, OutputMetadataOptions},
 };
 use cargo_util::paths::link_or_copy;
+use registry::{LockFile, PackageDependencyResolution, PackageResolutionMap};
 use std::{
     collections::BTreeMap,
     fs::{self, File},
@@ -47,25 +48,47 @@ fn last_modified_time(path: impl AsRef<Path>) -> Result<SystemTime> {
         })
 }
 
-async fn generate_workspace_bindings<'cfg>(
+async fn resolve_dependencies(
     config: &Config,
-    workspace: &mut Workspace<'cfg>,
+    workspace: &Workspace<'_>,
+) -> Result<PackageResolutionMap> {
+    let lock_file = LockFile::open(config, workspace)?.unwrap_or_default();
+
+    let mut map = PackageResolutionMap::default();
+    for package in workspace.members() {
+        match PackageDependencyResolution::new(config, workspace, package, &lock_file).await? {
+            Some(resolution) => {
+                let prev = map.insert(package.package_id(), resolution);
+                assert!(prev.is_none());
+            }
+            None => continue,
+        }
+    }
+
+    lock_file.update(config, workspace, &map)?;
+
+    Ok(map)
+}
+
+async fn generate_workspace_bindings(
+    config: &Config,
+    workspace: &mut Workspace<'_>,
     force_generation: bool,
-) -> Result<Vec<ComponentMetadata>> {
-    let mut metadata = Vec::new();
+) -> Result<PackageResolutionMap> {
+    let map = resolve_dependencies(config, workspace).await?;
     let bindings_dir = workspace.target_dir().join("bindings");
     let _lock = bindings_dir.open_rw(".lock", config.cargo(), "bindings cache")?;
     let last_modified_exe = last_modified_time(std::env::current_exe()?)?;
 
     for package in workspace.members_mut() {
-        let component_metadata = match ComponentMetadata::from_package(package)? {
-            Some(metadata) => metadata,
+        let resolution = match map.get(&package.package_id()) {
+            Some(resolution) => resolution,
             None => continue,
         };
 
         let dependency = generate_package_bindings(
             config,
-            &component_metadata,
+            resolution,
             bindings_dir.as_path_unlocked(),
             last_modified_exe,
             force_generation,
@@ -87,37 +110,19 @@ async fn generate_workspace_bindings<'cfg>(
             manifest.original().features().unwrap_or(&BTreeMap::new()),
             manifest.links(),
         )?;
-
-        metadata.push(component_metadata);
     }
 
-    Ok(metadata)
+    Ok(map)
 }
 
 async fn generate_package_bindings(
     config: &Config,
-    metadata: &ComponentMetadata,
+    resolution: &PackageDependencyResolution,
     bindings_dir: &Path,
     last_modified_exe: SystemTime,
     force: bool,
 ) -> Result<cargo::core::Dependency> {
-    let target_dependencies = metadata
-        .section
-        .target
-        .as_ref()
-        .map(|t| t.dependencies())
-        .unwrap_or_default();
-
-    // Resolve the dependencies of the component
-    let dependencies = registry::resolve(
-        config,
-        &metadata.section.registries,
-        target_dependencies.as_ref(),
-        &metadata.section.dependencies,
-    )
-    .await?;
-
-    let generator = BindingsGenerator::new(bindings_dir, metadata, dependencies)?;
+    let generator = BindingsGenerator::new(bindings_dir, resolution)?;
 
     match generator.reason(last_modified_exe, force)? {
         Some(reason) => {
@@ -131,7 +136,7 @@ async fn generate_package_bindings(
                 "Generating",
                 format!(
                     "bindings for {name} ({path})",
-                    name = metadata.name,
+                    name = resolution.metadata.name,
                     path = generator.package_dir().display()
                 ),
             )?;
@@ -149,7 +154,7 @@ async fn generate_package_bindings(
 
     let mut dep = cargo::core::Dependency::parse(
         generator.package_name(),
-        Some(&metadata.version.to_string()),
+        Some(&resolution.metadata.version.to_string()),
         SourceId::for_path(generator.package_dir())?,
     )?;
 
@@ -233,27 +238,22 @@ fn create_component(config: &Config, target_path: &Path) -> Result<()> {
 /// Compile a component for the given workspace and compile options.
 ///
 /// It is expected that the current package contains a `package.metadata.component` section.
-pub async fn compile<'cfg>(
-    config: &'cfg Config,
-    mut workspace: Workspace<'cfg>,
+pub async fn compile(
+    config: &Config,
+    mut workspace: Workspace<'_>,
     options: &CompileOptions,
     force_generation: bool,
 ) -> Result<()> {
-    let metadata = generate_workspace_bindings(config, &mut workspace, force_generation).await?;
+    let map = generate_workspace_bindings(config, &mut workspace, force_generation).await?;
     let result = ops::compile(&workspace, options)?;
 
-    for m in metadata {
+    for id in map.into_keys() {
         let path = result
             .cdylibs
             .iter()
-            .find(|o| o.unit.pkg.name() == m.name.as_str())
+            .find(|o| o.unit.pkg.package_id() == id)
             .map(|o| &o.path)
-            .ok_or_else(|| {
-                anyhow!(
-                    "failed to find output for component package `{package}`",
-                    package = m.name.as_str()
-                )
-            })?;
+            .ok_or_else(|| anyhow!("failed to find output for component package `{id}`",))?;
 
         create_component(config, path)?;
     }
@@ -264,9 +264,9 @@ pub async fn compile<'cfg>(
 /// Retrieves workspace metadata for the given workspace and metadata options.
 ///
 /// The returned metadata contains information about generated dependencies.
-pub async fn metadata<'cfg>(
-    config: &'cfg Config,
-    mut workspace: Workspace<'cfg>,
+pub async fn metadata(
+    config: &Config,
+    mut workspace: Workspace<'_>,
     options: &OutputMetadataOptions,
 ) -> Result<ExportInfo> {
     generate_workspace_bindings(config, &mut workspace, false).await?;
@@ -274,9 +274,9 @@ pub async fn metadata<'cfg>(
 }
 
 /// Check a component for errors with the given workspace and compile options.
-pub async fn check<'cfg>(
-    config: &'cfg Config,
-    mut workspace: Workspace<'cfg>,
+pub async fn check(
+    config: &Config,
+    mut workspace: Workspace<'_>,
     options: &CompileOptions,
     force_generation: bool,
 ) -> Result<()> {

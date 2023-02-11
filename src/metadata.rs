@@ -12,7 +12,7 @@ use url::Url;
 /// Represents a unique package identifier in a registry.
 ///
 /// This identifier is unique within a specific registry.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Ord, PartialOrd)]
 #[serde(transparent)]
 pub struct PackageId(String);
 
@@ -99,7 +99,7 @@ impl<'de> Deserialize<'de> for Dependency {
             type Value = Dependency;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                write!(formatter, "expecting a string or a table")
+                write!(formatter, "a string or a table")
             }
 
             fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
@@ -172,7 +172,7 @@ impl<'de> Deserialize<'de> for Registry {
             type Value = Registry;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                write!(formatter, "expecting a string or a table")
+                write!(formatter, "a string or a table")
             }
 
             fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
@@ -272,7 +272,18 @@ impl<'de> Deserialize<'de> for Target {
             type Value = Target;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                write!(formatter, "expecting a string or a table")
+                write!(formatter, "a string or a table")
+            }
+
+            fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(Self::Value::Package {
+                    package: s.parse().map_err(de::Error::custom)?,
+                    document: None,
+                    world: None,
+                })
             }
 
             fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>

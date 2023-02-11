@@ -1,5 +1,5 @@
 //! Module for interacting with local file system component registries.
-use super::{PackageContentLocation, PackageResolution, Registry};
+use super::{ContentLocation, Registry, RegistryPackageResolution};
 use crate::{
     config::Config,
     log::{PackageLog, PackageType},
@@ -434,8 +434,8 @@ impl Registry for LocalRegistry {
     fn resolve(
         &self,
         id: &PackageId,
-        requirement: Option<&VersionReq>,
-    ) -> Result<Option<PackageResolution>> {
+        requirement: &VersionReq,
+    ) -> Result<Option<RegistryPackageResolution>> {
         let path = self.package_log_path(id);
         if !path.exists() {
             bail!(
@@ -454,15 +454,10 @@ impl Registry for LocalRegistry {
             .releases()
             .filter_map(|release| match &release.state {
                 ReleaseState::Released { content } => {
-                    let matches = match requirement {
-                        Some(req) => req.matches(&release.version),
-                        None => true,
-                    };
-
                     let path = self.contents_path(content);
 
                     // Ignore remote packages that don't have content files
-                    if matches && (!is_remote_log || path.is_file()) {
+                    if requirement.matches(&release.version) && (!is_remote_log || path.is_file()) {
                         Some((&release.version, content, path))
                     } else {
                         None
@@ -472,7 +467,9 @@ impl Registry for LocalRegistry {
             })
             .max_by(|(a, _, _), (b, _, _)| a.cmp(b))
         {
-            Some((version, digest, path)) => Ok(Some(PackageResolution {
+            Some((version, digest, path)) => Ok(Some(RegistryPackageResolution {
+                id: id.clone(),
+                requirement: requirement.clone(),
                 url: Url::from_file_path(fs::canonicalize(&path).with_context(|| {
                     format!(
                         "failed to canonicalize local registry content path `{path}`",
@@ -482,7 +479,7 @@ impl Registry for LocalRegistry {
                 .unwrap(),
                 version: version.clone(),
                 digest: digest.clone(),
-                location: PackageContentLocation::Path(path),
+                location: ContentLocation::Local(path),
             })),
             None => Ok(None),
         }
