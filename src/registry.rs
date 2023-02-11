@@ -183,6 +183,7 @@ pub struct LockFile {
     /// The locked dependencies in the lock file.
     ///
     /// This list is sorted by the key of the locked package.
+    #[serde(rename = "package", default, skip_serializing_if = "Vec::is_empty")]
     pub packages: Vec<LockedPackage>,
 }
 

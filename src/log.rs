@@ -115,7 +115,7 @@ impl PackageLog {
             );
         }
 
-        if validate || log.validator.root().is_none() {
+        if validate || log.validator.head().is_none() {
             // Perform a full validation of the log
             log.validate().with_context(|| {
                 format!(

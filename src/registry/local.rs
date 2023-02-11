@@ -268,7 +268,7 @@ impl LocalRegistry {
         });
 
         let record = PackageRecord {
-            prev: log.validator().root().as_ref().map(|r| r.digest.clone()),
+            prev: log.validator().head().as_ref().map(|r| r.digest.clone()),
             version: PACKAGE_RECORD_VERSION,
             timestamp: SystemTime::now(),
             entries,
@@ -329,7 +329,7 @@ impl LocalRegistry {
         }
 
         let record = PackageRecord {
-            prev: log.validator().root().as_ref().map(|r| r.digest.clone()),
+            prev: log.validator().head().as_ref().map(|r| r.digest.clone()),
             version: PACKAGE_RECORD_VERSION,
             timestamp: SystemTime::now(),
             entries: vec![PackageEntry::Yank {
