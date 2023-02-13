@@ -28,8 +28,6 @@ pub mod metadata;
 pub mod registry;
 mod target;
 
-const WIT_BINDGEN_REPO: &str = "https://github.com/bytecodealliance/wit-bindgen";
-
 fn last_modified_time(path: impl AsRef<Path>) -> Result<SystemTime> {
     let path = path.as_ref();
     path.metadata()

@@ -1,4 +1,4 @@
-use crate::{Config, WIT_BINDGEN_REPO};
+use crate::Config;
 use anyhow::{bail, Context, Result};
 use cargo::ops::{self, NewOptions, VersionControl};
 use clap::{ArgAction, Args};
@@ -258,9 +258,9 @@ impl NewCommand {
         metadata["component"] = Item::Table(component);
 
         doc["package"]["metadata"] = Item::Table(metadata);
-        doc["dependencies"]["wit-bindgen-guest-rust"] = value(InlineTable::from_iter(
+        doc["dependencies"]["wit-bindgen"] = value(InlineTable::from_iter(
             [
-                ("git", Value::from(WIT_BINDGEN_REPO)),
+                ("version", Value::from("0.3.0")),
                 ("default_features", Value::from(false)),
             ]
             .into_iter(),

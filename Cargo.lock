@@ -2090,10 +2090,11 @@ dependencies = [
 
 [[package]]
 name = "thread_local"
-version = "1.1.4"
+version = "1.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5516c27b78311c50bf42c071425c560ac799b11c30b31f87e3081965fe5e0180"
+checksum = "3fdd6f064ccff2d6567adcb3873ca630700f00b5ad3f060c25b5dcfd9a4ce152"
 dependencies = [
+ "cfg-if",
  "once_cell",
 ]
 
@@ -2605,7 +2606,8 @@ checksum = "447660ad36a13288b1db4d4248e857b510e8c3a225c822ba4fb748c0aafecffd"
 [[package]]
 name = "wit-bindgen-core"
 version = "0.3.0"
-source = "git+https://github.com/bytecodealliance/wit-bindgen#964dff2c0f2fb12798a3ff6ca2990a88048580fc"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea1d49787508c06dfbeeb2c6599a20fc475547b102fc3e8637ada7d67bb62969"
 dependencies = [
  "anyhow",
  "wit-component",
@@ -2615,7 +2617,8 @@ dependencies = [
 [[package]]
 name = "wit-bindgen-gen-guest-rust"
 version = "0.3.0"
-source = "git+https://github.com/bytecodealliance/wit-bindgen#964dff2c0f2fb12798a3ff6ca2990a88048580fc"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3ae66d141c30d008ae9ef39b266b34c481db8c0aaa688c1431d04b8b8f3247d4"
 dependencies = [
  "heck",
  "wit-bindgen-core",
@@ -2626,7 +2629,8 @@ dependencies = [
 [[package]]
 name = "wit-bindgen-gen-rust-lib"
 version = "0.3.0"
-source = "git+https://github.com/bytecodealliance/wit-bindgen#964dff2c0f2fb12798a3ff6ca2990a88048580fc"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4b7e9138be66f508243c62d3d565fc03ce43ed04f3fc19a5fe8d3fb7f69f3fe4"
 dependencies = [
  "heck",
  "wit-bindgen-core",

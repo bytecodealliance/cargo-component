@@ -4,7 +4,6 @@ use crate::{
     last_modified_time,
     metadata::{self, ComponentMetadata, Target},
     registry::PackageDependencyResolution,
-    WIT_BINDGEN_REPO,
 };
 use anyhow::{anyhow, bail, Context, Result};
 use heck::ToSnakeCase;
@@ -146,7 +145,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-"wit-bindgen-guest-rust" = {{ git = "{WIT_BINDGEN_REPO}", features = ["realloc"], default_features = false }}
+"wit-bindgen" = {{ version = "0.3.0", features = ["realloc"], default_features = false }}
 "#,
                 name = self.name
             ),

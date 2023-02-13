@@ -7,7 +7,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-wit-bindgen-guest-rust = { git = "https://github.com/bytecodealliance/wit-bindgen", features = ["realloc"], default_features = false }
+wit-bindgen = { version = "0.3.0", features = ["realloc"], default_features = false }
 
 [package.metadata.component.target]
 path = "world.wit"
