@@ -310,7 +310,7 @@ document = "command"
 
 [package.metadata.component.dependencies]
 regex = "fancy-components/regex@1.0.0"
-transcoder = "fancy-components/transcoder:1.0.0"
+transcoder = "fancy-components/transcoder@1.0.0"
 ```
 
 In this example, the component still targets the WASI command world as above.
