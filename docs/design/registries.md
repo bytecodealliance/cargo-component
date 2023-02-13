@@ -181,7 +181,21 @@ using a local WIT document.
 
 #### Targeting a registry package
 
-Specifying a target from a registry package:
+You may use a shorthand form of specifying a target as follows:
+
+```toml
+[package.metadata.component]
+target = "<package-id>@<version>"
+```
+
+This is equivalent to:
+
+```toml
+[package.metadata.component]
+target = { package = "<package-id>", version = "<version>" }
+```
+
+The supported fields of `target` when referencing a registry package are:
 
 ```toml
 [package.metadata.component.target]
