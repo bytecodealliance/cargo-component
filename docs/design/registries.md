@@ -350,7 +350,7 @@ path = "component.wit"
 wasi = "webassembly/wasi@1.2.3"
 
 [package.metadata.component.dependencies]
-regex = "fancy-components/regex:1.0.0"
+regex = "fancy-components/regex@1.0.0"
 transcoder = "fancy-components/transcoder:1.0.0"
 ```
 An example `component.wit`:
