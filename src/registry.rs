@@ -131,10 +131,18 @@ pub fn create(
 /// Represents version information for a locked package.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LockedPackageVersion {
+    /// The version requirement used to resolve this version.
+    pub requirement: String,
     /// The version the package is locked to.
     pub version: Version,
     /// The digest of the package contents.
     pub digest: DynHash,
+}
+
+impl LockedPackageVersion {
+    fn key(&self) -> &str {
+        &self.requirement
+    }
 }
 
 /// Represents a locked package in a lock file.
@@ -148,9 +156,12 @@ pub struct LockedPackage {
     /// Defaults to the default registry if not specified.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub registry: Option<String>,
-    /// The map of requirements from the manifests in the workspace
-    /// to version information previously resolved for the package.
-    pub requirements: HashMap<VersionReq, LockedPackageVersion>,
+    /// The locked versions of a package.
+    ///
+    /// A package may have multiple locked versions if more than one
+    /// version requirement was specified for the package in `Cargo.toml`.
+    #[serde(rename = "version", default, skip_serializing_if = "Vec::is_empty")]
+    pub versions: Vec<LockedPackageVersion>,
 }
 
 impl LockedPackage {
@@ -190,10 +201,9 @@ pub struct LockFile {
 impl LockFile {
     /// Constructs a `LockFile` from a `PackageResolutionMap`.
     pub fn from_resolution(map: &PackageResolutionMap) -> Self {
-        let mut packages: HashMap<
-            (PackageId, Option<String>),
-            HashMap<VersionReq, LockedPackageVersion>,
-        > = HashMap::new();
+        type PackageKey = (PackageId, Option<String>);
+        type VersionsMap = HashMap<String, (Version, DynHash)>;
+        let mut packages: HashMap<PackageKey, VersionsMap> = HashMap::new();
 
         for resolution in map.values() {
             for (_, dep) in resolution.deps() {
@@ -204,16 +214,13 @@ impl LockFile {
                             .entry((id.clone(), registry.map(str::to_string)))
                             .or_default()
                             .insert(
-                                pkg.requirement.clone(),
-                                LockedPackageVersion {
-                                    version: pkg.version.clone(),
-                                    digest: pkg.digest.clone(),
-                                },
+                                pkg.requirement.to_string(),
+                                (pkg.version.clone(), pkg.digest.clone()),
                             );
 
-                        if let Some(prev) = prev {
+                        if let Some((prev, _)) = prev {
                             // The same requirements should resolve to the same version
-                            assert!(prev.version == pkg.version)
+                            assert!(prev == pkg.version)
                         }
                     }
                     None => continue,
@@ -223,10 +230,23 @@ impl LockFile {
 
         let mut packages: Vec<_> = packages
             .into_iter()
-            .map(|((id, registry), requirements)| LockedPackage {
-                id,
-                registry,
-                requirements,
+            .map(|((id, registry), versions)| {
+                let mut versions: Vec<LockedPackageVersion> = versions
+                    .into_iter()
+                    .map(|(requirement, (version, digest))| LockedPackageVersion {
+                        requirement,
+                        version,
+                        digest,
+                    })
+                    .collect();
+
+                versions.sort_by(|a, b| a.key().cmp(b.key()));
+
+                LockedPackage {
+                    id,
+                    registry,
+                    versions,
+                }
             })
             .collect();
 
@@ -313,8 +333,11 @@ impl LockFile {
             .ok()
             .map(|i| &self.packages[i])
         {
-            if let Some(ver) = pkg.requirements.get(requirement) {
-                return Ok(Some(ver));
+            if let Ok(index) = pkg
+                .versions
+                .binary_search_by_key(&requirement.to_string().as_str(), LockedPackageVersion::key)
+            {
+                return Ok(Some(&pkg.versions[index]));
             }
         }
 

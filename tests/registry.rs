@@ -218,7 +218,7 @@ bindings::export!(Component);
         .replace("\r\n", "\n");
 
     assert!(
-        contents.contains("[[package]]\nid = \"foo/bar\"\n\n[package.requirements.\"^1.0.0\"]\nversion = \"1.0.0\"\n"),
+        contents.contains("[[package]]\nid = \"foo/bar\"\n\n[[package.version]]\nrequirement = \"^1.0.0\"\nversion = \"1.0.0\"\n"),
         "missing foo/bar dependency"
     );
 
@@ -312,7 +312,7 @@ bindings::export!(Component);
         .replace("\r\n", "\n");
 
     assert!(
-        contents.contains("[[package]]\nid = \"foo/bar\"\n\n[package.requirements.\"^1.0.0\"]\nversion = \"1.0.0\"\n"),
+        contents.contains("[[package]]\nid = \"foo/bar\"\n\n[[package.version]]\nrequirement = \"^1.0.0\"\nversion = \"1.0.0\"\n"),
         "missing foo/bar dependency"
     );
 
@@ -456,7 +456,7 @@ bindings::export!(Component);
         .replace("\r\n", "\n");
 
     assert!(
-        contents.contains("[[package]]\nid = \"foo/bar\"\n\n[package.requirements.\"^1.0.0\"]\nversion = \"1.0.0\"\n"),
+        contents.contains("[[package]]\nid = \"foo/bar\"\n\n[[package.version]]\nrequirement = \"^1.0.0\"\nversion = \"1.0.0\"\n"),
         "missing foo/bar dependency"
     );
 
@@ -754,12 +754,12 @@ bindings::export!(Component);
         .replace("\r\n", "\n");
 
     assert!(
-        contents.contains("[[package]]\nid = \"foo/bar\"\n\n[package.requirements.\"^1.0.0\"]\nversion = \"1.0.0\"\n"),
+        contents.contains("[[package]]\nid = \"foo/bar\"\n\n[[package.version]]\nrequirement = \"^1.0.0\"\nversion = \"1.0.0\"\n"),
         "missing foo/bar dependency"
     );
 
     assert!(
-        contents.contains("[[package]]\nid = \"foo/baz\"\n\n[package.requirements.\"^1.0.0\"]\nversion = \"1.2.3\"\n"),
+        contents.contains("[[package]]\nid = \"foo/baz\"\n\n[[package.version]]\nrequirement = \"^1.0.0\"\nversion = \"1.2.3\"\n"),
         "missing foo/baz dependency"
     );
 
@@ -834,7 +834,7 @@ bindings::export!(Component);
         .replace("\r\n", "\n");
 
     assert!(
-        contents.contains("[[package]]\nid = \"foo/bar\"\n\n[package.requirements.\"^1.0.0\"]\nversion = \"1.0.0\"\n"),
+        contents.contains("[[package]]\nid = \"foo/bar\"\n\n[[package.version]]\nrequirement = \"^1.0.0\"\nversion = \"1.0.0\"\n"),
         "missing foo/bar dependency"
     );
 
@@ -909,7 +909,7 @@ bindings::export!(Component);
         .replace("\r\n", "\n");
 
     assert!(
-        orig_contents.contains("[[package]]\nid = \"foo/bar\"\n\n[package.requirements.\"^1.0.0\"]\nversion = \"1.0.0\"\n"),
+        orig_contents.contains("[[package]]\nid = \"foo/bar\"\n\n[[package.version]]\nrequirement = \"^1.0.0\"\nversion = \"1.0.0\"\n"),
         "missing foo/bar dependency"
     );
 
