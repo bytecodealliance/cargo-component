@@ -214,6 +214,8 @@ The `cargo component` subcommand has some analogous commands to cargo itself:
   bindings.
 * `cargo component registry` — a command for interacting with local component
   registries.
+* `cargo component update` — same as `cargo update` but also updates the 
+  dependencies in the component lock file.
 
 More commands will be added over time.
 

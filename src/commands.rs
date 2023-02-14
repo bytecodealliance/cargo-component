@@ -1,5 +1,6 @@
 //! Commands for the `cargo-component` CLI.
 
+use crate::{target, Config};
 use anyhow::{bail, Result};
 use cargo::core::compiler::{BuildConfig, CompileMode, MessageFormat};
 use cargo::core::resolver::CliFeatures;
@@ -16,6 +17,7 @@ mod clippy;
 mod metadata;
 mod new;
 mod registry;
+mod update;
 
 pub use self::add::*;
 pub use self::build::*;
@@ -24,7 +26,7 @@ pub use self::clippy::*;
 pub use self::metadata::*;
 pub use self::new::*;
 pub use self::registry::*;
-use crate::{target, Config};
+pub use self::update::*;
 
 fn root_manifest(manifest_path: Option<&Path>, config: &Config) -> Result<PathBuf> {
     match manifest_path {
