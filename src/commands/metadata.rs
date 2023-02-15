@@ -1,6 +1,6 @@
-use crate::{commands::workspace, metadata};
+use crate::{commands::workspace, metadata, Config};
 use anyhow::Result;
-use cargo::{core::resolver::CliFeatures, ops::OutputMetadataOptions, Config};
+use cargo::{core::resolver::CliFeatures, ops::OutputMetadataOptions};
 use clap::{value_parser, ArgAction, Args};
 use std::path::PathBuf;
 
@@ -75,10 +75,10 @@ pub struct MetadataCommand {
 
 impl MetadataCommand {
     /// Executes the command.
-    pub fn exec(self, config: &mut Config) -> Result<()> {
+    pub async fn exec(self, config: &mut Config) -> Result<()> {
         log::debug!("executing metadata command");
 
-        config.configure(
+        config.cargo_mut().configure(
             u32::from(self.verbose),
             self.quiet,
             self.color.as_deref(),
@@ -113,7 +113,7 @@ impl MetadataCommand {
             version,
         };
 
-        let metadata = metadata(config, workspace, &options)?;
+        let metadata = metadata(config, workspace, &options).await?;
 
         config.shell().print_json(&metadata)?;
 

@@ -44,8 +44,8 @@ fn get_sysroot() -> Result<PathBuf> {
     if !output.status.success() {
         bail!(
             "failed to execute `rustc --print sysroot`, \
-                 command exited with error: {}",
-            String::from_utf8_lossy(&output.stderr)
+                 command exited with error: {output}",
+            output = String::from_utf8_lossy(&output.stderr)
         );
     }
 

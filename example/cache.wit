@@ -1,8 +1,0 @@
-/// An example cache interface.
-interface cache {
-    /// Get a value from the cache.
-    get: func(key: string) -> option<list<u8>>
-
-    /// Put a value into the cache.
-    put: func(key: string, value: list<u8>)
-}

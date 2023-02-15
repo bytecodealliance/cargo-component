@@ -1,61 +1,14 @@
+use crate::Config;
 use anyhow::{bail, Context, Result};
-use cargo::{
-    ops::{self, NewOptions, VersionControl},
-    Config,
-};
+use cargo::ops::{self, NewOptions, VersionControl};
 use clap::{ArgAction, Args};
-use heck::{ToKebabCase, ToSnakeCase, ToUpperCamelCase};
+use heck::{ToKebabCase, ToSnakeCase};
 use std::{
     borrow::Cow,
     fmt, fs,
     path::{Path, PathBuf},
 };
 use toml_edit::{table, value, Document, InlineTable, Item, Table, Value};
-
-use crate::WIT_BINDGEN_REPO;
-
-fn is_wit_keyword(s: &str) -> bool {
-    // TODO: move this into wit-parser?
-    matches!(
-        s,
-        "use"
-            | "type"
-            | "func"
-            | "u8"
-            | "u16"
-            | "u32"
-            | "u64"
-            | "s8"
-            | "s16"
-            | "s32"
-            | "s64"
-            | "float32"
-            | "float64"
-            | "char"
-            | "record"
-            | "list"
-            | "flags"
-            | "variant"
-            | "enum"
-            | "union"
-            | "bool"
-            | "string"
-            | "option"
-            | "result"
-            | "future"
-            | "stream"
-            | "as"
-            | "from"
-            | "static"
-            | "interface"
-            | "tuple"
-            | "implements"
-            | "import"
-            | "export"
-            | "world"
-            | "default"
-    )
-}
 
 fn is_rust_keyword(s: &str) -> bool {
     // TODO: source this from somewhere?
@@ -176,9 +129,6 @@ pub struct NewCommand {
 
 struct PackageName<'a> {
     display: Cow<'a, str>,
-    kebab: String,
-    snake: String,
-    camel: String,
 }
 
 impl<'a> PackageName<'a> {
@@ -195,9 +145,8 @@ impl<'a> PackageName<'a> {
 
         let kebab = package.to_kebab_case();
         let snake = package.to_snake_case();
-        let camel = package.to_upper_camel_case();
 
-        if kebab.is_empty() || snake.is_empty() || camel.is_empty() {
+        if kebab.is_empty() || snake.is_empty() {
             bail!("invalid component name `{package}`");
         }
 
@@ -208,29 +157,24 @@ impl<'a> PackageName<'a> {
             bail!("component name `{package}` cannot be used as it is a Rust keyword");
         }
 
-        Ok(Self {
-            display,
-            kebab,
-            snake,
-            camel,
-        })
+        Ok(Self { display })
     }
 }
 
 impl fmt::Display for PackageName<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.display)
+        write!(f, "{name}", name = self.display)
     }
 }
 
 impl NewCommand {
     /// Executes the command.
-    pub fn exec(self, config: &mut Config) -> Result<()> {
+    pub async fn exec(self, config: &mut Config) -> Result<()> {
         log::debug!("executing new command");
 
         let name = PackageName::new(self.name.as_deref(), &self.path)?;
 
-        config.configure(
+        config.cargo_mut().configure(
             u32::from(self.verbose),
             self.quiet,
             self.color.as_deref(),
@@ -244,12 +188,12 @@ impl NewCommand {
 
         let opts = self.new_options(config)?;
 
-        ops::new(&opts, config)?;
+        ops::new(&opts, config.cargo())?;
 
-        let out_dir = config.cwd().join(&self.path);
-        self.update_manifest(&name, &out_dir)?;
-        self.update_source_file(&name, &out_dir)?;
-        self.create_interface_file(&name, &out_dir)?;
+        let out_dir = config.cargo().cwd().join(&self.path);
+        self.update_manifest(&out_dir)?;
+        self.update_source_file(&out_dir)?;
+        self.create_targets_file(&out_dir)?;
         self.create_editor_settings_file(&out_dir)?;
 
         // `cargo new` prints the given path to the new package, so
@@ -275,41 +219,38 @@ impl NewCommand {
             vcs,
             false,
             true,
-            config.cwd().join(&self.path),
+            config.cargo().cwd().join(&self.path),
             self.name.clone(),
             self.edition.clone(),
             None,
         )
     }
 
-    fn update_manifest(&self, name: &PackageName, out_dir: &Path) -> Result<()> {
+    fn update_manifest(&self, out_dir: &Path) -> Result<()> {
         let manifest_path = out_dir.join("Cargo.toml");
         let manifest = fs::read_to_string(&manifest_path).with_context(|| {
-            format!("failed to read manifest file `{}`", manifest_path.display())
+            format!(
+                "failed to read manifest file `{path}`",
+                path = manifest_path.display()
+            )
         })?;
 
         let mut doc: Document = manifest.parse().with_context(|| {
             format!(
-                "failed to parse manifest file `{}`",
-                manifest_path.display()
+                "failed to parse manifest file `{path}`",
+                path = manifest_path.display()
             )
         })?;
 
         doc["lib"] = table();
         doc["lib"]["crate-type"] = value(Value::from_iter(["cdylib"].into_iter()));
 
-        let mut exports = Table::new();
-        exports[&name.snake] = value(
-            Path::new(&name.snake)
-                .with_extension("wit")
-                .to_string_lossy()
-                .as_ref(),
-        );
-
         let mut component = Table::new();
         component.set_implicit(true);
-        component["direct-export"] = value(&name.snake);
-        component["exports"] = Item::Table(exports);
+        component["target"] = value(InlineTable::from_iter(
+            [("path", Value::from("world.wit"))].into_iter(),
+        ));
+        component["dependencies"] = Item::Table(Table::new());
 
         let mut metadata = Table::new();
         metadata.set_implicit(true);
@@ -317,9 +258,9 @@ impl NewCommand {
         metadata["component"] = Item::Table(component);
 
         doc["package"]["metadata"] = Item::Table(metadata);
-        doc["dependencies"]["wit-bindgen-guest-rust"] = value(InlineTable::from_iter(
+        doc["dependencies"]["wit-bindgen"] = value(InlineTable::from_iter(
             [
-                ("git", Value::from(WIT_BINDGEN_REPO)),
+                ("version", Value::from("0.3.0")),
                 ("default_features", Value::from(false)),
             ]
             .into_iter(),
@@ -327,55 +268,51 @@ impl NewCommand {
 
         fs::write(&manifest_path, doc.to_string()).with_context(|| {
             format!(
-                "failed to write manifest file `{}`",
-                manifest_path.display()
+                "failed to write manifest file `{path}`",
+                path = manifest_path.display()
             )
         })
     }
 
-    fn update_source_file(&self, name: &PackageName, out_dir: &Path) -> Result<()> {
+    fn update_source_file(&self, out_dir: &Path) -> Result<()> {
         let source_path = out_dir.join("src/lib.rs");
         fs::write(
             &source_path,
-            format!(
-                r#"use bindings::{snake};
-
+            r#"
 struct Component;
 
-impl {snake}::{camel} for Component {{
-    fn hello_world() -> String {{
+impl bindings::Component for Component {
+    fn hello_world() -> String {
         "Hello, World!".to_string()
-    }}
-}}
+    }
+}
 
 bindings::export!(Component);
 "#,
-                snake = name.snake,
-                camel = name.camel
-            ),
-        )
-        .with_context(|| format!("failed to write source file `{}`", source_path.display()))
-    }
-
-    fn create_interface_file(&self, name: &PackageName, out_dir: &Path) -> Result<()> {
-        let mut interface_path = out_dir.join(&name.snake);
-        interface_path.set_extension("wit");
-
-        fs::write(
-            &interface_path,
-            format!(
-                r#"interface {percent}{kebab} {{
-    hello-world: func() -> string
-}}
-"#,
-                percent = if is_wit_keyword(&name.kebab) { "%" } else { "" },
-                kebab = name.kebab,
-            ),
         )
         .with_context(|| {
             format!(
-                "failed to write interface file `{}`",
-                interface_path.display()
+                "failed to write source file `{path}`",
+                path = source_path.display()
+            )
+        })
+    }
+
+    fn create_targets_file(&self, out_dir: &Path) -> Result<()> {
+        let path = out_dir.join("world.wit");
+
+        fs::write(
+            &path,
+            r#"/// An example world for the component to target.
+default world component {
+    export hello-world: func() -> string
+}                
+"#,
+        )
+        .with_context(|| {
+            format!(
+                "failed to write targets file `{path}`",
+                path = path.display()
             )
         })
     }
@@ -397,8 +334,8 @@ bindings::export!(Component);
                 )
                 .with_context(|| {
                     format!(
-                        "failed to write editor settings file `{}`",
-                        settings_path.display()
+                        "failed to write editor settings file `{path}`",
+                        path = settings_path.display()
                     )
                 })
             }

@@ -5,7 +5,7 @@ use cargo::core::compiler::{BuildConfig, CompileMode, MessageFormat};
 use cargo::core::resolver::CliFeatures;
 use cargo::ops::{CompileFilter, Packages};
 use cargo::util::interning::InternedString;
-use cargo::{core::Workspace, util::important_paths::find_root_manifest_for_wd, Config};
+use cargo::{core::Workspace, util::important_paths::find_root_manifest_for_wd};
 use cargo_util::paths::normalize_path;
 use std::path::{Path, PathBuf};
 
@@ -15,6 +15,7 @@ mod check;
 mod clippy;
 mod metadata;
 mod new;
+mod registry;
 
 pub use self::add::*;
 pub use self::build::*;
@@ -22,7 +23,8 @@ pub use self::check::*;
 pub use self::clippy::*;
 pub use self::metadata::*;
 pub use self::new::*;
-use crate::target;
+pub use self::registry::*;
+use crate::{target, Config};
 
 fn root_manifest(manifest_path: Option<&Path>, config: &Config) -> Result<PathBuf> {
     match manifest_path {
@@ -32,16 +34,20 @@ fn root_manifest(manifest_path: Option<&Path>, config: &Config) -> Result<PathBu
                 bail!("the manifest-path must be a path to a Cargo.toml file")
             }
             if !normalized_path.exists() {
-                bail!("manifest path `{}` does not exist", path.display())
+                bail!(
+                    "manifest path `{path}` does not exist",
+                    path = path.display()
+                )
             }
             Ok(normalized_path)
         }
-        None => find_root_manifest_for_wd(config.cwd()),
+        None => find_root_manifest_for_wd(config.cargo().cwd()),
     }
 }
 
 fn workspace<'a>(manifest_path: Option<&Path>, config: &'a Config) -> Result<Workspace<'a>> {
     let root = root_manifest(manifest_path, config)?;
+    let config = config.cargo();
     let mut ws = Workspace::new(&root, config)?;
     if config.cli_unstable().avoid_dev_deps {
         ws.set_require_optional_deps(false);
@@ -109,7 +115,7 @@ fn message_format(option: Option<&str>) -> Result<MessageFormat> {
                         _ => bail!("cannot specify two kinds of `message-format` arguments"),
                     }
                 }
-                s => bail!("invalid message format specifier: `{}`", s),
+                s => bail!("invalid message format specifier: `{s}`"),
             }
         }
     }
@@ -148,8 +154,13 @@ impl CompileOptions {
 
         log::debug!("using targets {:#?}", self.targets);
 
-        let mut build_config =
-            BuildConfig::new(config, self.jobs, self.keep_going, &self.targets, mode)?;
+        let mut build_config = BuildConfig::new(
+            config.cargo(),
+            self.jobs,
+            self.keep_going,
+            &self.targets,
+            mode,
+        )?;
 
         build_config.message_format = message_format(self.message_format.as_deref())?;
         build_config.requested_profile =
@@ -179,7 +190,6 @@ impl CompileOptions {
             target_rustdoc_args: None,
             target_rustc_args: None,
             target_rustc_crate_types: None,
-            local_rustdoc_args: None,
             rustdoc_document_private_items: false,
             honor_rust_version: true,
         })

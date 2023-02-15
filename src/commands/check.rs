@@ -1,6 +1,9 @@
-use crate::commands::{workspace, CompileOptions};
+use crate::{
+    commands::{workspace, CompileOptions},
+    Config,
+};
 use anyhow::Result;
-use cargo::{core::compiler::CompileMode, Config};
+use cargo::core::compiler::CompileMode;
 use clap::{ArgAction, Args};
 use std::path::PathBuf;
 
@@ -106,10 +109,10 @@ pub struct CheckCommand {
 
 impl CheckCommand {
     /// Executes the command.
-    pub fn exec(self, config: &mut Config) -> Result<()> {
+    pub async fn exec(self, config: &mut Config) -> Result<()> {
         log::debug!("executing metadata command");
 
-        config.configure(
+        config.cargo_mut().configure(
             u32::from(self.verbose),
             self.quiet,
             self.color.as_deref(),
@@ -126,7 +129,7 @@ impl CheckCommand {
         let options = CompileOptions::from(self)
             .into_cargo_options(config, CompileMode::Check { test: false })?;
 
-        crate::check(config, workspace, &options, force_generation)
+        crate::check(config, workspace, &options, force_generation).await
     }
 }
 

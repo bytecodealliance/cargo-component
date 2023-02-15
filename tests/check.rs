@@ -71,7 +71,7 @@ edition = "2021"
 "#,
         )?
         .file("baz/src/lib.rs", "")?
-        .build()?;
+        .build();
 
     project
         .cargo_component("new foo")

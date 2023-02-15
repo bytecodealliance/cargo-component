@@ -1,13 +1,15 @@
 # Component example
 
-This directory contains an example component implementing a simple "passthrough cache" service
-responsible for fetching the content bytes of a given URL from a supplied origin service.
+This directory contains an example component implementing a simple "passthrough 
+cache" service responsible for fetching the content bytes of a given URL from a 
+supplied origin service.
 
-The component imports two interfaces: a cache implementation for storing previously fetched content
-and an "origin" backend implementation for forwarding the request to when there is a cache miss.
+The component imports two interfaces: a cache implementation for storing 
+previously fetched content and an "origin" backend implementation for 
+forwarding the request to when there is a cache miss.
 
-It exports the same backend interface as it imports, effectively wrapping the provided import interface
-with some simplistic caching logic.
+It exports the same backend interface as it imports, effectively wrapping the 
+provided import interface with some simplistic caching logic.
 
 ## Building the component
 
@@ -22,12 +24,12 @@ The component should now exist at `target/wasm32-unknown-unknown/debug/service.w
 The resulting component will have the following imports:
 
 ```wat
-(import "cache-0.1.0" (instance (type ...)))
-(import "backend-0.1.0" (instance (type ...)))
+(import "cache" (instance (type ...)))
+(import "origin" (instance (type ...)))
 ```
 
 And export the following:
 
 ```wat
-(export "backend-0.1.0" (instance ...))
+(export "backend" (instance ...))
 ```

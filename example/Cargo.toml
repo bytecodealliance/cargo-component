@@ -7,14 +7,9 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-wit-bindgen-guest-rust = { git = "https://github.com/bytecodealliance/wit-bindgen", features = ["realloc"], default_features = false }
+wit-bindgen = { version = "0.3.0", features = ["realloc"], default_features = false }
 
-[package.metadata.component]
-direct-export = "backend"
+[package.metadata.component.target]
+path = "world.wit"
 
-[package.metadata.component.imports]
-cache = "cache.wit"
-origin = "backend.wit"
-
-[package.metadata.component.exports]
-backend = "backend.wit"
+[package.metadata.component.dependencies]

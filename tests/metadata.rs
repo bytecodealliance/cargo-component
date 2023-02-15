@@ -32,11 +32,11 @@ fn it_prints_metadata() -> Result<()> {
 fn it_rejects_invalid_format_versions() -> Result<()> {
     let project = Project::new("foo")?;
 
-    for arg in ["bad", "1.42", "0", "42"] {
+    for arg in ["7", "0", "42"] {
         project
-            .cargo_component(format!("metadata --format-version {}", arg).as_str())
+            .cargo_component(&format!("metadata --format-version {arg}"))
             .assert()
-            .stderr(contains("Invalid value"))
+            .stderr(contains("invalid value"))
             .failure();
     }
 
@@ -63,7 +63,7 @@ edition = "2021"
 "#,
         )?
         .file("baz/src/lib.rs", "")?
-        .build()?;
+        .build();
 
     project
         .cargo_component("new foo")
