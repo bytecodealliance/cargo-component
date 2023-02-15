@@ -63,7 +63,8 @@ async fn resolve_dependencies(
         }
     }
 
-    lock_file.update(config, workspace, &map)?;
+    let new_lock_file = LockFile::from_resolution(&map);
+    new_lock_file.update(config, workspace, &lock_file)?;
 
     Ok(map)
 }

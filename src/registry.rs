@@ -345,24 +345,17 @@ impl LockFile {
         Ok(None)
     }
 
-    /// Updates the lock file on disk given the new package resolution map.
-    pub fn update(
-        self,
-        config: &Config,
-        workspace: &Workspace<'_>,
-        map: &PackageResolutionMap,
-    ) -> Result<()> {
-        let updated = Self::from_resolution(map);
-
+    /// Updates the lock file on disk given the old lock file to compare against.
+    pub fn update(&self, config: &Config, workspace: &Workspace<'_>, old: &Self) -> Result<()> {
         // If the set of packages are the same, we don't need to update the lock file.
         let path = workspace.root().join(LOCK_FILE_NAME);
-        if path.is_file() && updated == self {
+        if path.is_file() && old == self {
             return Ok(());
         }
 
         check_lock_update_allowed(config, workspace)?;
 
-        let updated = toml_edit::ser::to_string_pretty(&updated)
+        let updated = toml_edit::ser::to_string_pretty(&self)
             .with_context(|| format!("failed to serialize `{path}`", path = path.display()))?;
 
         let fs = Filesystem::new(workspace.root().into());
