@@ -137,26 +137,15 @@ fn it_resolves_a_target_wit_package() -> Result<()> {
     .assert()
     .success();
 
-    let source = r#"use bindings::{foo, Foo};
-struct Component;
-impl Foo for Component {
-    fn bar() -> String {
-        foo()
-    }
-}
-bindings::export!(Component);
-"#;
-
-    let project = create_project_with_registry(
-        &root,
-        "../registry",
+    let project = Project::with_root(
+        root,
         "component",
-        "foo/bar",
-        "1.0.0",
-        None,
-        None,
-        source,
+        &format!(
+            "--registry {path} --target foo/bar@1.0.0",
+            path = path.display()
+        ),
     )?;
+
     project
         .cargo_component("build")
         .assert()
@@ -187,24 +176,21 @@ fn it_errors_on_missing_target_package() -> Result<()> {
         .assert()
         .success();
 
-    let project = create_project_with_registry(
-        &root,
-        "../registry",
+    match Project::with_root(
+        root,
         "component",
-        "foo/bar",
-        "1.0.0",
-        None,
-        None,
-        "",
-    )?;
-
-    project
-        .cargo_component("build")
-        .assert()
-        .stderr(contains(
-            "package `foo/bar` does not exist in local registry",
-        ))
-        .failure();
+        &format!(
+            "--registry {path} --target foo/bar@1.0.0",
+            path = path.display()
+        ),
+    ) {
+        Ok(_) => panic!("expected command to fail"),
+        Err(e) => assert!(
+            e.to_string()
+                .contains("package `foo/bar` does not exist in local registry"),
+            "unexpected error: {e}",
+        ),
+    }
 
     Ok(())
 }
@@ -229,26 +215,15 @@ fn it_resolves_a_target_wit_package_with_document() -> Result<()> {
     .assert()
     .success();
 
-    let source = r#"use bindings::{foo, Foo};
-struct Component;
-impl Foo for Component {
-    fn bar() -> String {
-        foo()
-    }
-}
-bindings::export!(Component);
-"#;
-
-    let project = create_project_with_registry(
-        &root,
-        "../registry",
+    let project = Project::with_root(
+        root,
         "component",
-        "foo/bar",
-        "1.0.0",
-        Some("foo"),
-        None,
-        source,
+        &format!(
+            "--registry {path} --target foo/bar@1.0.0 --world foo",
+            path = path.display()
+        ),
     )?;
+
     project
         .cargo_component("build")
         .assert()
@@ -289,23 +264,21 @@ fn it_errors_on_invalid_document() -> Result<()> {
     .assert()
     .success();
 
-    let project = create_project_with_registry(
-        &root,
-        "../registry",
+    match Project::with_root(
+        root,
         "component",
-        "foo/bar",
-        "1.0.0",
-        Some("bar"),
-        None,
-        "",
-    )?;
-    project
-        .cargo_component("build")
-        .assert()
-        .stderr(contains(
-            "target package `foo/bar` does not contain a document named `bar`",
-        ))
-        .failure();
+        &format!(
+            "--registry {path} --target foo/bar@1.0.0 --world bar",
+            path = path.display()
+        ),
+    ) {
+        Ok(_) => panic!("expected command to fail"),
+        Err(e) => assert!(
+            e.to_string()
+                .contains("target package `foo/bar` does not contain a document named `bar`"),
+            "unexpected error: {e}",
+        ),
+    }
 
     Ok(())
 }
@@ -329,23 +302,20 @@ fn it_errors_on_too_many_documents() -> Result<()> {
     .assert()
     .success();
 
-    let project = create_project_with_registry(
-        &root,
-        "../registry",
+    match Project::with_root(
+        root,
         "component",
-        "foo/bar",
-        "1.0.0",
-        None,
-        None,
-        "",
-    )?;
-    project
-        .cargo_component("build")
-        .assert()
-        .stderr(contains(
-            "target package `foo/bar` contains multiple documents; specify the one to use with the `world` field in the manifest file",
-        ))
-        .failure();
+        &format!(
+            "--registry {path} --target foo/bar@1.0.0",
+            path = path.display()
+        ),
+    ) {
+        Ok(_) => panic!("expected command to fail"),
+        Err(e) => assert!(
+            e.to_string().contains("target package `foo/bar` contains multiple documents; specify the one to use with the `world` field in the manifest file"),
+            "unexpected error: {e}"
+        ),
+    }
 
     Ok(())
 }
@@ -356,7 +326,7 @@ fn it_resolves_a_target_wit_package_with_world() -> Result<()> {
     let path = root.join("registry");
     fs::write(
         root.join("foo.wit"),
-        r#"default world foo {
+        r#"default world bar {
     import foo: func() -> string
     export bar: func() -> string
 }"#,
@@ -370,26 +340,15 @@ fn it_resolves_a_target_wit_package_with_world() -> Result<()> {
     .assert()
     .success();
 
-    let source = r#"use bindings::{foo, Foo};
-struct Component;
-impl Foo for Component {
-    fn bar() -> String {
-        foo()
-    }
-}
-bindings::export!(Component);
-"#;
-
-    let project = create_project_with_registry(
-        &root,
-        "../registry",
+    let project = Project::with_root(
+        root,
         "component",
-        "foo/bar",
-        "1.0.0",
-        Some("foo"),
-        None,
-        source,
+        &format!(
+            "--registry {path} --target foo/bar@1.0.0 --world foo.bar",
+            path = path.display()
+        ),
     )?;
+
     project
         .cargo_component("build")
         .assert()
@@ -420,7 +379,7 @@ fn it_resolves_a_target_wit_package_with_default_world() -> Result<()> {
     fs::create_dir_all(&pkg_dir)?;
     fs::write(
         pkg_dir.join("doc1.wit"),
-        r#"default world foo {
+        r#"default world bar {
     import foo: func() -> string
     export bar: func() -> string
 }
@@ -438,26 +397,15 @@ world bar {
     .assert()
     .success();
 
-    let source = r#"use bindings::{foo, Foo};
-struct Component;
-impl Foo for Component {
-    fn bar() -> String {
-        foo()
-    }
-}
-bindings::export!(Component);
-"#;
-
-    let project = create_project_with_registry(
-        &root,
-        "../registry",
+    let project = Project::with_root(
+        root,
         "component",
-        "foo/bar",
-        "1.0.0",
-        Some("doc1"),
-        None,
-        source,
+        &format!(
+            "--registry {path} --target foo/bar@1.0.0 --world doc1",
+            path = path.display()
+        ),
     )?;
+
     project
         .cargo_component("build")
         .assert()
@@ -498,23 +446,22 @@ fn it_errors_on_invalid_world() -> Result<()> {
     .assert()
     .success();
 
-    let project = create_project_with_registry(
-        &root,
-        "../registry",
+    match Project::with_root(
+        root,
         "component",
-        "foo/bar",
-        "1.0.0",
-        Some("foo.bar"),
-        None,
-        "",
-    )?;
-    project
-        .cargo_component("build")
-        .assert()
-        .stderr(contains(
-            "target package `foo/bar` does not contain a world named `bar` in document `foo`",
-        ))
-        .failure();
+        &format!(
+            "--registry {path} --target foo/bar@1.0.0 --world foo.bar",
+            path = path.display()
+        ),
+    ) {
+        Ok(_) => panic!("expected command to fail"),
+        Err(e) => assert!(
+            e.to_string().contains(
+                "target package `foo/bar` does not contain a world named `bar` in document `foo`"
+            ),
+            "unexpected error: {e}",
+        ),
+    }
 
     Ok(())
 }
@@ -538,23 +485,20 @@ fn it_errors_on_too_many_worlds() -> Result<()> {
     .assert()
     .success();
 
-    let project = create_project_with_registry(
-        &root,
-        "../registry",
+    match Project::with_root(
+        root,
         "component",
-        "foo/bar",
-        "1.0.0",
-        Some("doc1"),
-        None,
-        "",
-    )?;
-    project
-        .cargo_component("build")
-        .assert()
-        .stderr(contains(
-            "target document `doc1` in package `foo/bar` contains multiple worlds; specify the one to use with the `world` field in the manifest file",
-        ))
-        .failure();
+        &format!(
+            "--registry {path} --target foo/bar@1.0.0 --world doc1",
+            path = path.display()
+        ),
+    ) {
+        Ok(_) => panic!("expected command to fail"),
+        Err(e) => assert!(
+            e.to_string().contains("target document `doc1` in package `foo/bar` contains multiple worlds; specify the one to use with the `world` field in the manifest file"),
+            "unexpected error: {e}"
+        ),
+    }
 
     Ok(())
 }
@@ -573,16 +517,18 @@ fn it_errors_on_missing_dependency() -> Result<()> {
     .assert()
     .success();
 
-    let project = create_project_with_registry(
-        &root,
-        "../registry",
+    let project = Project::with_root(
+        root,
         "component",
-        "foo/bar",
-        "1.0.0",
-        None,
-        Some(("baz", "foo/baz@1.0.0")),
-        "",
+        &format!("--registry {path} --target foo/bar", path = path.display()),
     )?;
+
+    let manifest_path = project.root().join("Cargo.toml");
+    let mut manifest: Document = fs::read_to_string(&manifest_path)?.parse()?;
+    let dependencies = &mut manifest["package"]["metadata"]["component"]["dependencies"];
+    dependencies["baz"] = value("foo/baz@1.0.0");
+    fs::write(manifest_path, manifest.to_string())?;
+
     project
         .cargo_component("build")
         .assert()
@@ -608,16 +554,18 @@ fn it_errors_on_missing_dependency_version() -> Result<()> {
     .assert()
     .success();
 
-    let project = create_project_with_registry(
-        &root,
-        "../registry",
+    let project = Project::with_root(
+        root,
         "component",
-        "foo/bar",
-        "2.0.0",
-        None,
-        None,
-        "",
+        &format!("--registry {path} --target foo/bar", path = path.display()),
     )?;
+
+    let manifest_path = project.root().join("Cargo.toml");
+    let mut manifest: Document = fs::read_to_string(&manifest_path)?.parse()?;
+    let dependencies = &mut manifest["package"]["metadata"]["component"]["dependencies"];
+    dependencies["bar"] = value("foo/bar@2.0.0");
+    fs::write(manifest_path, manifest.to_string())?;
+
     project
         .cargo_component("build")
         .assert()
@@ -641,11 +589,6 @@ fn it_resolves_a_component_dependency() -> Result<()> {
 }"#,
     )?;
 
-    fs::write(
-        root.join("baz.wat"),
-        r#"(component (import "foo" (func (result string))) (export "export" (func 0)))"#,
-    )?;
-
     cargo_component(&format!(
         "registry publish --registry {path} --id foo/bar --version 1.0.0 foo.wit",
         path = path.display()
@@ -653,6 +596,11 @@ fn it_resolves_a_component_dependency() -> Result<()> {
     .current_dir(&root)
     .assert()
     .success();
+
+    fs::write(
+        root.join("baz.wat"),
+        r#"(component (import "foo" (func (result string))) (export "export" (func 0)))"#,
+    )?;
 
     cargo_component(&format!(
         "registry publish --registry {path} --id foo/baz --version 1.2.3 baz.wat",
@@ -662,26 +610,18 @@ fn it_resolves_a_component_dependency() -> Result<()> {
     .assert()
     .success();
 
-    let source = r#"use bindings::{baz, Foo};
-struct Component;
-impl Foo for Component {
-    fn bar() -> String {
-        baz::export()
-    }
-}
-bindings::export!(Component);
-"#;
-
-    let project = create_project_with_registry(
-        &root,
-        "../registry",
+    let project = Project::with_root(
+        root,
         "component",
-        "foo/bar",
-        "1.0.0",
-        None,
-        Some(("baz", "foo/baz@1.0.0")),
-        source,
+        &format!("--registry {path} --target foo/bar", path = path.display()),
     )?;
+
+    let manifest_path = project.root().join("Cargo.toml");
+    let mut manifest: Document = fs::read_to_string(&manifest_path)?.parse()?;
+    let dependencies = &mut manifest["package"]["metadata"]["component"]["dependencies"];
+    dependencies["baz"] = value("foo/baz@1.0.0");
+    fs::write(manifest_path, manifest.to_string())?;
+
     project
         .cargo_component("build")
         .assert()
@@ -739,13 +679,7 @@ bindings::export!(Component);
     export bar: func() -> string
 }"#;
 
-    cargo_component("new component")
-        .current_dir(&root)
-        .assert()
-        .success();
-
-    let project = ProjectBuilder::new(root.join("component")).build();
-
+    let project = Project::with_root(root, "component", "")?;
     let manifest_path = project.root().join("Cargo.toml");
     let mut manifest: Document = fs::read_to_string(&manifest_path)?.parse()?;
 
@@ -810,25 +744,10 @@ fn it_locks_to_a_specific_version() -> Result<()> {
     .assert()
     .success();
 
-    let source = r#"use bindings::{foo, Foo};
-struct Component;
-impl Foo for Component {
-    fn bar() -> String {
-        foo()
-    }
-}
-bindings::export!(Component);
-"#;
-
-    let project = create_project_with_registry(
-        &root,
-        "../registry",
+    let project = Project::with_root(
+        root,
         "component",
-        "foo/bar",
-        "1.0.0",
-        None,
-        None,
-        source,
+        &format!("--registry {path} --target foo/bar", path = path.display()),
     )?;
 
     project
@@ -853,13 +772,13 @@ bindings::export!(Component);
         "missing foo/bar dependency"
     );
 
-    cargo_component(&format!(
-        "registry publish --registry {path} --id foo/bar --version 1.1.0 v11.wit",
-        path = path.display()
-    ))
-    .current_dir(&root)
-    .assert()
-    .success();
+    project
+        .cargo_component(&format!(
+            "registry publish --registry {path} --id foo/bar --version 1.1.0 ../v11.wit",
+            path = path.display()
+        ))
+        .assert()
+        .success();
 
     project
         .cargo_component("build")

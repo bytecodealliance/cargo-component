@@ -21,7 +21,7 @@ heck = "0.4.1"
 semver = "1.0.16"
 serde = { version = "1.0.152", features = ["derive"] }
 url = { version = "2.3.1", features = ["serde"] }
-tokio = { version = "1.25.0", default-features = false, features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.26.0", default-features = false, features = ["macros", "rt-multi-thread"] }
 home = "0.5.4"
 p256 = "0.11.1"
 rand_core = "0.6.4"
@@ -32,6 +32,7 @@ indexmap = "1.9.2"
 hex = "0.4.3"
 termcolor = "1.2.0"
 wasm-metadata = "0.3.0"
+wit-bindgen-gen-rust-lib = "0.3.0"
 
 [features]
 default = ["pretty_env_logger"]

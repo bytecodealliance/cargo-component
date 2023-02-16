@@ -91,7 +91,7 @@ impl AddCommand {
         };
 
         self.validate(&metadata)?;
-        let version = self.resolve_version(config, &metadata)?;
+        let version = self.resolve_version(config, &metadata).await?;
         let version = version.trim_start_matches('^');
         self.add(package, version)?;
 
@@ -106,13 +106,18 @@ impl AddCommand {
         Ok(())
     }
 
-    fn resolve_version(&self, config: &Config, metadata: &ComponentMetadata) -> Result<String> {
+    async fn resolve_version(
+        &self,
+        config: &Config,
+        metadata: &ComponentMetadata,
+    ) -> Result<String> {
         let registry = registry::create(
             config,
             self.registry.as_deref(),
             &metadata.section.registries,
         )?;
 
+        registry.synchronize(&[&self.package]).await?;
         match registry.resolve(&self.package, self.version.as_ref().unwrap_or(&VersionReq::STAR))? {
             Some(r) => Ok(self
                 .version
@@ -154,7 +159,7 @@ impl AddCommand {
                 )
             })?;
 
-        dependencies[&self.name] = value(format!("{pkg}:{version}", pkg = self.package));
+        dependencies[&self.name] = value(format!("{pkg}@{version}", pkg = self.package));
 
         if self.dry_run {
             println!("{document}");

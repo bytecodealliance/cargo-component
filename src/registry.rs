@@ -90,9 +90,6 @@ pub trait Registry {
     /// Resolves a package to the latest version that satisfies
     /// the given version requirement.
     ///
-    /// If the version requirement is `None`, then the latest released
-    /// version will be resolved.
-    ///
     /// Returns `Ok(None)` if no version satisfies the requirement.
     ///
     /// Yanked packages will not be considered.

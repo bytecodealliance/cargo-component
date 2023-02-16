@@ -38,25 +38,13 @@ fn test_update_without_changes_is_a_noop() -> Result<()> {
     .assert()
     .success();
 
-    let source = r#"use bindings::{foo, Foo};
-struct Component;
-impl Foo for Component {
-    fn bar() -> String {
-        foo()
-    }
-}
-bindings::export!(Component);
-"#;
-
-    let project = create_project_with_registry(
-        &root,
-        "../registry",
+    let project = Project::with_root(
+        root,
         "component",
-        "foo/bar",
-        "1.0.0",
-        None,
-        None,
-        source,
+        &format!(
+            "--registry {path} --target foo/bar@1.0.0",
+            path = path.display()
+        ),
     )?;
 
     project
@@ -66,8 +54,8 @@ bindings::export!(Component);
         .success();
     validate_component(&project.debug_wasm("component"))?;
 
-    cargo_component("update")
-        .current_dir(project.root())
+    project
+        .cargo_component("update")
         .assert()
         .success()
         .stderr(contains("foo/bar").not());
@@ -95,25 +83,13 @@ fn test_update_without_compatible_changes_is_a_noop() -> Result<()> {
     .assert()
     .success();
 
-    let source = r#"use bindings::{foo, Foo};
-struct Component;
-impl Foo for Component {
-    fn bar() -> String {
-        foo()
-    }
-}
-bindings::export!(Component);
-"#;
-
-    let project = create_project_with_registry(
-        &root,
-        "../registry",
+    let project = Project::with_root(
+        root,
         "component",
-        "foo/bar",
-        "1.0.0",
-        None,
-        None,
-        source,
+        &format!(
+            "--registry {path} --target foo/bar@1.0.0",
+            path = path.display()
+        ),
     )?;
 
     project
@@ -124,22 +100,22 @@ bindings::export!(Component);
     validate_component(&project.debug_wasm("component"))?;
 
     fs::write(
-        root.join("foo.wit"),
+        project.root().join("foo.wit"),
         r#"default world foo {
     export bar: func() -> string
 }"#,
     )?;
 
-    cargo_component(&format!(
-        "registry publish --registry {path} --id foo/bar --version 2.0.0 foo.wit",
-        path = path.display()
-    ))
-    .current_dir(&root)
-    .assert()
-    .success();
+    project
+        .cargo_component(&format!(
+            "registry publish --registry {path} --id foo/bar --version 2.0.0 foo.wit",
+            path = path.display()
+        ))
+        .assert()
+        .success();
 
-    cargo_component("update")
-        .current_dir(project.root())
+    project
+        .cargo_component("update")
         .assert()
         .success()
         .stderr(contains("foo/bar").not());
@@ -174,25 +150,13 @@ fn test_update_with_compatible_changes() -> Result<()> {
     .assert()
     .success();
 
-    let source = r#"use bindings::{foo, Foo};
-struct Component;
-impl Foo for Component {
-    fn bar() -> String {
-        foo()
-    }
-}
-bindings::export!(Component);
-"#;
-
-    let project = create_project_with_registry(
-        &root,
-        "../registry",
+    let project = Project::with_root(
+        root,
         "component",
-        "foo/bar",
-        "1.0.0",
-        None,
-        None,
-        source,
+        &format!(
+            "--registry {path} --target foo/bar@1.0.0",
+            path = path.display()
+        ),
     )?;
 
     project
@@ -203,7 +167,7 @@ bindings::export!(Component);
     validate_component(&project.debug_wasm("component"))?;
 
     fs::write(
-        root.join("foo.wit"),
+        project.root().join("../foo.wit"),
         r#"default world foo {
     import foo: func() -> string
     import baz: func() -> string
@@ -211,16 +175,16 @@ bindings::export!(Component);
 }"#,
     )?;
 
-    cargo_component(&format!(
-        "registry publish --registry {path} --id foo/bar --version 1.1.0 foo.wit",
-        path = path.display()
-    ))
-    .current_dir(&root)
-    .assert()
-    .success();
+    project
+        .cargo_component(&format!(
+            "registry publish --registry {path} --id foo/bar --version 1.1.0 ../foo.wit",
+            path = path.display()
+        ))
+        .assert()
+        .success();
 
-    cargo_component("update")
-        .current_dir(project.root())
+    project
+        .cargo_component("update")
         .assert()
         .success()
         .stderr(contains("`foo/bar` v1.0.0 -> v1.1.0"));
@@ -235,7 +199,7 @@ impl Foo for Component {
 bindings::export!(Component);
 "#;
 
-    fs::write(root.join("component/src/lib.rs"), source)?;
+    fs::write(project.root().join("src/lib.rs"), source)?;
 
     project
         .cargo_component("build")
