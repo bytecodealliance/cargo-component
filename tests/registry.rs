@@ -15,7 +15,6 @@ fn create_project(
     name: &str,
     package: &str,
     version: &str,
-    document: Option<&str>,
     world: Option<&str>,
     dependency: Option<(&str, &str)>,
     source: &str,
@@ -34,9 +33,6 @@ fn create_project(
     target.as_table_like_mut().unwrap().remove("path");
     target["package"] = value(package);
     target["version"] = value(version);
-    if let Some(document) = document {
-        target["document"] = value(document);
-    }
     if let Some(world) = world {
         target["world"] = value(world);
     }
@@ -202,7 +198,6 @@ bindings::export!(Component);
         "1.0.0",
         None,
         None,
-        None,
         source,
     )?;
     project
@@ -241,7 +236,6 @@ fn it_errors_on_missing_target_package() -> Result<()> {
         "component",
         "foo/bar",
         "1.0.0",
-        None,
         None,
         None,
         "",
@@ -296,7 +290,6 @@ bindings::export!(Component);
         "1.0.0",
         Some("foo"),
         None,
-        None,
         source,
     )?;
     project
@@ -347,7 +340,6 @@ fn it_errors_on_invalid_document() -> Result<()> {
         "1.0.0",
         Some("bar"),
         None,
-        None,
         "",
     )?;
     project
@@ -388,14 +380,13 @@ fn it_errors_on_too_many_documents() -> Result<()> {
         "1.0.0",
         None,
         None,
-        None,
         "",
     )?;
     project
         .cargo_component("build")
         .assert()
         .stderr(contains(
-            "target package `foo/bar` contains multiple documents; specify the one to use with the `document` field in the manifest file",
+            "target package `foo/bar` contains multiple documents; specify the one to use with the `world` field in the manifest file",
         ))
         .failure();
 
@@ -438,7 +429,6 @@ bindings::export!(Component);
         "component",
         "foo/bar",
         "1.0.0",
-        None,
         Some("foo"),
         None,
         source,
@@ -509,7 +499,6 @@ bindings::export!(Component);
         "1.0.0",
         Some("doc1"),
         None,
-        None,
         source,
     )?;
     project
@@ -558,8 +547,7 @@ fn it_errors_on_invalid_world() -> Result<()> {
         "component",
         "foo/bar",
         "1.0.0",
-        None,
-        Some("bar"),
+        Some("foo.bar"),
         None,
         "",
     )?;
@@ -601,7 +589,6 @@ fn it_errors_on_too_many_worlds() -> Result<()> {
         "1.0.0",
         Some("doc1"),
         None,
-        None,
         "",
     )?;
     project
@@ -635,7 +622,6 @@ fn it_errors_on_missing_dependency() -> Result<()> {
         "component",
         "foo/bar",
         "1.0.0",
-        None,
         None,
         Some(("baz", "foo/baz@1.0.0")),
         "",
@@ -671,7 +657,6 @@ fn it_errors_on_missing_dependency_version() -> Result<()> {
         "component",
         "foo/bar",
         "2.0.0",
-        None,
         None,
         None,
         "",
@@ -737,7 +722,6 @@ bindings::export!(Component);
         "foo/bar",
         "1.0.0",
         None,
-        None,
         Some(("baz", "foo/baz@1.0.0")),
         source,
     )?;
@@ -793,7 +777,7 @@ impl Foo for Component {
 bindings::export!(Component);
 "#;
 
-    let world = r#"world foo {
+    let world = r#"default world foo {
     import foo: external-package.foo.foo
     export bar: func() -> string
 }"#;
@@ -885,7 +869,6 @@ bindings::export!(Component);
         "component",
         "foo/bar",
         "1.0.0",
-        None,
         None,
         None,
         source,

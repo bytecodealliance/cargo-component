@@ -206,11 +206,9 @@ publish = false
 
     fn create_target_world(&self) -> Result<(Resolve, WorldId)> {
         let (mut merged, world_id) = match &self.resolution.metadata.section.target {
-            Some(Target::Package {
-                package,
-                document,
-                world,
-            }) => self.target_package(&package.id, document.as_deref(), world.as_deref())?,
+            Some(Target::Package { package, world }) => {
+                self.target_package(&package.id, world.as_deref())?
+            }
             Some(Target::Local { path, world, .. }) => {
                 self.target_local_file(path, world.as_deref())?
             }
@@ -243,7 +241,6 @@ publish = false
     fn target_package(
         &self,
         id: &metadata::PackageId,
-        document: Option<&str>,
         world: Option<&str>,
     ) -> Result<(Resolve, WorldId)> {
         // We must have resolved a target package dependency at this point
@@ -258,27 +255,42 @@ publish = false
             DecodedWasm::Component(resolve, _) => resolve,
         };
 
-        // Resolve the document to use
-        let package = &resolve.packages[package];
-        let document = match document {
-            Some(name) => *package.documents.get(name).ok_or_else(|| {
-                anyhow!("target package `{id}` does not contain a document named `{name}`")
-            })?,
-            None if package.documents.len() == 1 => package.documents[0],
-            None if package.documents.len() > 1 => bail!("target package `{id}` contains multiple documents; specify the one to use with the `document` field in the manifest file"),
-            None => bail!("target package `{id}` contains no documents"),
-        };
+        // Currently, "default" isn't encodable for worlds, so try to
+        // use `select_world` here, but otherwise fall back to a search
+        let world = match resolve.select_world(package, world) {
+            Ok(world) => world,
+            Err(_) => {
+                let (document, world) = match world {
+                    Some(world) => world
+                        .split_once('.')
+                        .map(|(d, w)| (Some(d), Some(w)))
+                        .unwrap_or((Some(world), None)),
+                    None => (None, None),
+                };
 
-        // Resolve the world to use
-        let document = &resolve.documents[document];
-        let world = match world {
-            Some(name) => *document.worlds.get(name).ok_or_else(|| {
-                anyhow!("target package `{id}` does not contain a world named `{name}` in document `{document}`", document = document.name)
-            })?,
-            None if document.default_world.is_some() => document.default_world.unwrap(),
-            None if document.worlds.len() == 1 => document.worlds[0],
-            None if document.worlds.len() > 1 => bail!("target document `{document}` in package `{id}` contains multiple worlds; specify the one to use with the `world` field in the manifest file", document = document.name),
-            None => bail!("target document `{document}` in package `{id}` contains no worlds", document = document.name),
+                // Resolve the document to use
+                let package = &resolve.packages[package];
+                let document = match document {
+                    Some(name) => *package.documents.get(name).ok_or_else(|| {
+                        anyhow!("target package `{id}` does not contain a document named `{name}`")
+                    })?,
+                    None if package.documents.len() == 1 => package.documents[0],
+                    None if package.documents.len() > 1 => bail!("target package `{id}` contains multiple documents; specify the one to use with the `world` field in the manifest file"),
+                    None => bail!("target package `{id}` contains no documents"),
+                };
+
+                // Resolve the world to use
+                let document = &resolve.documents[document];
+                match world {
+                    Some(name) => *document.worlds.get(name).ok_or_else(|| {
+                        anyhow!("target package `{id}` does not contain a world named `{name}` in document `{document}`", document = document.name)
+                    })?,
+                    None if document.default_world.is_some() => document.default_world.unwrap(),
+                    None if document.worlds.len() == 1 => document.worlds[0],
+                    None if document.worlds.len() > 1 => bail!("target document `{document}` in package `{id}` contains multiple worlds; specify the one to use with the `world` field in the manifest file", document = document.name),
+                    None => bail!("target document `{document}` in package `{id}` contains no worlds", document = document.name),
+                }
+            }
         };
 
         Ok((resolve, world))
@@ -310,16 +322,20 @@ publish = false
                 )
             })?;
 
-        let document = &merged.documents[merged.packages[package].documents[0]];
-        let world = match world {
-            Some(name) => *document.worlds.get(name).ok_or_else(|| {
-                anyhow!("local target `{path}` does not contain a world named `{name}`", path = path.display())
-            })?,
-            None if document.default_world.is_some() => document.default_world.unwrap(),
-            None if document.worlds.len() == 1 => document.worlds[0],
-            None if document.worlds.len() > 1 => bail!("local target `{path}` contains multiple worlds; specify the one to use with the `world` field in the manifest file", path = path.display()),
-            None => bail!("local target `{path}` contains no worlds", path = path.display()),
-        };
+        let world = merged
+            .select_world(package, world)
+            .with_context(|| match world {
+                Some(world) => {
+                    format!(
+                        "failed to select the specified world `{world}` for local target `{path}`",
+                        path = path.display()
+                    )
+                }
+                None => format!(
+                    "failed to select the default world to use for local target `{path}`",
+                    path = path.display()
+                ),
+            })?;
 
         Ok((merged, world))
     }
