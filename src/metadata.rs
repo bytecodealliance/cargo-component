@@ -219,17 +219,12 @@ pub enum Target {
     Package {
         /// The package being targeted.
         package: RegistryPackage,
-        /// The name of the document in the package to use.
-        ///
-        /// If `None`, then the package must have a single document. If
-        /// more than one document is present, it is an error.
-        document: Option<String>,
         /// The name of the world being targeted.
         ///
-        /// If `None`, then the document's default world is used. If the
-        /// document does not have a default world and there is exactly one
-        /// world in the document, then that world is used. Otherwise, it
-        /// is an error.
+        /// [Resolve::select_world][select-world] will be used
+        /// to select world.
+        ///
+        /// [select-world]: https://docs.rs/wit-parser/0.6.1/wit_parser/struct.Resolve.html#method.select_world
         world: Option<String>,
     },
     /// The target is a world from a local wit document.
@@ -238,10 +233,10 @@ pub enum Target {
         path: PathBuf,
         /// The name of the world being targeted.
         ///
-        /// If `None`, then the document's default world is used. If the
-        /// document does not have a default world and there is exactly one
-        /// world in the document, then that world is used. Otherwise, it
-        /// is an error.
+        /// [Resolve::select_world][select-world] will be used
+        /// to select world.
+        ///
+        /// [select-world]: https://docs.rs/wit-parser/0.6.1/wit_parser/struct.Resolve.html#method.select_world
         world: Option<String>,
         /// The dependencies of the wit document being targeted.
         dependencies: HashMap<String, Dependency>,
@@ -281,7 +276,6 @@ impl<'de> Deserialize<'de> for Target {
             {
                 Ok(Self::Value::Package {
                     package: s.parse().map_err(de::Error::custom)?,
-                    document: None,
                     world: None,
                 })
             }
@@ -295,7 +289,6 @@ impl<'de> Deserialize<'de> for Target {
                 struct Entry {
                     package: Option<String>,
                     version: Option<VersionReq>,
-                    document: Option<String>,
                     world: Option<String>,
                     registry: Option<String>,
                     path: Option<PathBuf>,
@@ -322,15 +315,12 @@ impl<'de> Deserialize<'de> for Target {
                                     .ok_or_else(|| de::Error::missing_field("version"))?,
                                 registry: entry.registry,
                             },
-                            document: entry.document,
                             world: entry.world,
                         })
                     }
                     (Some(path), None) => {
                         for (present, name) in [
                             (entry.version.is_some(), "version"),
-                            (entry.document.is_some(), "document"),
-                            (entry.world.is_some(), "world"),
                             (entry.registry.is_some(), "registry"),
                         ] {
                             if present {

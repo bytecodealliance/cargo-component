@@ -243,11 +243,11 @@ dependencies = [
  "url",
  "warg-crypto",
  "warg-protocol",
- "wasmparser",
+ "wasmparser 0.101.0",
  "wat",
  "wit-bindgen-core",
  "wit-bindgen-gen-guest-rust",
- "wit-component",
+ "wit-component 0.7.0",
  "wit-parser",
 ]
 
@@ -312,9 +312,9 @@ dependencies = [
 
 [[package]]
 name = "clap"
-version = "4.1.4"
+version = "4.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f13b9c79b5d1dd500d20ef541215a6423c75829ef43117e1b4d17fd8af0b5d76"
+checksum = "ec0b0588d44d4d63a87dbd75c136c166bbfd9a86a31cb89e09906521c7d3f5e3"
 dependencies = [
  "bitflags",
  "clap_derive",
@@ -786,24 +786,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a9c384f161156f5260c24a097c56119f9be8c798586aecc13afbcbe7b7e26bf8"
 dependencies = [
  "percent-encoding",
-]
-
-[[package]]
-name = "forrest"
-version = "0.1.0"
-source = "git+https://github.com/bytecodealliance/registry#a0e56cafb7ea8792a5227169b4b3dd988fb5e266"
-dependencies = [
- "anyhow",
- "pbjson",
- "pbjson-build",
- "pbjson-types",
- "prost",
- "prost-build",
- "prost-types",
- "serde",
- "serde_bytes",
- "thiserror",
- "warg-crypto",
 ]
 
 [[package]]
@@ -2328,7 +2310,7 @@ dependencies = [
 [[package]]
 name = "warg-crypto"
 version = "0.1.0"
-source = "git+https://github.com/bytecodealliance/registry#a0e56cafb7ea8792a5227169b4b3dd988fb5e266"
+source = "git+https://github.com/bytecodealliance/registry#99f871f340a93ca26fdb3b6d57b9f84225249106"
 dependencies = [
  "anyhow",
  "base64",
@@ -2347,11 +2329,10 @@ dependencies = [
 [[package]]
 name = "warg-protocol"
 version = "0.1.0"
-source = "git+https://github.com/bytecodealliance/registry#a0e56cafb7ea8792a5227169b4b3dd988fb5e266"
+source = "git+https://github.com/bytecodealliance/registry#99f871f340a93ca26fdb3b6d57b9f84225249106"
 dependencies = [
  "anyhow",
  "base64",
- "forrest",
  "hex 0.4.3",
  "indexmap",
  "pbjson",
@@ -2363,6 +2344,25 @@ dependencies = [
  "semver",
  "serde",
  "serde_with",
+ "thiserror",
+ "warg-crypto",
+ "warg-transparency",
+]
+
+[[package]]
+name = "warg-transparency"
+version = "0.1.0"
+source = "git+https://github.com/bytecodealliance/registry#99f871f340a93ca26fdb3b6d57b9f84225249106"
+dependencies = [
+ "anyhow",
+ "pbjson",
+ "pbjson-build",
+ "pbjson-types",
+ "prost",
+ "prost-build",
+ "prost-types",
+ "serde",
+ "serde_bytes",
  "thiserror",
  "warg-crypto",
 ]
@@ -2455,7 +2455,20 @@ dependencies = [
  "indexmap",
  "serde",
  "wasm-encoder 0.23.0",
- "wasmparser",
+ "wasmparser 0.100.0",
+]
+
+[[package]]
+name = "wasm-metadata"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "459c9bd177f859c675baf7573905c4a1a1f63087ef8bb10e0a1c94dc167228d4"
+dependencies = [
+ "anyhow",
+ "indexmap",
+ "serde",
+ "wasm-encoder 0.24.0",
+ "wasmparser 0.101.0",
 ]
 
 [[package]]
@@ -2463,6 +2476,16 @@ name = "wasmparser"
 version = "0.100.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "64b20236ab624147dfbb62cf12a19aaf66af0e41b8398838b66e997d07d269d4"
+dependencies = [
+ "indexmap",
+ "url",
+]
+
+[[package]]
+name = "wasmparser"
+version = "0.101.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9cc3222d9e47412382cc95e2f013c6a9f510bcff80af92de5665ae3ec1e4a2f6"
 dependencies = [
  "indexmap",
  "url",
@@ -2619,7 +2642,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea1d49787508c06dfbeeb2c6599a20fc475547b102fc3e8637ada7d67bb62969"
 dependencies = [
  "anyhow",
- "wit-component",
+ "wit-component 0.6.0",
  "wit-parser",
 ]
 
@@ -2632,7 +2655,7 @@ dependencies = [
  "heck",
  "wit-bindgen-core",
  "wit-bindgen-gen-rust-lib",
- "wit-component",
+ "wit-component 0.6.0",
 ]
 
 [[package]]
@@ -2657,8 +2680,25 @@ dependencies = [
  "log",
  "url",
  "wasm-encoder 0.23.0",
- "wasm-metadata",
- "wasmparser",
+ "wasm-metadata 0.1.2",
+ "wasmparser 0.100.0",
+ "wit-parser",
+]
+
+[[package]]
+name = "wit-component"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1d06e30f5e23df26d6a60061086b0b17687d458b29448cb329bcff9e425c6ea3"
+dependencies = [
+ "anyhow",
+ "bitflags",
+ "indexmap",
+ "log",
+ "url",
+ "wasm-encoder 0.24.0",
+ "wasm-metadata 0.2.0",
+ "wasmparser 0.101.0",
  "wit-parser",
 ]
 

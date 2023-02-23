@@ -201,7 +201,6 @@ The supported fields of `target` when referencing a registry package are:
 [package.metadata.component.target]
 package = "<package-id>"
 version = "<version>"
-document = "<document>"
 world = "<world>"
 registry = "<registry>"
 ```
@@ -211,16 +210,12 @@ The `package` and `version` fields are required.
 The `package`, `version`, and `registry` fields describe which package is being 
 referenced. The `registry` field is optional.
 
-The `document` field is optional and defaults to the first document in the 
-package if there is exactly one document. If there are multiple documents, the 
-`document` field is required.
-
-The `world` field is optional and defaults to the default world of the 
-document. If the document has no default world, then the default is the first 
-world in the document if there is exactly one world. If there are multiple 
-worlds in the document, the `world` field is required.
+The `world` field is optional and defaults to the default world resolution of
+the WIT package as defined by [`Resolve::select_world`][select-world].
 
 The referenced package may be either a WIT package or a component.
+
+[select-world]: https://docs.rs/wit-parser/0.6.1/wit_parser/struct.Resolve.html#method.select_world
 
 #### Targeting a local WIT document
 
@@ -233,16 +228,15 @@ world = "<world>"
 
 [package.metadata.component.target.dependencies]
 "<name>" = "<package-id>@<version>" # or any of the other forms of specifying a dependency
-...
+
+# ...
 ```
 
 The `path` field is required and specifies the path to the WIT document 
 defining a world to target.
 
-The `world` field is optional and defaults to the default world of the 
-document. If the document has no default world, then the default is the first 
-world in the document if there is exactly one world. If there are multiple 
-worlds in the document, the `world` field is required.
+The `world` field is optional and defaults to the default world resolution of
+the WIT package as defined by [`Resolve::select_world`][select-world].
 
 The `[package.metadata.component.target.dependencies]` table is optional and 
 defines the WIT package dependencies that may be referenced in the local WIT 
