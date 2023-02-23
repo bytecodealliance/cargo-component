@@ -197,6 +197,10 @@ publish = false
     fn dependencies_are_newer(&self, last_modified_output: SystemTime) -> Result<bool> {
         for (_, dep) in self.resolution.deps() {
             if last_modified_time(&dep.path)? > last_modified_output {
+                log::debug!(
+                    "dependency `{path}` has been modified",
+                    path = dep.path.display()
+                );
                 return Ok(true);
             }
         }

@@ -3,53 +3,10 @@ use anyhow::{Context, Result};
 use assert_cmd::prelude::*;
 use cargo_component::registry::LOCK_FILE_NAME;
 use predicates::str::contains;
-use std::{fs, path::Path};
+use std::fs;
 use toml_edit::{value, Document, InlineTable, Value};
 
 mod support;
-
-#[allow(clippy::too_many_arguments)]
-fn create_project(
-    root: &Path,
-    registry: &str,
-    name: &str,
-    package: &str,
-    version: &str,
-    world: Option<&str>,
-    dependency: Option<(&str, &str)>,
-    source: &str,
-) -> Result<Project> {
-    cargo_component(&format!("new {name}"))
-        .current_dir(root)
-        .assert()
-        .success();
-
-    let project = ProjectBuilder::new(root.join(name)).build();
-
-    let manifest_path = project.root().join("Cargo.toml");
-    let mut manifest: Document = fs::read_to_string(&manifest_path)?.parse()?;
-
-    let target = &mut manifest["package"]["metadata"]["component"]["target"];
-    target.as_table_like_mut().unwrap().remove("path");
-    target["package"] = value(package);
-    target["version"] = value(version);
-    if let Some(world) = world {
-        target["world"] = value(world);
-    }
-
-    let registries = &mut manifest["package"]["metadata"]["component"]["registries"];
-    registries["default"] = value(InlineTable::from_iter([("path", Value::from(registry))]));
-
-    let dependencies = &mut manifest["package"]["metadata"]["component"]["dependencies"];
-    if let Some((name, package)) = dependency {
-        dependencies[name] = value(package);
-    }
-
-    fs::write(manifest_path, manifest.to_string())?;
-    project.file("src/lib.rs", source)?;
-
-    Ok(project)
-}
 
 #[test]
 fn help() {
@@ -190,7 +147,7 @@ impl Foo for Component {
 bindings::export!(Component);
 "#;
 
-    let project = create_project(
+    let project = create_project_with_registry(
         &root,
         "../registry",
         "component",
@@ -230,7 +187,7 @@ fn it_errors_on_missing_target_package() -> Result<()> {
         .assert()
         .success();
 
-    let project = create_project(
+    let project = create_project_with_registry(
         &root,
         "../registry",
         "component",
@@ -282,7 +239,7 @@ impl Foo for Component {
 bindings::export!(Component);
 "#;
 
-    let project = create_project(
+    let project = create_project_with_registry(
         &root,
         "../registry",
         "component",
@@ -332,7 +289,7 @@ fn it_errors_on_invalid_document() -> Result<()> {
     .assert()
     .success();
 
-    let project = create_project(
+    let project = create_project_with_registry(
         &root,
         "../registry",
         "component",
@@ -372,7 +329,7 @@ fn it_errors_on_too_many_documents() -> Result<()> {
     .assert()
     .success();
 
-    let project = create_project(
+    let project = create_project_with_registry(
         &root,
         "../registry",
         "component",
@@ -423,7 +380,7 @@ impl Foo for Component {
 bindings::export!(Component);
 "#;
 
-    let project = create_project(
+    let project = create_project_with_registry(
         &root,
         "../registry",
         "component",
@@ -491,7 +448,7 @@ impl Foo for Component {
 bindings::export!(Component);
 "#;
 
-    let project = create_project(
+    let project = create_project_with_registry(
         &root,
         "../registry",
         "component",
@@ -541,7 +498,7 @@ fn it_errors_on_invalid_world() -> Result<()> {
     .assert()
     .success();
 
-    let project = create_project(
+    let project = create_project_with_registry(
         &root,
         "../registry",
         "component",
@@ -581,7 +538,7 @@ fn it_errors_on_too_many_worlds() -> Result<()> {
     .assert()
     .success();
 
-    let project = create_project(
+    let project = create_project_with_registry(
         &root,
         "../registry",
         "component",
@@ -616,7 +573,7 @@ fn it_errors_on_missing_dependency() -> Result<()> {
     .assert()
     .success();
 
-    let project = create_project(
+    let project = create_project_with_registry(
         &root,
         "../registry",
         "component",
@@ -651,7 +608,7 @@ fn it_errors_on_missing_dependency_version() -> Result<()> {
     .assert()
     .success();
 
-    let project = create_project(
+    let project = create_project_with_registry(
         &root,
         "../registry",
         "component",
@@ -715,7 +672,7 @@ impl Foo for Component {
 bindings::export!(Component);
 "#;
 
-    let project = create_project(
+    let project = create_project_with_registry(
         &root,
         "../registry",
         "component",
@@ -863,7 +820,7 @@ impl Foo for Component {
 bindings::export!(Component);
 "#;
 
-    let project = create_project(
+    let project = create_project_with_registry(
         &root,
         "../registry",
         "component",

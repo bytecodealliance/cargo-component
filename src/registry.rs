@@ -140,7 +140,7 @@ pub struct LockedPackageVersion {
 }
 
 impl LockedPackageVersion {
-    fn key(&self) -> &str {
+    pub(crate) fn key(&self) -> &str {
         &self.requirement
     }
 }
@@ -166,7 +166,7 @@ pub struct LockedPackage {
 
 impl LockedPackage {
     /// The key used in sorting and searching the package list.
-    fn key(&self) -> (&PackageId, &str) {
+    pub(crate) fn key(&self) -> (&PackageId, &str) {
         (
             &self.id,
             self.registry.as_deref().unwrap_or(DEFAULT_REGISTRY_NAME),
@@ -462,7 +462,7 @@ impl PackageDependencyResolution {
         config: &Config,
         workspace: &Workspace<'_>,
         package: &Package,
-        lock_file: &LockFile,
+        lock_file: Option<&LockFile>,
     ) -> Result<Option<Self>> {
         let mut resolution = Self {
             metadata: match ComponentMetadata::from_package(package)? {
@@ -558,13 +558,18 @@ impl PackageDependencyResolution {
             for (id, entries) in packages {
                 for entry in entries {
                     // Resolve the package from the lock file first
-                    let res = if let Some(ver) = lock_file.resolve(
-                        config,
-                        workspace,
-                        registry_name.unwrap_or(DEFAULT_REGISTRY_NAME),
-                        id,
-                        &entry.package.version,
-                    )? {
+                    let res = if let Some(Some(ver)) = lock_file
+                        .map(|f| {
+                            f.resolve(
+                                config,
+                                workspace,
+                                registry_name.unwrap_or(DEFAULT_REGISTRY_NAME),
+                                id,
+                                &entry.package.version,
+                            )
+                        })
+                        .transpose()?
+                    {
                         let exact_req = VersionReq {
                             comparators: vec![Comparator {
                                 op: Op::Exact,

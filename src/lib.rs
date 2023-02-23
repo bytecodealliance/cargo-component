@@ -7,10 +7,13 @@ use anyhow::{anyhow, bail, Context, Result};
 use bindings::BindingsGenerator;
 use cargo::{
     core::{SourceId, Summary, Workspace},
-    ops::{self, CompileOptions, ExportInfo, OutputMetadataOptions},
+    ops::{self, CompileOptions, ExportInfo, OutputMetadataOptions, UpdateOptions},
 };
 use cargo_util::paths::link_or_copy;
-use registry::{LockFile, PackageDependencyResolution, PackageResolutionMap};
+use registry::{
+    LockFile, LockedPackage, LockedPackageVersion, PackageDependencyResolution,
+    PackageResolutionMap,
+};
 use std::{
     collections::BTreeMap,
     fs::{self, File},
@@ -18,6 +21,7 @@ use std::{
     path::Path,
     time::SystemTime,
 };
+use termcolor::Color;
 use wit_component::ComponentEncoder;
 
 pub mod bindings;
@@ -46,15 +50,14 @@ fn last_modified_time(path: impl AsRef<Path>) -> Result<SystemTime> {
         })
 }
 
-async fn resolve_dependencies(
+async fn create_resolution_map(
     config: &Config,
     workspace: &Workspace<'_>,
+    lock_file: Option<&LockFile>,
 ) -> Result<PackageResolutionMap> {
-    let lock_file = LockFile::open(config, workspace)?.unwrap_or_default();
-
     let mut map = PackageResolutionMap::default();
     for package in workspace.members() {
-        match PackageDependencyResolution::new(config, workspace, package, &lock_file).await? {
+        match PackageDependencyResolution::new(config, workspace, package, lock_file).await? {
             Some(resolution) => {
                 let prev = map.insert(package.package_id(), resolution);
                 assert!(prev.is_none());
@@ -62,7 +65,15 @@ async fn resolve_dependencies(
             None => continue,
         }
     }
+    Ok(map)
+}
 
+async fn resolve_dependencies(
+    config: &Config,
+    workspace: &Workspace<'_>,
+) -> Result<PackageResolutionMap> {
+    let lock_file = LockFile::open(config, workspace)?.unwrap_or_default();
+    let map = create_resolution_map(config, workspace, Some(&lock_file)).await?;
     let new_lock_file = LockFile::from_resolution(&map);
     new_lock_file.update(config, workspace, &lock_file)?;
 
@@ -281,5 +292,65 @@ pub async fn check(
 ) -> Result<()> {
     generate_workspace_bindings(config, &mut workspace, force_generation).await?;
     ops::compile(&workspace, options)?;
+    Ok(())
+}
+
+/// Update the dependencies in the local lock files.
+///
+/// This updates both `Cargo.lock` and `Cargo-component.lock`.
+pub async fn update_lockfile(
+    config: &Config,
+    workspace: &Workspace<'_>,
+    options: &UpdateOptions<'_>,
+) -> Result<()> {
+    // First update `Cargo.lock`
+    ops::update_lockfile(workspace, options)?;
+
+    // Next read the current lock file and generate a new one
+    let map = create_resolution_map(config, workspace, None).await?;
+    let orig_lock_file = LockFile::open(config, workspace)?.unwrap_or_default();
+    let new_lock_file = LockFile::from_resolution(&map);
+
+    // Unlike `cargo`, the lock file doesn't have transitive dependencies
+    // So we expect the entries (and the version requirements) to be the same
+    // Thus, only "updating" messages get printed for the packages that changed
+    for old_pkg in &orig_lock_file.packages {
+        let new_pkg_index = new_lock_file
+            .packages
+            .binary_search_by_key(&old_pkg.key(), LockedPackage::key)
+            .expect("locked packages should remain the same");
+
+        let new_pkg = &new_lock_file.packages[new_pkg_index];
+        for old_ver in &old_pkg.versions {
+            let new_ver_index = new_pkg
+                .versions
+                .binary_search_by_key(&old_ver.key(), LockedPackageVersion::key)
+                .expect("version requirements should remain the same");
+
+            let new_ver = &new_pkg.versions[new_ver_index];
+            if old_ver.version != new_ver.version {
+                config.shell().status_with_color(
+                    "Updating",
+                    format!(
+                        "component registry package `{id}` v{old} -> v{new}",
+                        id = old_pkg.id,
+                        old = old_ver.version,
+                        new = new_ver.version
+                    ),
+                    Color::Green,
+                )?;
+            }
+        }
+    }
+
+    if options.dry_run {
+        options
+            .config
+            .shell()
+            .warn("not updating component lock file due to dry run")?;
+    } else {
+        new_lock_file.update(config, workspace, &orig_lock_file)?;
+    }
+
     Ok(())
 }

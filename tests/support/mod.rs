@@ -8,6 +8,7 @@ use std::{
     process::Command,
     sync::atomic::{AtomicUsize, Ordering::SeqCst},
 };
+use toml_edit::{value, Document, InlineTable, Value};
 use wasmparser::{Chunk, Encoding, Parser, Payload, Validator, WasmFeatures};
 
 pub fn root() -> Result<PathBuf> {
@@ -163,4 +164,47 @@ pub fn validate_component(path: &Path) -> Result<()> {
         )),
         Chunk::NeedMoreData(_) => unreachable!(),
     }
+}
+
+#[allow(clippy::too_many_arguments)]
+pub fn create_project_with_registry(
+    root: &Path,
+    registry: &str,
+    name: &str,
+    package: &str,
+    version: &str,
+    world: Option<&str>,
+    dependency: Option<(&str, &str)>,
+    source: &str,
+) -> Result<Project> {
+    cargo_component(&format!("new {name}"))
+        .current_dir(root)
+        .assert()
+        .success();
+
+    let project = ProjectBuilder::new(root.join(name)).build();
+
+    let manifest_path = project.root().join("Cargo.toml");
+    let mut manifest: Document = fs::read_to_string(&manifest_path)?.parse()?;
+
+    let target = &mut manifest["package"]["metadata"]["component"]["target"];
+    target.as_table_like_mut().unwrap().remove("path");
+    target["package"] = value(package);
+    target["version"] = value(version);
+    if let Some(world) = world {
+        target["world"] = value(world);
+    }
+
+    let registries = &mut manifest["package"]["metadata"]["component"]["registries"];
+    registries["default"] = value(InlineTable::from_iter([("path", Value::from(registry))]));
+
+    let dependencies = &mut manifest["package"]["metadata"]["component"]["dependencies"];
+    if let Some((name, package)) = dependency {
+        dependencies[name] = value(package);
+    }
+
+    fs::write(manifest_path, manifest.to_string())?;
+    project.file("src/lib.rs", source)?;
+
+    Ok(project)
 }

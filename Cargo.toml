@@ -30,6 +30,7 @@ async-trait = "0.1.64"
 wat = "1.0.59"
 indexmap = "1.9.2"
 hex = "0.4.3"
+termcolor = "1.2.0"
 
 [features]
 default = ["pretty_env_logger"]

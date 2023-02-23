@@ -3,7 +3,7 @@ use cargo::CliError;
 use cargo_component::{
     commands::{
         AddCommand, BuildCommand, CheckCommand, ClippyCommand, MetadataCommand, NewCommand,
-        RegistryCommand,
+        RegistryCommand, UpdateCommand,
     },
     config::Config,
 };
@@ -34,6 +34,7 @@ pub enum Command {
     Add(AddCommand),
     Clippy(ClippyCommand),
     Registry(RegistryCommand),
+    Update(UpdateCommand),
 }
 
 #[tokio::main]
@@ -52,6 +53,7 @@ async fn main() -> Result<()> {
             Command::Add(cmd) => cmd.exec(&mut config).await,
             Command::Clippy(cmd) => cmd.exec(&mut config).await,
             Command::Registry(cmd) => cmd.exec(&mut config).await,
+            Command::Update(cmd) => cmd.exec(&mut config).await,
         },
     } {
         cargo::exit_with_error(
