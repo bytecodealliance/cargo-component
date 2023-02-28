@@ -416,17 +416,13 @@ default world component {
         let mut registries = HashMap::new();
 
         if let Some(registry) = self.registry.as_deref() {
-            let registry = match Url::try_from(registry) {
-                Ok(url) => metadata::Registry::Remote(url),
-                Err(_) => {
-                    let path: PathBuf = registry.into();
-                    if !path.is_dir() {
-                        bail!(
-                            "local registry `{path}` does not exist",
-                            path = path.display()
-                        );
-                    }
-                    metadata::Registry::Local(path)
+            // Check if the specified registry exists as a path
+            let registry = if Path::new(registry).exists() {
+                metadata::Registry::Local(registry.into())
+            } else {
+                match Url::try_from(registry) {
+                    Ok(url) => metadata::Registry::Remote(url),
+                    Err(_) => bail!("local registry `{registry}` does not exist"),
                 }
             };
             registries.insert("default".to_string(), registry);
