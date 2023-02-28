@@ -19,7 +19,7 @@ To build the component, run the following command:
 cargo component build
 ```
 
-The component should now exist at `target/wasm32-unknown-unknown/debug/service.wasm`.
+The component should now exist at `target/wasm32-wasi/debug/service.wasm`.
 
 The resulting component will have the following imports:
 

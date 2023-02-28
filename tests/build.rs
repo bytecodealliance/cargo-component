@@ -147,3 +147,23 @@ fn it_adds_a_producers_field() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn it_builds_wasm32_unknown_unknown() -> Result<()> {
+    let project = Project::new("foo")?;
+    project
+        .cargo_component("build --target wasm32-unknown-unknown")
+        .assert()
+        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .success();
+
+    validate_component(
+        &project
+            .build_dir()
+            .join("wasm32-unknown-unknown")
+            .join("debug")
+            .join("foo.wasm"),
+    )?;
+
+    Ok(())
+}

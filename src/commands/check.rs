@@ -82,7 +82,7 @@ pub struct CheckCommand {
     #[clap(long = "no-default-features")]
     pub no_default_features: bool,
 
-    /// Check for the target triple (defaults to `wasm32-unknown-unknown`)
+    /// Check for the target triple (defaults to `wasm32-wasi`)
     #[clap(long = "target", value_name = "TRIPLE")]
     pub targets: Vec<String>,
 

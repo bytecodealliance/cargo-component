@@ -5,31 +5,31 @@ use std::{
     process::{Command, Stdio},
 };
 
-pub fn install_wasm32_unknown_unknown() -> Result<()> {
+pub fn install_wasm32_wasi() -> Result<()> {
     let sysroot = get_sysroot()?;
-    if sysroot.join("lib/rustlib/wasm32-unknown-unknown").exists() {
+    if sysroot.join("lib/rustlib/wasm32-wasi").exists() {
         return Ok(());
     }
 
     if env::var_os("RUSTUP_TOOLCHAIN").is_none() {
         bail!(
-            "failed to find the `wasm32-unknown-unknown` target \
+            "failed to find the `wasm32-wasi` target \
                and `rustup` is not available. If you're using rustup \
                make sure that it's correctly installed; if not, make sure to \
-               install the `wasm32-unknown-unknown` target before using this command"
+               install the `wasm32-wasi` target before using this command"
         );
     }
 
     let output = Command::new("rustup")
         .arg("target")
         .arg("add")
-        .arg("wasm32-unknown-unknown")
+        .arg("wasm32-wasi")
         .stderr(Stdio::inherit())
         .stdout(Stdio::inherit())
         .output()?;
 
     if !output.status.success() {
-        bail!("failed to install the `wasm32-unknown-unknown` target");
+        bail!("failed to install the `wasm32-wasi` target");
     }
 
     Ok(())
