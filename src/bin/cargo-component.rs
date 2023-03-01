@@ -9,6 +9,10 @@ use cargo_component::{
 };
 use clap::Parser;
 
+fn version() -> &'static str {
+    option_env!("CARGO_VERSION_INFO").unwrap_or(env!("CARGO_PKG_VERSION"))
+}
+
 /// Cargo integration for WebAssembly components.
 #[derive(Parser)]
 #[clap(
@@ -17,6 +21,7 @@ use clap::Parser;
     propagate_version = true,
     arg_required_else_help = true
 )]
+#[command(version = version())]
 enum CargoComponent {
     /// Cargo integration for WebAssembly components.
     #[clap(subcommand, hide = true)]

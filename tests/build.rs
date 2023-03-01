@@ -118,3 +118,32 @@ fn it_supports_wit_keywords() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn it_adds_a_producers_field() -> Result<()> {
+    let project = Project::new("foo")?;
+    project
+        .cargo_component("build --release")
+        .assert()
+        .stderr(contains("Finished release [optimized] target(s)"))
+        .success();
+
+    let path = project.release_wasm("foo");
+
+    validate_component(&path)?;
+
+    let wasm = fs::read(&path)
+        .with_context(|| format!("failed to read wasm file `{path}`", path = path.display()))?;
+    let section = wasm_metadata::Producers::from_wasm(&wasm)?.expect("missing producers section");
+
+    assert_eq!(
+        section
+            .get("processed-by")
+            .expect("missing processed-by field")
+            .get(env!("CARGO_PKG_NAME"))
+            .expect("missing cargo-component field"),
+        option_env!("CARGO_VERSION_INFO").unwrap_or(env!("CARGO_PKG_VERSION"))
+    );
+
+    Ok(())
+}
