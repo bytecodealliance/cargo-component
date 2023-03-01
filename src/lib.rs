@@ -234,7 +234,21 @@ fn create_component(config: &Config, target_path: &Path) -> Result<()> {
 
     let encoder = ComponentEncoder::default().module(&module)?.validate(true);
 
-    fs::write(&dep_path, encoder.encode()?).with_context(|| {
+    let mut producers = wasm_metadata::Producers::empty();
+    producers.add(
+        "processed-by",
+        env!("CARGO_PKG_NAME"),
+        option_env!("CARGO_VERSION_INFO").unwrap_or(env!("CARGO_PKG_VERSION")),
+    );
+
+    let component = producers.add_to_wasm(&encoder.encode()?).with_context(|| {
+        anyhow!(
+            "failed to add metadata to output component `{path}`",
+            path = dep_path.display()
+        )
+    })?;
+
+    fs::write(&dep_path, component).with_context(|| {
         anyhow!(
             "failed to write output component `{path}`",
             path = dep_path.display()
