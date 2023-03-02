@@ -3,7 +3,7 @@ use anyhow::Result;
 use assert_cmd::prelude::*;
 use predicates::{prelude::*, str::contains};
 use std::fs;
-use toml_edit::{value, Document, InlineTable, Value};
+use toml_edit::{value, Document};
 
 mod support;
 
@@ -41,20 +41,20 @@ fn validate_name_does_not_conflict_with_package() -> Result<()> {
 
 #[test]
 fn validate_the_package_exists() -> Result<()> {
-    let project = Project::new("foo")?;
-    let manifest_path = project.root().join("Cargo.toml");
-    let manifest = fs::read_to_string(&manifest_path)?;
-    let mut doc: Document = manifest.parse()?;
-    doc["package"]["metadata"]["component"]["registries"]["default"] = value(
-        InlineTable::from_iter([("path", Value::from("registry"))].into_iter()),
-    );
-    fs::write(manifest_path, doc.to_string())?;
+    let root = create_root()?;
+    let path = root.join("registry");
 
-    project
-        .cargo_component("registry new registry")
+    cargo_component(&format!("registry new {path}", path = path.display()))
+        .current_dir(&root)
         .assert()
         .stderr(contains("Creating local component registry"))
         .success();
+
+    let project = Project::with_root(
+        root,
+        "foo",
+        &format!("--registry {path}", path = path.display()),
+    )?;
 
     project
         .cargo_component("add bar foo/bar")
@@ -69,20 +69,25 @@ fn validate_the_package_exists() -> Result<()> {
 
 #[test]
 fn validate_the_version_exists() -> Result<()> {
-    let project = Project::new("foo")?;
-    let manifest_path = project.root().join("Cargo.toml");
-    let manifest = fs::read_to_string(&manifest_path)?;
-    let mut doc: Document = manifest.parse()?;
-    doc["package"]["metadata"]["component"]["registries"]["default"] = value(
-        InlineTable::from_iter([("path", Value::from("registry"))].into_iter()),
-    );
-    fs::write(manifest_path, doc.to_string())?;
+    let root = create_root()?;
+    let path = root.join("registry");
 
-    project
-        .cargo_component("registry publish -r registry --id foo/bar -v 1.0.0 world.wit")
-        .assert()
-        .stderr(contains("Publishing version 1.0.0 of package `foo/bar`"))
-        .success();
+    fs::write(root.join("foo.wat"), r#"(component)"#)?;
+
+    cargo_component(&format!(
+        "registry publish -r {path} --id foo/bar -v 1.0.0 foo.wat",
+        path = path.display()
+    ))
+    .current_dir(&root)
+    .assert()
+    .stderr(contains("Publishing version 1.0.0 of package `foo/bar`"))
+    .success();
+
+    let project = Project::with_root(
+        root,
+        "foo",
+        &format!("--registry {path}", path = path.display()),
+    )?;
 
     project
         .cargo_component("add --version 2.0.0 bar foo/bar")
@@ -117,20 +122,25 @@ fn checks_for_duplicate_dependencies() -> Result<()> {
 
 #[test]
 fn prints_modified_manifest_for_dry_run() -> Result<()> {
-    let project = Project::new("foo")?;
-    let manifest_path = project.root().join("Cargo.toml");
-    let manifest = fs::read_to_string(&manifest_path)?;
-    let mut doc: Document = manifest.parse()?;
-    doc["package"]["metadata"]["component"]["registries"]["default"] = value(
-        InlineTable::from_iter([("path", Value::from("registry"))].into_iter()),
-    );
-    fs::write(manifest_path, doc.to_string())?;
+    let root = create_root()?;
+    let path = root.join("registry");
 
-    project
-        .cargo_component("registry publish -r registry --id foo/bar -v 1.2.3 world.wit")
-        .assert()
-        .stderr(contains("Publishing version 1.2.3 of package `foo/bar`"))
-        .success();
+    fs::write(root.join("foo.wat"), r#"(component)"#)?;
+
+    cargo_component(&format!(
+        "registry publish -r {path} --id foo/bar -v 1.2.3 foo.wat",
+        path = path.display()
+    ))
+    .current_dir(&root)
+    .assert()
+    .stderr(contains("Publishing version 1.2.3 of package `foo/bar`"))
+    .success();
+
+    let project = Project::with_root(
+        root,
+        "foo",
+        &format!("--registry {path}", path = path.display()),
+    )?;
 
     project
         .cargo_component("add --dry-run bar foo/bar")
@@ -141,7 +151,7 @@ fn prints_modified_manifest_for_dry_run() -> Result<()> {
     let manifest = fs::read_to_string(project.root().join("Cargo.toml"))?;
 
     // Assert the dependency was added to the manifest
-    assert!(!contains(r#"bar = "foo/baz:1.2.3""#).eval(&manifest));
+    assert!(!contains(r#"bar = "foo/baz@1.2.3""#).eval(&manifest));
 
     Ok(())
 }

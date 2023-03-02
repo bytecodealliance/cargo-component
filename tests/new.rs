@@ -100,7 +100,7 @@ fn it_rejects_rust_keywords() -> Result<()> {
         .current_dir(&root)
         .assert()
         .stderr(contains(
-            "component name `fn` cannot be used as it is a Rust keyword",
+            "the name `fn` cannot be used as a package name, it is a Rust keyword",
         ))
         .failure();
 
