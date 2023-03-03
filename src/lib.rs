@@ -232,7 +232,13 @@ fn create_component(config: &Config, target_path: &Path) -> Result<()> {
         format!("component {path}", path = target_path.display()),
     )?;
 
-    let encoder = ComponentEncoder::default().module(&module)?.validate(true);
+    let encoder = ComponentEncoder::default()
+        .adapter(
+            "wasi_snapshot_preview1",
+            include_bytes!("../adapters/wasi_snapshot_preview1.wasm"),
+        )?
+        .module(&module)?
+        .validate(true);
 
     let mut producers = wasm_metadata::Producers::empty();
     producers.add(

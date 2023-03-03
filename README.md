@@ -139,15 +139,25 @@ and tooling developers can use to test their implementations.
 
 ## WASI Support
 
-The current WASI preview does not yet support the WebAssembly component model.
+Currently `cargo component` targets `wasm32-wasi` by default.
 
-For that reason, `cargo component` currently targets `wasm32-unknown-unknown`
-by default.
+As this target is for a _preview1_ release of WASI, the WebAssembly module 
+produced by the Rust compiler must be adapted to the _preview2_ version of WASI 
+supported by the component model.
 
-Once a WASI preview is available that [supports the component model][1], `cargo component`
-will target WASI by default at that time.
+The adaptation is automatically performed when `wasm32-wasi` is targeted.
 
-[1]: https://github.com/WebAssembly/meetings/blob/main/wasi/2022/presentations/2022-06-30-gohman-wasi-preview2.pdf
+To prevent this, override the target to `wasm32-unknown-unknown` using the 
+`--target` option when building. This, however, will disable WASI support.
+
+Use the _preview2_ version of [`wasi-common`][2] in your host to run components 
+produced by `cargo component`.
+
+When the Rust compiler supports a [_preview2_ version of the WASI target][1], 
+support in `cargo component` for adapting a _preview1_ module will be removed.
+
+[1]: https://github.com/rust-lang/compiler-team/issues/594
+[2]: https://github.com/bytecodealliance/preview2-prototyping/tree/main/wasi-common
 
 ## Installation
 

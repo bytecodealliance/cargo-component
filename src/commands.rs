@@ -150,8 +150,8 @@ impl CompileOptions {
         let spec = Packages::from_flags(self.workspace, self.exclude, self.packages)?;
 
         if self.targets.is_empty() {
-            target::install_wasm32_unknown_unknown()?;
-            self.targets.push("wasm32-unknown-unknown".to_string());
+            target::install_wasm32_wasi()?;
+            self.targets.push("wasm32-wasi".to_string());
         }
 
         log::debug!("using targets {:#?}", self.targets);
