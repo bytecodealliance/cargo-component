@@ -264,11 +264,7 @@ version = "1.2.3"
 
 [package.metadata.component]
 package = "my-org/my-component"
-
-[package.metadata.component.target]
-package = "webassembly/wasi"
-version = "1.2.3"
-document = "command"
+target = { package = "webassembly/wasi", version = "1.2.3", world = "cli.command" }
 
 [package.metadata.component.dependencies]
 ```
@@ -296,11 +292,7 @@ version = "1.2.3"
 
 [package.metadata.component]
 package = "my-org/my-component"
-
-[package.metadata.component.target]
-package = "webassembly/wasi"
-version = "1.2.3"
-document = "command"
+target = { package = "webassembly/wasi", version = "1.2.3", world = "cli.command" }
 
 [package.metadata.component.dependencies]
 regex = "fancy-components/regex@1.0.0"
@@ -377,9 +369,7 @@ version = "1.2.3"
 
 [package.metadata.component]
 package = "my-org/my-component"
-
-[package.metadata.component.target]
-path = "component.wit"
+target = { path = "component.wit" }
 ```
 
 An example `component.wit`:
