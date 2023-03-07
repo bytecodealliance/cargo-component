@@ -25,9 +25,29 @@ using Rust as the component's implementation language.
 `cargo component` is considered to be experimental and is _not_ currently
 stable in terms of the code it supports building.
 
-Upgrading `cargo component` may cause build errors in the future.
+Until the component model stabilizes, upgrading to a newer `cargo component` 
+may cause build errors for existing component projects.
 
-### Motivation
+## Requirements
+
+1. The `cargo component` subcommand is written in Rust, so you'll want the
+  [latest stable Rust installed](https://www.rust-lang.org/tools/install).
+2. A [protobuf compiler](http://google.github.io/proto-lens/installing-protoc.html)
+is also required for registry support.
+
+## Installation
+
+To install the `cargo component` subcommand, run the following command:
+
+```
+cargo install --git https://github.com/bytecodealliance/cargo-component
+```
+
+The [currently published crate](https://crates.io/crates/cargo-component)
+on crates.io is a nonfunctional placeholder and these instructions will be
+updated to install the crates.io package once a proper release is made.
+
+## Motivation
 
 Today, developers that target WebAssembly typically compile a monolithic
 program written in a single source language to a WebAssembly module. The
@@ -51,7 +71,7 @@ While it is possible to solve these challenges with the existing
 WebAssembly standard, doing so is burdensome, error-prone, and requires
 foreknowledge of how the WebAssembly modules are implemented.
 
-### WebAssembly Component Model
+## WebAssembly Component Model
 
 The WebAssembly component model proposal provides a way to
 simplify the process of building WebAssembly applications and services
@@ -77,7 +97,7 @@ different components might have a shared dependency, hosts may even
 share the same implementation of that dependency to save on host
 memory usage.
 
-### Cargo Component
+## Cargo Component
 
 A primary goal of `cargo component` is to try to imagine what
 first-class support for WebAssembly components might look like for Rust.
@@ -158,20 +178,6 @@ support in `cargo component` for adapting a _preview1_ module will be removed.
 
 [1]: https://github.com/rust-lang/compiler-team/issues/594
 [2]: https://github.com/bytecodealliance/preview2-prototyping/tree/main/wasi-common
-
-## Installation
-
-To install the `cargo component` subcommand, first you'll want to install
-[the latest stable Rust](https://www.rust-lang.org/tools/install) and then
-you'll execute to  install the subcommand:
-
-```
-cargo install --git https://github.com/bytecodealliance/cargo-component
-```
-
-The [currently published crate](https://crates.io/crates/cargo-component)
-on crates.io is a nonfunctional placeholder and these instructions will be
-updated to install the crates.io package once a proper release is made.
 
 ## Getting Started
 
@@ -269,13 +275,6 @@ for other IDEs.
 project, and follows
 the Bytecode Alliance's [Code of Conduct](CODE_OF_CONDUCT.md) and
 [Organizational Code of Conduct](ORG_CODE_OF_CONDUCT.md).
-
-### Prerequisites
-
-1. The `cargo component` subcommand is written in Rust, so you'll want
-  [Rust installed](https://www.rust-lang.org/tools/install) first.
-2. A [protobuf compiler](http://google.github.io/proto-lens/installing-protoc.html)
-  is required to be installed for registry support.
 
 ### Getting the Code
 
