@@ -7,7 +7,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-wit-bindgen = { version = "0.3.0", features = ["realloc"], default_features = false }
+wit-bindgen = { version = "0.4.0", features = ["realloc"], default-features = false }
 
 [package.metadata.component.target]
 path = "world.wit"
