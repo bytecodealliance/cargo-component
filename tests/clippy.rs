@@ -43,7 +43,7 @@ fn it_finds_errors() -> Result<()> {
         .cargo_component("clippy")
         .assert()
         .stderr(contains("Checking foo-bindings v0.1.0").and(contains(
-            "expected struct `std::string::String`, found `&str`",
+            "expected struct `String`, found `&str`",
         )))
         .failure();
 
