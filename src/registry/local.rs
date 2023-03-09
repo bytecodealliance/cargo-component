@@ -121,7 +121,7 @@ impl LocalRegistry {
                 })?;
             signing_key.into()
         } else {
-            SigningKey::from_bytes(&key)
+            SigningKey::from_bytes(key.as_slice().into())
                 .with_context(|| {
                     format!(
                         "failed to parse signing key from `{path}`",

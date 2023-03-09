@@ -258,7 +258,7 @@ impl NewCommand {
         doc["package"]["metadata"] = Item::Table(metadata);
         doc["dependencies"]["wit-bindgen"] = value(InlineTable::from_iter(
             [
-                ("version", Value::from("0.3.0")),
+                ("version", Value::from("0.4.0")),
                 ("default_features", Value::from(false)),
             ]
             .into_iter(),

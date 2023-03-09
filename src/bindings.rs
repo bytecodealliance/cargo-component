@@ -17,8 +17,8 @@ use std::{
     process::{Command, Stdio},
     time::SystemTime,
 };
-use wit_bindgen_gen_guest_rust::Opts;
-use wit_bindgen_gen_rust_lib::to_rust_ident;
+use wit_bindgen_rust::Opts;
+use wit_bindgen_rust_lib::to_rust_ident;
 use wit_component::DecodedWasm;
 use wit_parser::{
     Document, Function, Interface, InterfaceId, Package, PackageId, Resolve, Type, TypeDef,
@@ -194,7 +194,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-"wit-bindgen" = {{ version = "0.3.0", features = ["realloc"], default_features = false }}
+"wit-bindgen" = {{ version = "0.4.0", features = ["realloc"], default-features = false }}
 "#,
                 name = self.name
             ),
