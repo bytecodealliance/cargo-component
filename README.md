@@ -221,7 +221,9 @@ The `cargo component` subcommand has some analogous commands to cargo itself:
 * `cargo component add` — adds a component interface dependency to a cargo 
   manifest file.
 * `cargo component build` — builds a WebAssembly component from a Rust project
-  using the `wasm32-unknown-unknown` target by default.
+  using the `wasm32-wasi` target by default.
+* `cargo component doc` — generates API documentation for a WebAssembly component from a Rust project
+  using the `wasm32-wasi` target by default.
 * `cargo component metadata` — prints package metadata as `cargo metadata` 
   would, except it also includes the metadata of generated bindings.
 * `cargo component check` — checks the local package and all of its dependencies
