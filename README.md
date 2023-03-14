@@ -188,6 +188,7 @@ component will target:
 
 ```wit
 default world component {
+  /// Say hello!
   export hello-world: func() -> string
 }
 ```
