@@ -694,7 +694,7 @@ bindings::export!(Component);
 
     fs::write(manifest_path, manifest.to_string())?;
     project.file("src/lib.rs", source)?;
-    project.file("world.wit", world)?;
+    project.file("wit/world.wit", world)?;
 
     project
         .cargo_component("build")
