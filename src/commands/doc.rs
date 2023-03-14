@@ -118,7 +118,7 @@ pub struct DocCommand {
 impl DocCommand {
     /// Executes the command.
     pub async fn exec(self, config: &mut Config) -> Result<()> {
-        log::debug!("executing compile command");
+        log::debug!("executing document command");
 
         config.cargo_mut().configure(
             u32::from(self.verbose),
