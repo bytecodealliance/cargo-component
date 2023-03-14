@@ -2,8 +2,8 @@ use anyhow::Result;
 use cargo::CliError;
 use cargo_component::{
     commands::{
-        AddCommand, BuildCommand, CheckCommand, ClippyCommand, MetadataCommand, NewCommand,
-        RegistryCommand, UpdateCommand,
+        AddCommand, BuildCommand, CheckCommand, ClippyCommand, DocCommand, MetadataCommand,
+        NewCommand, RegistryCommand, UpdateCommand,
     },
     config::Config,
 };
@@ -34,6 +34,7 @@ enum CargoComponent {
 pub enum Command {
     New(NewCommand),
     Build(BuildCommand),
+    Doc(DocCommand),
     Metadata(MetadataCommand),
     Check(CheckCommand),
     Add(AddCommand),
@@ -53,6 +54,7 @@ async fn main() -> Result<()> {
         CargoComponent::Component(cmd) | CargoComponent::Command(cmd) => match cmd {
             Command::New(cmd) => cmd.exec(&mut config).await,
             Command::Build(cmd) => cmd.exec(&mut config).await,
+            Command::Doc(cmd) => cmd.exec(&mut config).await,
             Command::Metadata(cmd) => cmd.exec(&mut config).await,
             Command::Check(cmd) => cmd.exec(&mut config).await,
             Command::Add(cmd) => cmd.exec(&mut config).await,

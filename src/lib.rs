@@ -7,7 +7,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use bindings::BindingsGenerator;
 use cargo::{
     core::{SourceId, Summary, Workspace},
-    ops::{self, CompileOptions, ExportInfo, OutputMetadataOptions, UpdateOptions},
+    ops::{self, CompileOptions, DocOptions, ExportInfo, OutputMetadataOptions, UpdateOptions},
 };
 use cargo_util::paths::link_or_copy;
 use registry::{
@@ -288,6 +288,20 @@ pub async fn compile(
         create_component(config, path)?;
     }
 
+    Ok(())
+}
+
+/// Generate API documentation for the given workspace and compile options.
+///
+/// It is expected that the current package contains a `package.metadata.component` section.
+pub async fn doc(
+    config: &Config,
+    mut workspace: Workspace<'_>,
+    options: &DocOptions,
+    force_generation: bool,
+) -> Result<()> {
+    generate_workspace_bindings(config, &mut workspace, force_generation).await?;
+    ops::doc(&workspace, options)?;
     Ok(())
 }
 

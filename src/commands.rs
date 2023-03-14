@@ -14,6 +14,7 @@ mod add;
 mod build;
 mod check;
 mod clippy;
+mod doc;
 mod metadata;
 mod new;
 mod registry;
@@ -23,6 +24,7 @@ pub use self::add::*;
 pub use self::build::*;
 pub use self::check::*;
 pub use self::clippy::*;
+pub use self::doc::*;
 pub use self::metadata::*;
 pub use self::new::*;
 pub use self::registry::*;
@@ -194,6 +196,24 @@ impl CompileOptions {
             target_rustc_crate_types: None,
             rustdoc_document_private_items: false,
             honor_rust_version: true,
+        })
+    }
+}
+
+struct DocOptions {
+    pub open_result: bool,
+    pub compile_opts: CompileOptions,
+}
+
+impl DocOptions {
+    fn into_cargo_options(
+        self,
+        config: &Config,
+        mode: CompileMode,
+    ) -> Result<cargo::ops::DocOptions> {
+        Ok(cargo::ops::DocOptions {
+            open_result: self.open_result,
+            compile_opts: self.compile_opts.into_cargo_options(config, mode)?,
         })
     }
 }
