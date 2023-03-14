@@ -183,7 +183,7 @@ support in `cargo component` for adapting a _preview1_ module will be removed.
 
 Use `cargo component new <name>` to create a new component.
 
-This will create a `world.wit` file describing the world that the
+This will create a `wit/world.wit` file describing the world that the
 component will target:
 
 ```wit

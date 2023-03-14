@@ -223,7 +223,7 @@ impl NewCommand {
                 version = target.version
             )),
             None => value(InlineTable::from_iter(
-                [("path", Value::from("world.wit"))].into_iter(),
+                [("path", Value::from("wit/world.wit"))].into_iter(),
             )),
         };
         component["dependencies"] = Item::Table(Table::new());
@@ -335,7 +335,15 @@ bindings::export!(Component);
             return Ok(());
         }
 
-        let path = out_dir.join("world.wit");
+        let wit_path = out_dir.join("wit");
+        fs::create_dir(&wit_path).with_context(|| {
+            format!(
+                "failed to create targets directory `{wit_path}`",
+                wit_path = wit_path.display()
+            )
+        })?;
+
+        let path = wit_path.join("world.wit");
 
         fs::write(
             &path,

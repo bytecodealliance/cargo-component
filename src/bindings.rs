@@ -329,14 +329,18 @@ publish = false
         }
 
         // Next parse the local target file, giving it the packages we just merged
-        let package = merged
-            .push(UnresolvedPackage::parse_file(path)?, &dependencies)
-            .with_context(|| {
-                format!(
-                    "failed to parse local target `{path}`",
-                    path = path.display()
-                )
-            })?;
+        let package = if path.is_dir() {
+            merged.push_dir(path)?.0
+        } else {
+            merged
+                .push(UnresolvedPackage::parse_file(path)?, &dependencies)
+                .with_context(|| {
+                    format!(
+                        "failed to parse local target `{path}`",
+                        path = path.display()
+                    )
+                })?
+        };
 
         let world = merged
             .select_world(package, world)

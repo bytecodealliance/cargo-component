@@ -330,7 +330,7 @@ version = "1.2.3"
 package = "my-org/my-component"
 
 [package.metadata.component.target]
-path = "component.wit"
+path = "wit"
 
 [package.metadata.component.target.dependencies]
 wasi = "webassembly/wasi@1.2.3"
@@ -339,7 +339,7 @@ wasi = "webassembly/wasi@1.2.3"
 regex = "fancy-components/regex@1.0.0"
 transcoder = "fancy-components/transcoder@1.0.0"
 ```
-An example `component.wit`:
+An example `wit/component.wit`:
 
 ```wit
 default world my-component {
@@ -369,10 +369,10 @@ version = "1.2.3"
 
 [package.metadata.component]
 package = "my-org/my-component"
-target = { path = "component.wit" }
+target = { path = "wit" }
 ```
 
-An example `component.wit`:
+An example `wit/component.wit`:
 
 ```wit
 default world my-component {
