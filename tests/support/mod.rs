@@ -89,6 +89,19 @@ impl Project {
     pub fn new(name: &str) -> Result<Self> {
         let root = create_root()?;
 
+        cargo_component(&format!("new --lib {name}"))
+            .current_dir(&root)
+            .assert()
+            .try_success()?;
+
+        Ok(Self {
+            root: root.join(name),
+        })
+    }
+
+    pub fn new_bin(name: &str) -> Result<Self> {
+        let root = create_root()?;
+
         cargo_component(&format!("new {name}"))
             .current_dir(&root)
             .assert()
@@ -100,7 +113,7 @@ impl Project {
     }
 
     pub fn with_root(root: PathBuf, name: &str, args: &str) -> Result<Self> {
-        cargo_component(&format!("new {name} {args}"))
+        cargo_component(&format!("new --lib {name} {args}"))
             .current_dir(&root)
             .assert()
             .try_success()?;

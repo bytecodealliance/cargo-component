@@ -19,10 +19,31 @@ fn help() {
 }
 
 #[test]
+fn it_creates_the_expected_files_for_bin() -> Result<()> {
+    let root = create_root()?;
+
+    cargo_component("new --bin foo")
+        .current_dir(&root)
+        .assert()
+        .stderr(contains("Created component `foo` package"))
+        .success();
+
+    let proj_dir = root.join("foo");
+
+    assert!(proj_dir.join("Cargo.toml").is_file());
+    assert!(!proj_dir.join("wit/world.wit").is_file());
+    assert!(!proj_dir.join("src").join("lib.rs").is_file());
+    assert!(proj_dir.join("src").join("main.rs").is_file());
+    assert!(proj_dir.join(".vscode").join("settings.json").is_file());
+
+    Ok(())
+}
+
+#[test]
 fn it_creates_the_expected_files() -> Result<()> {
     let root = create_root()?;
 
-    cargo_component("new foo")
+    cargo_component("new --lib foo")
         .current_dir(&root)
         .assert()
         .stderr(contains("Created component `foo` package"))
@@ -33,6 +54,7 @@ fn it_creates_the_expected_files() -> Result<()> {
     assert!(proj_dir.join("Cargo.toml").is_file());
     assert!(proj_dir.join("wit/world.wit").is_file());
     assert!(proj_dir.join("src").join("lib.rs").is_file());
+    assert!(!proj_dir.join("src").join("main.rs").is_file());
     assert!(proj_dir.join(".vscode").join("settings.json").is_file());
 
     Ok(())
@@ -42,7 +64,7 @@ fn it_creates_the_expected_files() -> Result<()> {
 fn it_supports_editor_option() -> Result<()> {
     let root = create_root()?;
 
-    cargo_component("new foo --editor none")
+    cargo_component("new --lib foo --editor none")
         .current_dir(&root)
         .assert()
         .stderr(contains("Created component `foo` package"))
@@ -62,7 +84,7 @@ fn it_supports_editor_option() -> Result<()> {
 fn it_supports_edition_option() -> Result<()> {
     let root = create_root()?;
 
-    cargo_component("new foo --edition 2018")
+    cargo_component("new --lib foo --edition 2018")
         .current_dir(&root)
         .assert()
         .stderr(contains("Created component `foo` package"))
@@ -79,7 +101,7 @@ fn it_supports_edition_option() -> Result<()> {
 fn it_supports_name_option() -> Result<()> {
     let root = create_root()?;
 
-    cargo_component("new foo --name bar")
+    cargo_component("new --lib foo --name bar")
         .current_dir(&root)
         .assert()
         .stderr(contains("Created component `bar` package"))
@@ -96,7 +118,7 @@ fn it_supports_name_option() -> Result<()> {
 fn it_rejects_rust_keywords() -> Result<()> {
     let root = create_root()?;
 
-    cargo_component("new foo --name fn")
+    cargo_component("new --lib foo --name fn")
         .current_dir(&root)
         .assert()
         .stderr(contains(

@@ -3,13 +3,12 @@
 #![deny(missing_docs)]
 
 use crate::config::Config;
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, Context as _, Result};
 use bindings::BindingsGenerator;
 use cargo::{
     core::{SourceId, Summary, Workspace},
     ops::{self, CompileOptions, DocOptions, ExportInfo, OutputMetadataOptions, UpdateOptions},
 };
-use cargo_util::paths::link_or_copy;
 use registry::{
     LockFile, LockedPackage, LockedPackageVersion, PackageDependencyResolution,
     PackageResolutionMap,
@@ -198,44 +197,48 @@ fn is_wasm_module(path: impl AsRef<Path>) -> Result<bool> {
     Ok(bytes[4..] == [0x01, 0x00, 0x00, 0x00])
 }
 
-fn create_component(config: &Config, target_path: &Path) -> Result<()> {
-    let dep_path = target_path
-        .parent()
-        .unwrap()
-        .join("deps")
-        .join(target_path.file_name().unwrap());
-
-    ::log::debug!(
-        "compilation output is `{dep_path}` with target `{target_path}`",
-        dep_path = dep_path.display(),
-        target_path = target_path.display()
-    );
-
-    // If the compilation output is not a WebAssembly module, then no need to generate a component
-    if !is_wasm_module(&dep_path)? {
+fn create_component(config: &Config, path: &Path, binary: bool) -> Result<()> {
+    // If the compilation output is not a WebAssembly module, then do nothing
+    // Note: due to the way cargo currently works on macOS, it will overwrite
+    // a previously generated component on an up-to-date build.
+    //
+    // As a result, users on macOS will see a "creating component" message
+    // even if the build is up-to-date.
+    //
+    // See: https://github.com/rust-lang/cargo/blob/99ad42deb4b0be0cdb062d333d5e63460a94c33c/crates/cargo-util/src/paths.rs#L542-L550
+    if !is_wasm_module(path)? {
         ::log::debug!(
             "output file `{path}` is already a WebAssembly component",
-            path = dep_path.display()
+            path = path.display()
         );
         return Ok(());
     }
 
-    let module = fs::read(&dep_path).with_context(|| {
+    ::log::debug!(
+        "componentizing WebAssembly module `{path}`",
+        path = path.display()
+    );
+
+    let module = fs::read(path).with_context(|| {
         anyhow!(
             "failed to read output module `{path}`",
-            path = dep_path.display()
+            path = path.display()
         )
     })?;
 
     config.shell().status(
         "Creating",
-        format!("component {path}", path = target_path.display()),
+        format!("component {path}", path = path.display()),
     )?;
 
     let encoder = ComponentEncoder::default()
         .adapter(
             "wasi_snapshot_preview1",
-            include_bytes!("../adapters/wasi_snapshot_preview1.wasm"),
+            if binary {
+                include_bytes!("../adapters/1f93e4e/wasi_snapshot_preview1.command.wasm")
+            } else {
+                include_bytes!("../adapters/1f93e4e/wasi_snapshot_preview1.reactor.wasm")
+            },
         )?
         .module(&module)?
         .validate(true);
@@ -250,19 +253,16 @@ fn create_component(config: &Config, target_path: &Path) -> Result<()> {
     let component = producers.add_to_wasm(&encoder.encode()?).with_context(|| {
         anyhow!(
             "failed to add metadata to output component `{path}`",
-            path = dep_path.display()
+            path = path.display()
         )
     })?;
 
-    fs::write(&dep_path, component).with_context(|| {
+    fs::write(path, component).with_context(|| {
         anyhow!(
             "failed to write output component `{path}`",
-            path = dep_path.display()
+            path = path.display()
         )
-    })?;
-
-    // Finally, link the dep path to the target path to create the final target
-    link_or_copy(dep_path, target_path)
+    })
 }
 
 /// Compile a component for the given workspace and compile options.
@@ -275,17 +275,16 @@ pub async fn compile(
     force_generation: bool,
 ) -> Result<()> {
     let map = generate_workspace_bindings(config, &mut workspace, force_generation).await?;
-    let result = ops::compile(&workspace, options)?;
+    let compilation = ops::compile(&workspace, options)?;
 
-    for id in map.into_keys() {
-        let path = result
-            .cdylibs
-            .iter()
-            .find(|o| o.unit.pkg.package_id() == id)
-            .map(|o| &o.path)
-            .ok_or_else(|| anyhow!("failed to find output for component package `{id}`",))?;
-
-        create_component(config, path)?;
+    for (binary, output) in compilation
+        .binaries
+        .iter()
+        .map(|o| (true, o))
+        .chain(compilation.cdylibs.iter().map(|o| (false, o)))
+        .filter(|(_, o)| map.keys().any(|k| k == &o.unit.pkg.package_id()))
+    {
+        create_component(config, &output.path, binary)?;
     }
 
     Ok(())

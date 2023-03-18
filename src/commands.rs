@@ -156,6 +156,12 @@ impl CompileOptions {
             self.targets.push("wasm32-wasi".to_string());
         }
 
+        for target in self.targets.iter() {
+            if !target.starts_with("wasm32-") && !target.starts_with("wasm64-") {
+                bail!("target `{target}` is not a wasm target");
+            }
+        }
+
         log::debug!("using targets {:#?}", self.targets);
 
         let mut build_config = BuildConfig::new(
