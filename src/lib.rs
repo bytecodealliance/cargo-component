@@ -3,13 +3,12 @@
 #![deny(missing_docs)]
 
 use crate::config::Config;
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{anyhow, bail, Context as _, Result};
 use bindings::BindingsGenerator;
 use cargo::{
-    core::{compiler::UnitOutput, SourceId, Summary, Workspace},
+    core::{SourceId, Summary, Workspace},
     ops::{self, CompileOptions, DocOptions, ExportInfo, OutputMetadataOptions, UpdateOptions},
 };
-use cargo_util::paths::link_or_copy;
 use registry::{
     LockFile, LockedPackage, LockedPackageVersion, PackageDependencyResolution,
     PackageResolutionMap,
@@ -18,7 +17,7 @@ use std::{
     collections::BTreeMap,
     fs::{self, File},
     io::Read,
-    path::{Path, PathBuf},
+    path::Path,
     time::SystemTime,
 };
 use termcolor::Color;
@@ -198,142 +197,72 @@ fn is_wasm_module(path: impl AsRef<Path>) -> Result<bool> {
     Ok(bytes[4..] == [0x01, 0x00, 0x00, 0x00])
 }
 
-fn create_component(config: &Config, output: &UnitOutput, binary: bool) -> Result<()> {
-    let deps_dir = output
-        .path
-        .parent()
-        .expect("expected the output to have a parent directory")
-        .join("deps");
-
-    // Determine what the file would be in the deps directory
-    // We need to do this because cargo will *always* link/copy the dep to
-    // the output directory, even when it's up-to-date.
+fn create_component(config: &Config, path: &Path, binary: bool) -> Result<()> {
+    // If the compilation output is not a WebAssembly module, then do nothing
+    // Note: due to the way cargo currently works on macOS, it will overwrite
+    // a previously generated component on an up-to-date build.
     //
-    // This means that we would regenerate the component even through no
-    // builds occurred.
+    // As a result, users on macOS will see a "creating component" message
+    // even if the build is up-to-date.
     //
-    // Instead we componentize the dep file in the deps directory and then
-    // link/copy it to the output.
-    let dep_path = if binary {
-        // Unfortunately, cargo doesn't expose enough information for us to
-        // determine what the "deps" path for a binary; it contains a fingerprint.
-        // Therefore, we need to probe for the file.
-        let mut dep_path: Option<PathBuf> = None;
-        for path in glob::glob(&format!(
-            "{dir}/{stem}-*.wasm",
-            dir = deps_dir.display(),
-            stem = output
-                .path
-                .file_stem()
-                .expect("file should have stem")
-                .to_string_lossy(),
-        ))
-        .with_context(|| {
-            format!(
-                "failed to read directory `{path}",
-                path = deps_dir.display()
-            )
-        })? {
-            let path = path.with_context(|| {
-                format!(
-                    "failed to read directory `{path}`",
-                    path = deps_dir.display()
-                )
-            })?;
-
-            if !path.is_file() {
-                continue;
-            }
-
-            match dep_path {
-                Some(prev) => {
-                    bail!(
-                        "found multiple possible dep files for `{output}`: `{prev}` and `{path}`",
-                        output = output.path.display(),
-                        prev = prev.display(),
-                        path = path.display(),
-                    );
-                }
-                None => dep_path = Some(path),
-            }
-        }
-
-        dep_path.ok_or_else(|| {
-            anyhow!(
-                "failed to find dep file for `{output}`",
-                output = output.path.display(),
-            )
-        })?
-    } else {
-        deps_dir.join(
-            output
-                .path
-                .file_name()
-                .expect("expected the output to have a file name"),
-        )
-    };
-
-    ::log::debug!(
-        "compilation output is `{dep_path}` with target `{target_path}`",
-        dep_path = dep_path.display(),
-        target_path = output.path.display()
-    );
-
-    // If the compilation output is not a WebAssembly module, then no need to generate a component
-    if is_wasm_module(&dep_path)? {
+    // See: https://github.com/rust-lang/cargo/blob/99ad42deb4b0be0cdb062d333d5e63460a94c33c/crates/cargo-util/src/paths.rs#L542-L550
+    if !is_wasm_module(path)? {
         ::log::debug!(
-            "componentizing WebAssembly module `{path}`",
-            path = dep_path.display()
+            "output file `{path}` is already a WebAssembly component",
+            path = path.display()
         );
-
-        let module = fs::read(&dep_path).with_context(|| {
-            anyhow!(
-                "failed to read output module `{path}`",
-                path = dep_path.display()
-            )
-        })?;
-
-        config.shell().status(
-            "Creating",
-            format!("component {path}", path = output.path.display()),
-        )?;
-
-        let encoder = ComponentEncoder::default()
-            .adapter(
-                "wasi_snapshot_preview1",
-                if binary {
-                    include_bytes!("../adapters/1f93e4e/wasi_snapshot_preview1.command.wasm")
-                } else {
-                    include_bytes!("../adapters/1f93e4e/wasi_snapshot_preview1.reactor.wasm")
-                },
-            )?
-            .module(&module)?
-            .validate(true);
-
-        let mut producers = wasm_metadata::Producers::empty();
-        producers.add(
-            "processed-by",
-            env!("CARGO_PKG_NAME"),
-            option_env!("CARGO_VERSION_INFO").unwrap_or(env!("CARGO_PKG_VERSION")),
-        );
-
-        let component = producers.add_to_wasm(&encoder.encode()?).with_context(|| {
-            anyhow!(
-                "failed to add metadata to output component `{path}`",
-                path = dep_path.display()
-            )
-        })?;
-
-        fs::write(&dep_path, component).with_context(|| {
-            anyhow!(
-                "failed to write output component `{path}`",
-                path = dep_path.display()
-            )
-        })?;
+        return Ok(());
     }
 
-    // Finally, link the dep path to the target path to create the final target
-    link_or_copy(dep_path, &output.path)
+    ::log::debug!(
+        "componentizing WebAssembly module `{path}`",
+        path = path.display()
+    );
+
+    let module = fs::read(path).with_context(|| {
+        anyhow!(
+            "failed to read output module `{path}`",
+            path = path.display()
+        )
+    })?;
+
+    config.shell().status(
+        "Creating",
+        format!("component {path}", path = path.display()),
+    )?;
+
+    let encoder = ComponentEncoder::default()
+        .adapter(
+            "wasi_snapshot_preview1",
+            if binary {
+                include_bytes!("../adapters/1f93e4e/wasi_snapshot_preview1.command.wasm")
+            } else {
+                include_bytes!("../adapters/1f93e4e/wasi_snapshot_preview1.reactor.wasm")
+            },
+        )?
+        .module(&module)?
+        .validate(true);
+
+    let mut producers = wasm_metadata::Producers::empty();
+    producers.add(
+        "processed-by",
+        env!("CARGO_PKG_NAME"),
+        option_env!("CARGO_VERSION_INFO").unwrap_or(env!("CARGO_PKG_VERSION")),
+    );
+
+    let component = producers.add_to_wasm(&encoder.encode()?).with_context(|| {
+        anyhow!(
+            "failed to add metadata to output component `{path}`",
+            path = path.display()
+        )
+    })?;
+
+    fs::write(path, component).with_context(|| {
+        anyhow!(
+            "failed to write output component `{path}`",
+            path = path.display()
+        )
+    })
 }
 
 /// Compile a component for the given workspace and compile options.
@@ -346,16 +275,16 @@ pub async fn compile(
     force_generation: bool,
 ) -> Result<()> {
     let map = generate_workspace_bindings(config, &mut workspace, force_generation).await?;
-    let result = ops::compile(&workspace, options)?;
+    let compilation = ops::compile(&workspace, options)?;
 
-    for (binary, output) in result
+    for (binary, output) in compilation
         .binaries
         .iter()
         .map(|o| (true, o))
-        .chain(result.cdylibs.iter().map(|o| (false, o)))
+        .chain(compilation.cdylibs.iter().map(|o| (false, o)))
         .filter(|(_, o)| map.keys().any(|k| k == &o.unit.pkg.package_id()))
     {
-        create_component(config, output, binary)?;
+        create_component(config, &output.path, binary)?;
     }
 
     Ok(())

@@ -241,7 +241,6 @@ dependencies = [
  "cargo",
  "cargo-util",
  "clap",
- "glob",
  "heck",
  "hex 0.4.3",
  "home",
