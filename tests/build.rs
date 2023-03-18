@@ -46,8 +46,8 @@ fn it_builds_debug() -> Result<()> {
 }
 
 #[test]
-fn it_builds_release() -> Result<()> {
-    let project = Project::new("foo")?;
+fn it_builds_a_bin_project() -> Result<()> {
+    let project = Project::new_bin("foo")?;
     project
         .cargo_component("build --release")
         .assert()
@@ -82,13 +82,13 @@ edition = "2021"
         .build();
 
     project
-        .cargo_component("new foo")
+        .cargo_component("new --lib foo")
         .assert()
         .stderr(contains("Created component `foo` package"))
         .success();
 
     project
-        .cargo_component("new bar")
+        .cargo_component("new --lib bar")
         .assert()
         .stderr(contains("Created component `bar` package"))
         .success();

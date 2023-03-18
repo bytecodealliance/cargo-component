@@ -66,13 +66,13 @@ edition = "2021"
         .build();
 
     project
-        .cargo_component("new foo")
+        .cargo_component("new --lib foo")
         .assert()
         .stderr(contains("Created component `foo` package"))
         .success();
 
     project
-        .cargo_component("new bar")
+        .cargo_component("new --lib bar")
         .assert()
         .stderr(contains("Created component `bar` package"))
         .success();

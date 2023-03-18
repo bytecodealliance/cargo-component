@@ -181,7 +181,7 @@ support in `cargo component` for adapting a _preview1_ module will be removed.
 
 ## Getting Started
 
-Use `cargo component new <name>` to create a new component.
+Use `cargo component new --lib <name>` to create a new reactor component.
 
 This will create a `wit/world.wit` file describing the world that the
 component will target:
