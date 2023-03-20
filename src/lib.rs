@@ -235,9 +235,9 @@ fn create_component(config: &Config, path: &Path, binary: bool) -> Result<()> {
         .adapter(
             "wasi_snapshot_preview1",
             if binary {
-                include_bytes!("../adapters/1f93e4e/wasi_snapshot_preview1.command.wasm")
+                include_bytes!("../adapters/408f0bf/wasi_snapshot_preview1.command.wasm")
             } else {
-                include_bytes!("../adapters/1f93e4e/wasi_snapshot_preview1.reactor.wasm")
+                include_bytes!("../adapters/408f0bf/wasi_snapshot_preview1.reactor.wasm")
             },
         )?
         .module(&module)?
