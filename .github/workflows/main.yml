@@ -24,6 +24,8 @@ jobs:
         repo-token: ${{ secrets.GITHUB_TOKEN }}
     - name: Build cargo-component
       run: cargo build
+    - name: Install warg-server
+      run: cargo install --git https://github.com/bytecodealliance/registry --rev bfe599a warg-server
     - name: Test cargo-component
       run: cargo test
 

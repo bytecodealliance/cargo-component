@@ -25,6 +25,8 @@ use wit_parser::{
     TypeDefKind, TypeId, TypeOwner, UnresolvedPackage, World, WorldId, WorldItem,
 };
 
+pub(crate) const BINDINGS_VERSION: &str = "0.1.0";
+
 fn select_world(
     resolve: &Resolve,
     id: &metadata::PackageId,
@@ -189,7 +191,7 @@ impl<'a> BindingsGenerator<'a> {
             format!(
                 r#"[package]
 name = "{name}"
-version = "0.1.0"
+version = "{BINDINGS_VERSION}"
 edition = "2021"
 publish = false
 
@@ -244,11 +246,11 @@ publish = false
     }
 
     fn dependencies_are_newer(&self, last_modified_output: SystemTime) -> Result<bool> {
-        for (_, dep) in self.resolution.deps() {
-            if last_modified_time(&dep.path)? > last_modified_output {
+        for (_, dep) in self.resolution.all() {
+            if last_modified_time(dep.path())? > last_modified_output {
                 log::debug!(
                     "dependency `{path}` has been modified",
-                    path = dep.path.display()
+                    path = dep.path().display()
                 );
                 return Ok(true);
             }
@@ -269,7 +271,7 @@ publish = false
         };
 
         // Merge all component dependencies as interface imports
-        for (name, dependency) in &self.resolution.component_dependencies {
+        for (name, dependency) in &self.resolution.resolutions {
             match dependency.decode()? {
                 DecodedWasm::WitPackage(_, _) => {
                     bail!("component dependency `{name}` is not a WebAssembly component")
@@ -297,10 +299,10 @@ publish = false
         world: Option<&str>,
     ) -> Result<(Resolve, WorldId)> {
         // We must have resolved a target package dependency at this point
-        assert_eq!(self.resolution.target_dependencies.len(), 1);
+        assert_eq!(self.resolution.target_resolutions.len(), 1);
 
         // Decode the target package dependency
-        let dependency = self.resolution.target_dependencies.values().next().unwrap();
+        let dependency = self.resolution.target_resolutions.values().next().unwrap();
         let decoded = dependency.decode()?;
         let package = decoded.package();
         let resolve = match decoded {
@@ -317,7 +319,7 @@ publish = false
 
         // Start by decoding and merging all of the target dependencies
         let mut dependencies = HashMap::new();
-        for (name, dependency) in &self.resolution.target_dependencies {
+        for (name, dependency) in &self.resolution.target_resolutions {
             let (resolve, package) = match dependency.decode()? {
                 DecodedWasm::WitPackage(resolve, package) => (resolve, package),
                 DecodedWasm::Component(..) => bail!("target dependency `{name}` is a WIT package"),

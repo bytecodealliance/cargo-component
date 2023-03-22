@@ -17,7 +17,8 @@ mod clippy;
 mod doc;
 mod metadata;
 mod new;
-mod registry;
+mod publish;
+mod signing;
 mod update;
 
 pub use self::add::*;
@@ -27,7 +28,8 @@ pub use self::clippy::*;
 pub use self::doc::*;
 pub use self::metadata::*;
 pub use self::new::*;
-pub use self::registry::*;
+pub use self::publish::*;
+pub use self::signing::*;
 pub use self::update::*;
 
 fn root_manifest(manifest_path: Option<&Path>, config: &Config) -> Result<PathBuf> {
@@ -133,6 +135,7 @@ struct CompileOptions {
     packages: Vec<String>,
     targets: Vec<String>,
     jobs: Option<i32>,
+    bins: Vec<String>,
     message_format: Option<String>,
     release: bool,
     features: Vec<String>,
@@ -186,9 +189,9 @@ impl CompileOptions {
             spec,
             filter: CompileFilter::from_raw_arguments(
                 self.lib,
-                // TODO: support bins/tests/examples/benches?
-                Vec::new(),
+                self.bins,
                 false,
+                // TODO: support tests/examples/benches?
                 Vec::new(),
                 false,
                 Vec::new(),
