@@ -194,6 +194,16 @@ impl<'a> BindingsGenerator<'a> {
         Ok(())
     }
 
+    /// Encodes the target world used by the generator to a binary format.
+    pub fn encode_target_world(&self) -> Result<Vec<u8>> {
+        wit_component::encode(
+            &self.resolve,
+            self.resolve.documents[self.resolve.worlds[self.world].document]
+                .package
+                .unwrap(),
+        )
+    }
+
     fn create_manifest_file(&self) -> Result<()> {
         fs::write(
             &self.manifest_path,
@@ -302,18 +312,11 @@ publish = false
                     bail!("component dependency `{name}` is not a WebAssembly component")
                 }
                 DecodedWasm::Component(resolve, id) => {
-                    let id = merged
+                    let source = merged
                         .merge(resolve)
                         .with_context(|| format!("failed to merge world of dependency `{name}`"))?
                         .worlds[id.index()];
-                    let interface = Self::import_world(&mut merged, id);
-                    if merged.worlds[world_id]
-                        .imports
-                        .insert(name.to_string(), WorldItem::Interface(interface))
-                        .is_some()
-                    {
-                        bail!("cannot import dependency `{name}` because it conflicts with an import in the target world");
-                    }
+                    Self::import_world(&mut merged, source, world_id)?;
                 }
             }
         }
@@ -438,32 +441,69 @@ publish = false
         (resolve, world)
     }
 
-    // This function imports the exports of the given world as a new interface.
-    fn import_world(resolve: &mut Resolve, id: WorldId) -> InterfaceId {
-        let world = &resolve.worlds[id];
-        let name = world.name.clone();
+    // This function imports in the target world the exports of the source world.
+    fn import_world(resolve: &mut Resolve, source: WorldId, target: WorldId) -> Result<()> {
         let mut types = IndexMap::default();
         let mut functions = IndexMap::default();
+        let mut interfaces = IndexMap::new();
+        let name;
+        let document;
 
-        for (name, item) in &world.exports {
-            match item {
-                WorldItem::Function(f) => {
-                    functions.insert(name.clone(), f.clone());
-                }
-                WorldItem::Interface(_) => continue,
-                WorldItem::Type(t) => {
-                    types.insert(name.clone(), *t);
+        {
+            let source = &resolve.worlds[source];
+            name = source.name.clone();
+            document = source.document;
+            for (name, item) in &source.exports {
+                match item {
+                    WorldItem::Function(f) => {
+                        functions.insert(name.clone(), f.clone());
+                    }
+                    WorldItem::Interface(i) => {
+                        interfaces.insert(name.clone(), *i);
+                    }
+                    WorldItem::Type(t) => {
+                        types.insert(name.clone(), *t);
+                    }
                 }
             }
         }
+        let target = &mut resolve.worlds[target];
+        for (name, id) in interfaces {
+            let name = format!(
+                "{name}-{iface}",
+                iface = resolve.interfaces[id]
+                    .name
+                    .as_ref()
+                    .ok_or_else(|| anyhow!("interface `{name}` does not have a name"))?
+            );
+            if target
+                .imports
+                .insert(name.clone(), WorldItem::Interface(id))
+                .is_some()
+            {
+                bail!("cannot import dependency `{name}` because it conflicts with an import in the target world");
+            }
+        }
 
-        resolve.interfaces.alloc(Interface {
-            name: Some(name),
-            docs: Default::default(),
-            types,
-            functions,
-            document: world.document,
-        })
+        if !types.is_empty() || !functions.is_empty() {
+            let interface = resolve.interfaces.alloc(Interface {
+                name: Some(name.clone()),
+                docs: Default::default(),
+                types,
+                functions,
+                document,
+            });
+
+            if target
+                .imports
+                .insert(name.clone(), WorldItem::Interface(interface))
+                .is_some()
+            {
+                bail!("cannot import dependency `{name}` because it conflicts with an import in the target world");
+            }
+        }
+
+        Ok(())
     }
 }
 

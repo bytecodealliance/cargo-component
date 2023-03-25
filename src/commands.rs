@@ -20,6 +20,7 @@ mod metadata;
 mod new;
 mod publish;
 mod update;
+mod wit;
 
 pub use self::add::*;
 pub use self::build::*;
@@ -31,6 +32,7 @@ pub use self::metadata::*;
 pub use self::new::*;
 pub use self::publish::*;
 pub use self::update::*;
+pub use self::wit::*;
 
 fn root_manifest(manifest_path: Option<&Path>, config: &Config) -> Result<PathBuf> {
     match manifest_path {

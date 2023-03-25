@@ -237,6 +237,7 @@ The `cargo component` subcommand has some analogous commands to cargo itself:
   component registry.
 * `cargo component key` - manages signing keys for publishing WebAssembly 
   components.
+* `cargo component wit` - manages the target WIT package of the component.
 
 More commands will be added over time.
 

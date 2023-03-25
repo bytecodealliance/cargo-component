@@ -1,9 +1,8 @@
-use std::fs;
-
 use crate::support::*;
 use anyhow::Result;
 use assert_cmd::prelude::*;
 use predicates::str::contains;
+use std::fs;
 
 mod support;
 

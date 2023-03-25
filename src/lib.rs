@@ -5,11 +5,17 @@
 use crate::config::Config;
 use anyhow::{anyhow, bail, Context as _, Result};
 use bindings::{BindingsGenerator, BINDINGS_VERSION};
+use bytes::Bytes;
 use cargo::{
     core::{compiler::Compilation, SourceId, Summary, Workspace},
-    ops::{self, CompileOptions, DocOptions, ExportInfo, OutputMetadataOptions, UpdateOptions},
+    ops::{
+        self, CompileOptions, DocOptions, ExportInfo, OutputMetadataOptions, Packages,
+        UpdateOptions,
+    },
+    util::Filesystem,
 };
 use futures::TryStreamExt;
+use metadata::Target;
 use registry::{
     LockFile, LockFileResolver, LockedPackage, LockedPackageVersion, PackageDependencyResolution,
     PackageResolutionMap,
@@ -56,6 +62,10 @@ fn last_modified_time(path: impl AsRef<Path>) -> Result<SystemTime> {
         })
 }
 
+fn bindings_dir(workspace: &Workspace) -> Filesystem {
+    workspace.target_dir().join("bindings")
+}
+
 async fn create_resolution_map(
     config: &Config,
     workspace: &Workspace<'_>,
@@ -94,7 +104,7 @@ async fn generate_workspace_bindings(
     force_generation: bool,
 ) -> Result<PackageResolutionMap> {
     let map = resolve_dependencies(config, workspace).await?;
-    let bindings_dir = workspace.target_dir().join("bindings");
+    let bindings_dir = bindings_dir(workspace);
     let _lock = bindings_dir.open_rw(".lock", config.cargo(), "bindings cache")?;
     let last_modified_exe = last_modified_time(std::env::current_exe()?)?;
 
@@ -305,6 +315,117 @@ pub async fn compile<'a>(
     }
 
     Ok(compilation)
+}
+
+/// Represents options for a publish WIT operation.
+pub struct PublishWitOptions<'a> {
+    /// The name of the cargo package to publish for.
+    pub cargo_package: Option<&'a str>,
+    /// The name of the registry package to publish.
+    pub name: &'a str,
+    /// The version of the registry package to publish.
+    pub version: &'a Version,
+    /// The url of the registry to publish to.
+    pub url: &'a str,
+    /// The private signing key to use for the publish.
+    pub signing_key: PrivateKey,
+    /// Whether or not to initialize the package before publishing.
+    pub init: bool,
+    /// Whether or not to perform a dry run.
+    ///
+    /// A dry run skips communicating with the registry.
+    pub dry_run: bool,
+}
+
+/// Publish the target WIT for a project to a component registry.
+pub async fn publish_wit(
+    config: &Config,
+    workspace: Workspace<'_>,
+    options: &PublishWitOptions<'_>,
+) -> Result<()> {
+    let package = if let Some(ref inner) = options.cargo_package {
+        let pkg = Packages::from_flags(false, vec![], vec![inner.to_string()])?;
+        pkg.get_packages(&workspace)?[0]
+    } else {
+        workspace.current()?
+    };
+
+    let lock_file = LockFile::open(config, &workspace)?;
+    let resolver = lock_file
+        .as_ref()
+        .map(|l| LockFileResolver::new(&workspace, l));
+    let resolution = match PackageDependencyResolution::new(config, package, resolver).await? {
+        Some(resolution) => resolution,
+        None => bail!(
+            "manifest `{path}` is not a WebAssembly component package",
+            path = package.manifest_path().display(),
+        ),
+    };
+
+    let bytes = match &resolution.metadata.section.target {
+        Some(Target::Local { .. }) => {
+            // NOTE: we don't need to lock the bindings directory as we're not actually going to read or write any files.
+            let bindings_dir = bindings_dir(&workspace);
+            let generator = BindingsGenerator::new(bindings_dir.as_path_unlocked(), &resolution)?;
+            generator.encode_target_world().with_context(|| {
+                anyhow!(
+                    "failed to encode target WIT for package `{package}`",
+                    package = package.name()
+                )
+            })?
+        }
+        _ => {
+            bail!("a WIT package may only be published from a project using a local target");
+        }
+    };
+
+    if options.dry_run {
+        config
+            .shell()
+            .warn("not publishing WIT package to the registry due to the --dry-run option")?;
+        return Ok(());
+    }
+
+    let client = registry::create_client(config, options.url)?;
+
+    let content = client
+        .content()
+        .store_content(
+            Box::pin(futures::stream::once(async { Ok(Bytes::from(bytes)) })),
+            None,
+        )
+        .await?;
+
+    config
+        .shell()
+        .status("Publishing", format!("target WIT package ({content})"))?;
+
+    let mut info = PublishInfo {
+        package: options.name.to_string(),
+        entries: Default::default(),
+    };
+
+    if options.init {
+        info.entries.push(PublishEntry::Init);
+    }
+
+    info.entries.push(PublishEntry::Release {
+        version: options.version.clone(),
+        content,
+    });
+
+    client.publish_with_info(&options.signing_key, info).await?;
+
+    config.shell().status(
+        "Published",
+        format!(
+            "package `{name}` v{version}",
+            name = options.name,
+            version = options.version
+        ),
+    )?;
+
+    Ok(())
 }
 
 /// Represents options for a publish operation.
