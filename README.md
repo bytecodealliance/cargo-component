@@ -33,7 +33,7 @@ may cause build errors for existing component projects.
 1. The `cargo component` subcommand is written in Rust, so you'll want the
   [latest stable Rust installed](https://www.rust-lang.org/tools/install).
 2. A [protobuf compiler](http://google.github.io/proto-lens/installing-protoc.html)
-is also required for registry support.
+  of version 3.15 or greater is also required for registry support.
 
 ## Installation
 
