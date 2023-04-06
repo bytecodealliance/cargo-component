@@ -78,6 +78,9 @@ pub struct BindingsGenerator<'a> {
     name: String,
     manifest_path: PathBuf,
     source_path: PathBuf,
+    resolve: Resolve,
+    world: WorldId,
+    deps: Vec<PathBuf>,
 }
 
 impl<'a> BindingsGenerator<'a> {
@@ -95,11 +98,16 @@ impl<'a> BindingsGenerator<'a> {
         let manifest_path = package_dir.join("Cargo.toml");
         let source_path = package_dir.join("src").join("lib.rs");
 
+        let (resolve, world, deps) = Self::create_target_world(resolution)?;
+
         Ok(Self {
             resolution,
             name,
             manifest_path,
             source_path,
+            resolve,
+            world,
+            deps,
         })
     }
 
@@ -218,7 +226,6 @@ publish = false
             )
         })?;
 
-        let (resolve, world) = self.create_target_world()?;
         let opts = Opts {
             rustfmt: true,
             macro_export: true,
@@ -229,7 +236,7 @@ publish = false
 
         let mut files = Default::default();
         let mut generator = opts.build();
-        generator.generate(&resolve, world, &mut files);
+        generator.generate(&self.resolve, self.world, &mut files);
 
         fs::write(
             &self.source_path,
@@ -246,6 +253,16 @@ publish = false
     }
 
     fn dependencies_are_newer(&self, last_modified_output: SystemTime) -> Result<bool> {
+        for dep in &self.deps {
+            if last_modified_time(dep)? > last_modified_output {
+                log::debug!(
+                    "dependency `{path}` has been modified",
+                    path = dep.display()
+                );
+                return Ok(true);
+            }
+        }
+
         for (_, dep) in self.resolution.all() {
             if last_modified_time(dep.path())? > last_modified_output {
                 log::debug!(
@@ -259,19 +276,26 @@ publish = false
         Ok(false)
     }
 
-    fn create_target_world(&self) -> Result<(Resolve, WorldId)> {
-        let (mut merged, world_id) = match &self.resolution.metadata.section.target {
+    fn create_target_world(
+        resolution: &PackageDependencyResolution,
+    ) -> Result<(Resolve, WorldId, Vec<PathBuf>)> {
+        let (mut merged, world_id, deps) = match &resolution.metadata.section.target {
             Some(Target::Package { package, world }) => {
-                self.target_package(&package.id, world.as_deref())?
+                let (merged, world) =
+                    Self::target_package(resolution, &package.id, world.as_deref())?;
+                (merged, world, Vec::new())
             }
             Some(Target::Local { path, world, .. }) => {
-                self.target_local_file(path, world.as_deref())?
+                Self::target_local_file(resolution, path, world.as_deref())?
             }
-            None => self.target_empty_world(),
+            None => {
+                let (merged, world) = Self::target_empty_world(resolution);
+                (merged, world, Vec::new())
+            }
         };
 
         // Merge all component dependencies as interface imports
-        for (name, dependency) in &self.resolution.resolutions {
+        for (name, dependency) in &resolution.resolutions {
             match dependency.decode()? {
                 DecodedWasm::WitPackage(_, _) => {
                     bail!("component dependency `{name}` is not a WebAssembly component")
@@ -290,19 +314,19 @@ publish = false
             }
         }
 
-        Ok((merged, world_id))
+        Ok((merged, world_id, deps))
     }
 
     fn target_package(
-        &self,
+        resolution: &PackageDependencyResolution,
         id: &metadata::PackageId,
         world: Option<&str>,
     ) -> Result<(Resolve, WorldId)> {
         // We must have resolved a target package dependency at this point
-        assert_eq!(self.resolution.target_resolutions.len(), 1);
+        assert_eq!(resolution.target_resolutions.len(), 1);
 
         // Decode the target package dependency
-        let dependency = self.resolution.target_resolutions.values().next().unwrap();
+        let dependency = resolution.target_resolutions.values().next().unwrap();
         let decoded = dependency.decode()?;
         let package = decoded.package();
         let resolve = match decoded {
@@ -314,12 +338,16 @@ publish = false
         Ok((resolve, world))
     }
 
-    fn target_local_file(&self, path: &Path, world: Option<&str>) -> Result<(Resolve, WorldId)> {
+    fn target_local_file(
+        resolution: &PackageDependencyResolution,
+        path: &Path,
+        world: Option<&str>,
+    ) -> Result<(Resolve, WorldId, Vec<PathBuf>)> {
         let mut merged = Resolve::default();
 
         // Start by decoding and merging all of the target dependencies
         let mut dependencies = HashMap::new();
-        for (name, dependency) in &self.resolution.target_resolutions {
+        for (name, dependency) in &resolution.target_resolutions {
             let (resolve, package) = match dependency.decode()? {
                 DecodedWasm::WitPackage(resolve, package) => (resolve, package),
                 DecodedWasm::Component(..) => bail!("target dependency `{name}` is a WIT package"),
@@ -331,17 +359,20 @@ publish = false
         }
 
         // Next parse the local target file, giving it the packages we just merged
-        let package = if path.is_dir() {
-            merged.push_dir(path)?.0
+        let (package, deps) = if path.is_dir() {
+            merged.push_dir(path)?
         } else {
-            merged
-                .push(UnresolvedPackage::parse_file(path)?, &dependencies)
-                .with_context(|| {
-                    format!(
-                        "failed to parse local target `{path}`",
-                        path = path.display()
-                    )
-                })?
+            (
+                merged
+                    .push(UnresolvedPackage::parse_file(path)?, &dependencies)
+                    .with_context(|| {
+                        format!(
+                            "failed to parse local target `{path}`",
+                            path = path.display()
+                        )
+                    })?,
+                Vec::new(),
+            )
         };
 
         let world = merged
@@ -359,12 +390,12 @@ publish = false
                 ),
             })?;
 
-        Ok((merged, world))
+        Ok((merged, world, deps))
     }
 
-    fn target_empty_world(&self) -> (Resolve, WorldId) {
+    fn target_empty_world(resolution: &PackageDependencyResolution) -> (Resolve, WorldId) {
         let mut resolve = Resolve::default();
-        let name = self.resolution.metadata.name.clone();
+        let name = resolution.metadata.name.clone();
         let package = resolve.packages.alloc(Package {
             name: name.clone(),
             url: None,

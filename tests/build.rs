@@ -2,8 +2,9 @@ use crate::support::*;
 use anyhow::{Context, Result};
 use assert_cmd::prelude::*;
 use cargo_component::registry::LOCK_FILE_NAME;
-use predicates::str::contains;
+use predicates::{prelude::PredicateBooleanExt, str::contains};
 use std::fs;
+use toml_edit::{value, Document};
 
 mod support;
 
@@ -164,6 +165,41 @@ fn it_builds_wasm32_unknown_unknown() -> Result<()> {
             .join("debug")
             .join("foo.wasm"),
     )?;
+
+    Ok(())
+}
+
+#[test]
+fn it_regenerates_bindings_if_wit_changed() -> Result<()> {
+    let project = Project::new("foo")?;
+
+    let manifest_path = project.root().join("Cargo.toml");
+    let manifest = fs::read_to_string(&manifest_path)?;
+    let mut doc: Document = manifest.parse()?;
+    doc["package"]["metadata"]["component"]["target"]["path"] = value("wit");
+    fs::write(manifest_path, doc.to_string())?;
+
+    project
+        .cargo_component("build")
+        .assert()
+        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .success();
+
+    validate_component(&project.debug_wasm("foo"))?;
+
+    project
+        .cargo_component("build")
+        .assert()
+        .stderr(contains("Generating bindings").not())
+        .success();
+
+    fs::write(project.root().join("wit/other.wit"), "world foo {}")?;
+
+    project
+        .cargo_component("build")
+        .assert()
+        .stderr(contains("Generating bindings"))
+        .success();
 
     Ok(())
 }
