@@ -841,46 +841,52 @@ impl<'a> DependencyResolver<'a> {
     /// This will download all dependencies that are not already present in client storage.
     ///
     /// Returns a tuple of target dependency resolutions and component dependency resolutions.
-    pub async fn resolve(mut self) -> Result<(DependencyResolutionMap, DependencyResolutionMap)> {
-        self.update_and_download().await?;
+    pub async fn resolve(self) -> Result<(DependencyResolutionMap, DependencyResolutionMap)> {
+        let Self {
+            config,
+            mut registries,
+            mut target_resolutions,
+            mut resolutions,
+            ..
+        } = self;
 
-        for registry in self.registries.into_values() {
-            for dep in registry.dependencies {
-                let resolution = DependencyResolution::Registry(
-                    dep.resolution.expect("dependency should be resolved"),
-                );
+        // Start by updating the packages that need updating
+        // This will determine the contents that need to be downloaded
+        let downloads = Self::update_packages(config, &mut registries).await?;
 
-                let prev = if dep.from_target {
-                    self.target_resolutions
-                        .insert(dep.name.to_string(), resolution)
-                } else {
-                    self.resolutions.insert(dep.name.to_string(), resolution)
-                };
+        // Finally, download and resolve the dependencies
+        for (resolution, from_target) in
+            Self::download_and_resolve(config, registries, downloads).await?
+        {
+            let prev = if from_target {
+                target_resolutions.insert(resolution.name().to_string(), resolution)
+            } else {
+                resolutions.insert(resolution.name().to_string(), resolution)
+            };
 
-                assert!(prev.is_none());
-            }
+            assert!(prev.is_none());
         }
 
-        Ok((self.target_resolutions, self.resolutions))
+        Ok((target_resolutions, resolutions))
     }
 
-    async fn update_and_download(&mut self) -> Result<()> {
-        // Start by updating the package logs that need updating
-        let task_count = self
-            .registries
+    async fn update_packages(
+        config: &Config,
+        registries: &mut IndexMap<&'a str, Registry<'a>>,
+    ) -> Result<DownloadMap<'a>> {
+        let task_count = registries
             .iter()
             .filter(|(_, r)| !r.upserts.is_empty())
             .count();
 
-        let mut progress =
-            Progress::with_style("Updating", ProgressStyle::Ratio, self.config.cargo());
+        let mut progress = Progress::with_style("Updating", ProgressStyle::Ratio, config.cargo());
 
         if task_count > 0 {
-            if !self.config.cargo().network_allowed() {
+            if !config.cargo().network_allowed() {
                 bail!("a component registry update is required but network access is disabled");
             }
 
-            self.config
+            config
                 .shell()
                 .status("Updating", "component registry package logs")?;
 
@@ -889,7 +895,7 @@ impl<'a> DependencyResolver<'a> {
 
         let mut downloads = DownloadMap::new();
         let mut futures = FuturesUnordered::new();
-        for (index, (name, registry)) in self.registries.iter_mut().enumerate() {
+        for (index, (name, registry)) in registries.iter_mut().enumerate() {
             let upserts = std::mem::take(&mut registry.upserts);
             if upserts.is_empty() {
                 // No upserts needed, add the necessary downloads now
@@ -915,8 +921,7 @@ impl<'a> DependencyResolver<'a> {
         let mut finished = 0;
         while let Some(res) = futures.next().await {
             let (index, res) = res.context("failed to join registry update task")?;
-            let (name, registry) = self
-                .registries
+            let (name, registry) = registries
                 .get_index_mut(index)
                 .expect("out of bounds registry index");
 
@@ -932,87 +937,100 @@ impl<'a> DependencyResolver<'a> {
 
         progress.clear();
 
-        self.download(downloads).await
+        Ok(downloads)
     }
 
-    async fn download(&mut self, downloads: DownloadMap<'a>) -> Result<()> {
-        if downloads.is_empty() {
-            return Ok(());
-        }
-
-        if !self.config.cargo().network_allowed() {
-            bail!("a component package download is required but network access is disabled");
-        }
-
-        self.config
-            .shell()
-            .status("Downloading", "component registry packages")?;
-
-        let mut progress =
-            Progress::with_style("Downloading", ProgressStyle::Ratio, self.config.cargo());
-
-        let count = downloads.len();
-        progress.tick_now(0, count, "")?;
-
-        let mut futures = FuturesUnordered::new();
-        for ((name, id, version), deps) in downloads {
-            let registry_index = self.registries.get_index_of(name).unwrap();
-            let (_, registry) = self.registries.get_index(registry_index).unwrap();
-
-            log::info!("downloading content for package `{id}` from registry `{name}`");
-
-            let id = id.clone();
-            let client = registry.client.clone();
-            futures.push(tokio::spawn(async move {
-                let res = client.download_exact(id.as_str(), &version).await;
-                (registry_index, id, version, deps, res)
-            }))
-        }
-
-        assert_eq!(futures.len(), count);
-
-        let mut finished = 0;
-        while let Some(res) = futures.next().await {
-            let (registry_index, id, version, deps, res) =
-                res.context("failed to join content download task")?;
-            let (name, registry) = self
-                .registries
-                .get_index_mut(registry_index)
-                .expect("out of bounds registry index");
-
-            let download = res.with_context(|| {
-                format!("failed to download package `{id}` (v{version}) from registry `{name}`")
-            })?;
-
-            log::info!("downloaded contents of package `{id}` (v{version}) from registry `{name}`");
-
-            finished += 1;
-            progress.tick_now(finished, count, &format!(" downloaded `{id}` (v{version})"))?;
-
-            for index in deps {
-                let dependency = &mut registry.dependencies[index];
-                assert!(dependency.resolution.is_none());
-                dependency.resolution = Some(RegistryResolution {
-                    name: dependency.name.to_string(),
-                    id: dependency.package.id.clone(),
-                    registry: if *name == DEFAULT_REGISTRY_NAME {
-                        None
-                    } else {
-                        Some(name.to_string())
-                    },
-                    requirement: dependency.package.version.clone(),
-                    url: warg_url(&dependency.package.id),
-                    version: download.version.clone(),
-                    digest: download.digest.clone(),
-                    path: download.path.clone(),
-                });
+    async fn download_and_resolve(
+        config: &Config,
+        mut registries: IndexMap<&'a str, Registry<'a>>,
+        downloads: DownloadMap<'a>,
+    ) -> Result<impl Iterator<Item = (DependencyResolution, bool)> + 'a> {
+        if !downloads.is_empty() {
+            if !config.cargo().network_allowed() {
+                bail!("a component package download is required but network access is disabled");
             }
+
+            config
+                .shell()
+                .status("Downloading", "component registry packages")?;
+
+            let mut progress =
+                Progress::with_style("Downloading", ProgressStyle::Ratio, config.cargo());
+
+            let count = downloads.len();
+            progress.tick_now(0, count, "")?;
+
+            let mut futures = FuturesUnordered::new();
+            for ((name, id, version), deps) in downloads {
+                let registry_index = registries.get_index_of(name).unwrap();
+                let (_, registry) = registries.get_index(registry_index).unwrap();
+
+                log::info!("downloading content for package `{id}` from registry `{name}`");
+
+                let id = id.clone();
+                let client = registry.client.clone();
+                futures.push(tokio::spawn(async move {
+                    let res = client.download_exact(id.as_str(), &version).await;
+                    (registry_index, id, version, deps, res)
+                }))
+            }
+
+            assert_eq!(futures.len(), count);
+
+            let mut finished = 0;
+            while let Some(res) = futures.next().await {
+                let (registry_index, id, version, deps, res) =
+                    res.context("failed to join content download task")?;
+                let (name, registry) = registries
+                    .get_index_mut(registry_index)
+                    .expect("out of bounds registry index");
+
+                let download = res.with_context(|| {
+                    format!("failed to download package `{id}` (v{version}) from registry `{name}`")
+                })?;
+
+                log::info!(
+                    "downloaded contents of package `{id}` (v{version}) from registry `{name}`"
+                );
+
+                finished += 1;
+                progress.tick_now(finished, count, &format!(" downloaded `{id}` (v{version})"))?;
+
+                for index in deps {
+                    let dependency = &mut registry.dependencies[index];
+                    assert!(dependency.resolution.is_none());
+                    dependency.resolution = Some(RegistryResolution {
+                        name: dependency.name.to_string(),
+                        id: dependency.package.id.clone(),
+                        registry: if *name == DEFAULT_REGISTRY_NAME {
+                            None
+                        } else {
+                            Some(name.to_string())
+                        },
+                        requirement: dependency.package.version.clone(),
+                        url: warg_url(&dependency.package.id),
+                        version: download.version.clone(),
+                        digest: download.digest.clone(),
+                        path: download.path.clone(),
+                    });
+                }
+            }
+
+            assert_eq!(finished, count);
+
+            progress.clear();
         }
 
-        assert_eq!(finished, count);
-
-        progress.clear();
-
-        Ok(())
+        Ok(registries
+            .into_values()
+            .flat_map(|r| r.dependencies.into_iter())
+            .map(|d| {
+                (
+                    DependencyResolution::Registry(
+                        d.resolution.expect("dependency should have been resolved"),
+                    ),
+                    d.from_target,
+                )
+            }))
     }
 }
