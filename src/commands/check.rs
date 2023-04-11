@@ -149,6 +149,7 @@ impl From<CheckCommand> for CompileOptions {
             lib: cmd.lib,
             all_targets: cmd.all_targets,
             keep_going: cmd.keep_going,
+            bins: vec![],
         }
     }
 }

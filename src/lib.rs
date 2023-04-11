@@ -4,15 +4,17 @@
 
 use crate::config::Config;
 use anyhow::{anyhow, bail, Context as _, Result};
-use bindings::BindingsGenerator;
+use bindings::{BindingsGenerator, BINDINGS_VERSION};
 use cargo::{
-    core::{SourceId, Summary, Workspace},
+    core::{compiler::Compilation, SourceId, Summary, Workspace},
     ops::{self, CompileOptions, DocOptions, ExportInfo, OutputMetadataOptions, UpdateOptions},
 };
+use futures::TryStreamExt;
 use registry::{
-    LockFile, LockedPackage, LockedPackageVersion, PackageDependencyResolution,
+    LockFile, LockFileResolver, LockedPackage, LockedPackageVersion, PackageDependencyResolution,
     PackageResolutionMap,
 };
+use semver::Version;
 use std::{
     collections::BTreeMap,
     fs::{self, File},
@@ -21,6 +23,10 @@ use std::{
     time::SystemTime,
 };
 use termcolor::Color;
+use tokio::io::BufReader;
+use tokio_util::io::ReaderStream;
+use warg_client::storage::{ContentStorage, PublishEntry, PublishInfo};
+use warg_crypto::signing::PrivateKey;
 use wit_component::ComponentEncoder;
 
 pub mod bindings;
@@ -29,6 +35,7 @@ pub mod config;
 pub mod log;
 pub mod metadata;
 pub mod registry;
+mod signing;
 mod target;
 
 fn last_modified_time(path: impl AsRef<Path>) -> Result<SystemTime> {
@@ -55,8 +62,10 @@ async fn create_resolution_map(
     lock_file: Option<&LockFile>,
 ) -> Result<PackageResolutionMap> {
     let mut map = PackageResolutionMap::default();
+    let resolver = lock_file.map(|l| LockFileResolver::new(workspace, l));
+
     for package in workspace.members() {
-        match PackageDependencyResolution::new(config, workspace, package, lock_file).await? {
+        match PackageDependencyResolution::new(config, package, resolver).await? {
             Some(resolution) => {
                 let prev = map.insert(package.package_id(), resolution);
                 assert!(prev.is_none());
@@ -73,7 +82,7 @@ async fn resolve_dependencies(
 ) -> Result<PackageResolutionMap> {
     let lock_file = LockFile::open(config, workspace)?.unwrap_or_default();
     let map = create_resolution_map(config, workspace, Some(&lock_file)).await?;
-    let new_lock_file = LockFile::from_resolution(&map);
+    let new_lock_file = LockFile::from_resolution_map(&map);
     new_lock_file.update(config, workspace, &lock_file)?;
 
     Ok(map)
@@ -163,7 +172,7 @@ async fn generate_package_bindings(
 
     let mut dep = cargo::core::Dependency::parse(
         generator.package_name(),
-        Some(&resolution.metadata.version.to_string()),
+        Some(BINDINGS_VERSION),
         SourceId::for_path(generator.package_dir())?,
     )?;
 
@@ -268,12 +277,12 @@ fn create_component(config: &Config, path: &Path, binary: bool) -> Result<()> {
 /// Compile a component for the given workspace and compile options.
 ///
 /// It is expected that the current package contains a `package.metadata.component` section.
-pub async fn compile(
+pub async fn compile<'a>(
     config: &Config,
-    mut workspace: Workspace<'_>,
+    mut workspace: Workspace<'a>,
     options: &CompileOptions,
     force_generation: bool,
-) -> Result<()> {
+) -> Result<Compilation<'a>> {
     let map = generate_workspace_bindings(config, &mut workspace, force_generation).await?;
     let compilation = ops::compile(&workspace, options)?;
 
@@ -286,6 +295,127 @@ pub async fn compile(
     {
         create_component(config, &output.path, binary)?;
     }
+
+    Ok(compilation)
+}
+
+/// Represents options for a publish operation.
+pub struct PublishOptions<'a> {
+    /// Force generation of bindings for the build.
+    pub force_generation: bool,
+    /// The compile options to use for the build.
+    pub compile_options: CompileOptions,
+    /// The name of the component to publish.
+    pub name: &'a str,
+    /// The version of the component to publish.
+    pub version: &'a Version,
+    /// The url of the registry to publish to.
+    pub url: &'a str,
+    /// The private signing key to use for the publish.
+    pub signing_key: PrivateKey,
+    /// Whether or not to initialize the package before publishing.
+    pub init: bool,
+    /// Whether or not to perform a dry run.
+    ///
+    /// A dry run skips communicating with the registry.
+    pub dry_run: bool,
+}
+
+/// Publish a component for the given workspace and publish options.
+pub async fn publish(
+    config: &Config,
+    workspace: Workspace<'_>,
+    options: &PublishOptions<'_>,
+) -> Result<()> {
+    let compilation = compile(
+        config,
+        workspace,
+        &options.compile_options,
+        options.force_generation,
+    )
+    .await?;
+
+    let outputs: Vec<_> = compilation
+        .binaries
+        .iter()
+        .map(|o| (true, o))
+        .chain(compilation.cdylibs.iter().map(|o| (false, o)))
+        .collect();
+
+    let output = match outputs.len() {
+        0 => bail!("no compilation outputs to publish"),
+        1 => &outputs[0].1,
+        2 => {
+            // One output must be a lib and the other a bin
+            if outputs[0].0 == outputs[1].0 {
+                bail!("cannot publish multiple compilation outputs");
+            }
+
+            // Publish the bin in this case
+            if outputs[0].0 {
+                assert!(!outputs[1].0);
+                &outputs[0].1
+            } else {
+                assert!(outputs[1].0);
+                &outputs[1].1
+            }
+        }
+        _ => bail!("cannot publish multiple compilation outputs"),
+    };
+
+    if options.dry_run {
+        config
+            .shell()
+            .warn("not publishing component to the registry due to the --dry-run option")?;
+        return Ok(());
+    }
+
+    let client = registry::create_client(config, options.url)?;
+
+    let content = client
+        .content()
+        .store_content(
+            Box::pin(
+                ReaderStream::new(BufReader::new(
+                    tokio::fs::File::open(&output.path).await.with_context(|| {
+                        format!("failed to open `{path}`", path = output.path.display())
+                    })?,
+                ))
+                .map_err(|e| anyhow!(e)),
+            ),
+            None,
+        )
+        .await?;
+
+    config.shell().status(
+        "Publishing",
+        format!("component {path} ({content})", path = output.path.display()),
+    )?;
+
+    let mut info = PublishInfo {
+        package: options.name.to_string(),
+        entries: Default::default(),
+    };
+
+    if options.init {
+        info.entries.push(PublishEntry::Init);
+    }
+
+    info.entries.push(PublishEntry::Release {
+        version: options.version.clone(),
+        content,
+    });
+
+    client.publish_with_info(&options.signing_key, info).await?;
+
+    config.shell().status(
+        "Published",
+        format!(
+            "package `{name}` v{version}",
+            name = options.name,
+            version = options.version
+        ),
+    )?;
 
     Ok(())
 }
@@ -342,7 +472,7 @@ pub async fn update_lockfile(
     // Next read the current lock file and generate a new one
     let map = create_resolution_map(config, workspace, None).await?;
     let orig_lock_file = LockFile::open(config, workspace)?.unwrap_or_default();
-    let new_lock_file = LockFile::from_resolution(&map);
+    let new_lock_file = LockFile::from_resolution_map(&map);
 
     // Unlike `cargo`, the lock file doesn't have transitive dependencies
     // So we expect the entries (and the version requirements) to be the same
@@ -380,7 +510,7 @@ pub async fn update_lockfile(
         options
             .config
             .shell()
-            .warn("not updating component lock file due to dry run")?;
+            .warn("not updating component lock file due to --dry-run option")?;
     } else {
         new_lock_file.update(config, workspace, &orig_lock_file)?;
     }

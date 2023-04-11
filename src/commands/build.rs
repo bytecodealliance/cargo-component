@@ -128,7 +128,9 @@ impl BuildCommand {
         let workspace = workspace(self.manifest_path.as_deref(), config)?;
         let options = CompileOptions::from(self).into_cargo_options(config, CompileMode::Build)?;
 
-        crate::compile(config, workspace, &options, force_generation).await
+        crate::compile(config, workspace, &options, force_generation).await?;
+
+        Ok(())
     }
 }
 
@@ -148,6 +150,7 @@ impl From<BuildCommand> for CompileOptions {
             lib: cmd.lib,
             all_targets: cmd.all_targets,
             keep_going: cmd.keep_going,
+            bins: vec![],
         }
     }
 }

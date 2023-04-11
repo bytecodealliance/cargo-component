@@ -21,6 +21,11 @@ impl PackageId {
     pub fn new(s: impl Into<String>) -> Self {
         s.into().into()
     }
+
+    /// Gets a string reference of the package id.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 
 impl From<String> for PackageId {
@@ -144,64 +149,6 @@ impl<'de> Deserialize<'de> for Dependency {
                     )),
                     (None, None, _, _) => Err(de::Error::missing_field("package")),
                     (None, Some(_), None, _) => Err(de::Error::missing_field("version")),
-                }
-            }
-        }
-
-        deserializer.deserialize_any(Visitor)
-    }
-}
-
-/// Represents a component registry in the manifest.
-#[derive(Debug, Clone)]
-pub enum Registry {
-    /// The source is a remote registry.
-    Remote(Url),
-    /// The source is a local file system registry.
-    Local(PathBuf),
-}
-
-impl<'de> Deserialize<'de> for Registry {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct Visitor;
-
-        impl<'de> de::Visitor<'de> for Visitor {
-            type Value = Registry;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                write!(formatter, "a string or a table")
-            }
-
-            fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                Ok(Self::Value::Remote(s.parse().map_err(de::Error::custom)?))
-            }
-
-            fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
-            where
-                A: de::MapAccess<'de>,
-            {
-                #[derive(Default, Deserialize)]
-                #[serde(default, deny_unknown_fields)]
-                struct Entry {
-                    path: Option<PathBuf>,
-                    url: Option<Url>,
-                }
-
-                let entry = Entry::deserialize(MapAccessDeserializer::new(map))?;
-
-                match (entry.path, entry.url) {
-                    (Some(path), None) => Ok(Self::Value::Local(path)),
-                    (None, Some(url)) => Ok(Self::Value::Remote(url)),
-                    (None, None) => Err(de::Error::missing_field("url")),
-                    (Some(_), Some(_)) => Err(de::Error::custom(
-                        "cannot specify both `path` and `url` fields in a component registry entry",
-                    )),
                 }
             }
         }
@@ -358,7 +305,7 @@ pub struct ComponentSection {
     /// The dependencies of the component.
     pub dependencies: HashMap<String, Dependency>,
     /// The registries to use for the component.
-    pub registries: HashMap<String, Registry>,
+    pub registries: HashMap<String, Url>,
 }
 
 /// Represents cargo metadata for a WebAssembly component.
@@ -422,12 +369,6 @@ impl ComponentMetadata {
 
         for dependency in section.dependencies.values_mut() {
             if let Dependency::Local(path) = dependency {
-                *path = manifest_dir.join(path.as_path());
-            }
-        }
-
-        for registry in section.registries.values_mut() {
-            if let Registry::Local(path) = registry {
                 *path = manifest_dir.join(path.as_path());
             }
         }

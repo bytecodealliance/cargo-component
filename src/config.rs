@@ -36,6 +36,8 @@ pub struct Config {
     home_path: PathBuf,
     /// The configuration of `cargo` itself.
     cargo: cargo::Config,
+    /// The warg client configuration.
+    warg: warg_client::Config,
 }
 
 impl Config {
@@ -45,7 +47,12 @@ impl Config {
         let cwd = std::env::current_dir()?;
         let home_path = home_with_cwd_env(&home::env::OS_ENV, &cwd)?;
         let cargo = cargo::Config::default()?;
-        Ok(Self { home_path, cargo })
+        let warg = warg_client::Config::from_default_file()?.unwrap_or_default();
+        Ok(Self {
+            home_path,
+            cargo,
+            warg,
+        })
     }
 
     /// Gets the home path of `cargo-component`.
@@ -61,6 +68,11 @@ impl Config {
     /// Gets the mutable configuration of `cargo`.
     pub fn cargo_mut(&mut self) -> &mut cargo::Config {
         &mut self.cargo
+    }
+
+    /// Gets the warg client configuration.
+    pub fn warg(&self) -> &warg_client::Config {
+        &self.warg
     }
 
     /// Gets a reference to the shell, e.g., for writing error messages.

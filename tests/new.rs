@@ -1,7 +1,7 @@
 use crate::support::*;
 use anyhow::Result;
 use assert_cmd::prelude::*;
-use predicates::str::contains;
+use predicates::{str::contains, Predicate};
 use std::fs;
 
 mod support;
@@ -125,6 +125,52 @@ fn it_rejects_rust_keywords() -> Result<()> {
             "the name `fn` cannot be used as a package name, it is a Rust keyword",
         ))
         .failure();
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn it_targets_a_world() -> Result<()> {
+    let (_server, config) = start_warg_server().await?;
+
+    let root = create_root()?;
+    config.write_to_file(&root.join("warg-config.json"))?;
+
+    publish_wit(
+        &config,
+        "foo/bar",
+        "1.2.3",
+        r#"default world foo {
+    import foo: func() -> string
+    export bar: func() -> string
+}"#,
+        true,
+    )
+    .await?;
+
+    let project = Project::with_root(&root, "component", "--target foo/bar@1.0.0")?;
+
+    project
+        .cargo_component("build")
+        .assert()
+        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .success();
+    validate_component(&project.debug_wasm("component"))?;
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn it_errors_if_target_does_not_exist() -> Result<()> {
+    let (_server, config) = start_warg_server().await?;
+
+    let root = create_root()?;
+    config.write_to_file(&root.join("warg-config.json"))?;
+
+    match Project::with_root(&root, "component", "--target foo/bar@1.0.0") {
+        Ok(_) => panic!("expected error"),
+        Err(e) => assert!(contains("package `foo/bar` not found").eval(&e.to_string())),
+    }
 
     Ok(())
 }

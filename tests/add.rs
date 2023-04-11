@@ -39,61 +39,49 @@ fn validate_name_does_not_conflict_with_package() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn validate_the_package_exists() -> Result<()> {
+#[tokio::test]
+async fn validate_the_package_exists() -> Result<()> {
+    let (_server, config) = start_warg_server().await?;
+
     let root = create_root()?;
-    let path = root.join("registry");
+    config.write_to_file(&root.join("warg-config.json"))?;
 
-    cargo_component(&format!("registry new {path}", path = path.display()))
-        .current_dir(&root)
-        .assert()
-        .stderr(contains("Creating local component registry"))
-        .success();
-
-    let project = Project::with_root(
-        root,
-        "foo",
-        &format!("--registry {path}", path = path.display()),
-    )?;
+    let project = Project::with_root(&root, "foo", "")?;
 
     project
         .cargo_component("add bar foo/bar")
         .assert()
-        .stderr(contains(
-            "package `foo/bar` does not exist in local registry",
-        ))
+        .stderr(contains("package `foo/bar` not found"))
         .failure();
 
     Ok(())
 }
 
-#[test]
-fn validate_the_version_exists() -> Result<()> {
+#[tokio::test]
+async fn validate_the_version_exists() -> Result<()> {
+    let (_server, config) = start_warg_server().await?;
+
     let root = create_root()?;
-    let path = root.join("registry");
+    config.write_to_file(&root.join("warg-config.json"))?;
 
-    fs::write(root.join("foo.wat"), r#"(component)"#)?;
+    publish_component(&config, "foo/bar", "1.1.0", "(component)", true).await?;
 
-    cargo_component(&format!(
-        "registry publish -r {path} --id foo/bar -v 1.0.0 foo.wat",
-        path = path.display()
-    ))
-    .current_dir(&root)
-    .assert()
-    .stderr(contains("Publishing version 1.0.0 of package `foo/bar`"))
-    .success();
-
-    let project = Project::with_root(
-        root,
-        "foo",
-        &format!("--registry {path}", path = path.display()),
-    )?;
+    let project = Project::with_root(&root, "foo", "")?;
 
     project
-        .cargo_component("add --version 2.0.0 bar foo/bar")
+        .cargo_component("add bar foo/bar")
+        .assert()
+        .stderr(contains("Added dependency `bar` with version `1.1.0`"))
+        .success();
+
+    let manifest = fs::read_to_string(project.root().join("Cargo.toml"))?;
+    assert!(contains(r#"bar = "foo/bar@1.1.0""#).eval(&manifest));
+
+    project
+        .cargo_component("add --version 2.0.0 baz foo/bar")
         .assert()
         .stderr(contains(
-            "package `foo/bar` has no release that satisfies version requirement `^2.0.0`",
+            "component package `foo/bar` has no release matching version requirement `^2.0.0`",
         ))
         .failure();
 
@@ -120,27 +108,16 @@ fn checks_for_duplicate_dependencies() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn prints_modified_manifest_for_dry_run() -> Result<()> {
+#[tokio::test]
+async fn prints_modified_manifest_for_dry_run() -> Result<()> {
+    let (_server, config) = start_warg_server().await?;
+
     let root = create_root()?;
-    let path = root.join("registry");
+    config.write_to_file(&root.join("warg-config.json"))?;
 
-    fs::write(root.join("foo.wat"), r#"(component)"#)?;
+    publish_component(&config, "foo/bar", "1.2.3", "(component)", true).await?;
 
-    cargo_component(&format!(
-        "registry publish -r {path} --id foo/bar -v 1.2.3 foo.wat",
-        path = path.display()
-    ))
-    .current_dir(&root)
-    .assert()
-    .stderr(contains("Publishing version 1.2.3 of package `foo/bar`"))
-    .success();
-
-    let project = Project::with_root(
-        root,
-        "foo",
-        &format!("--registry {path}", path = path.display()),
-    )?;
+    let project = Project::with_root(&root, "foo", "")?;
 
     project
         .cargo_component("add --dry-run bar foo/bar")

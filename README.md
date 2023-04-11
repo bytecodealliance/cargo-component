@@ -223,18 +223,20 @@ The `cargo component` subcommand has some analogous commands to cargo itself:
   manifest file.
 * `cargo component build` — builds a WebAssembly component from a Rust project
   using the `wasm32-wasi` target by default.
-* `cargo component doc` — generates API documentation for a WebAssembly component from a Rust project
-  using the `wasm32-wasi` target by default.
+* `cargo component doc` — generates API documentation for a WebAssembly 
+  component from a Rust project.
 * `cargo component metadata` — prints package metadata as `cargo metadata` 
   would, except it also includes the metadata of generated bindings.
 * `cargo component check` — checks the local package and all of its dependencies
   (including generated bindings) for errors.
 * `cargo component clippy` — same as `cargo clippy` but also checks generated 
   bindings.
-* `cargo component registry` — a command for interacting with local component
-  registries.
 * `cargo component update` — same as `cargo update` but also updates the 
   dependencies in the component lock file.
+* `cargo component publish` - publishes a WebAssembly component to a [warg](https://warg.io/)
+  component registry.
+* `cargo component key` - manages signing keys for publishing WebAssembly 
+  components.
 
 More commands will be added over time.
 
@@ -288,6 +290,14 @@ git clone https://github.com/bytecodealliance/cargo-component
 ```
 
 ### Testing Changes
+
+To run tests, a [warg](https://warg.io/) registry server is required.
+
+To install `warg-server` locally, run:
+
+```
+cargo install --git https://github.com/bytecodealliance/registry warg-server
+```
 
 We'd like tests ideally to be written for all changes. Test can be run via:
 

@@ -18,34 +18,26 @@ fn help() {
     }
 }
 
-#[test]
-fn test_update_without_changes_is_a_noop() -> Result<()> {
+#[tokio::test]
+async fn test_update_without_changes_is_a_noop() -> Result<()> {
+    let (_server, config) = start_warg_server().await?;
+
     let root = create_root()?;
-    let path = root.join("registry");
-    fs::write(
-        root.join("foo.wit"),
+    config.write_to_file(&root.join("warg-config.json"))?;
+
+    publish_wit(
+        &config,
+        "foo/bar",
+        "1.0.0",
         r#"default world foo {
     import foo: func() -> string
     export bar: func() -> string
 }"#,
-    )?;
+        true,
+    )
+    .await?;
 
-    cargo_component(&format!(
-        "registry publish --registry {path} --id foo/bar --version 1.0.0 foo.wit",
-        path = path.display()
-    ))
-    .current_dir(&root)
-    .assert()
-    .success();
-
-    let project = Project::with_root(
-        root,
-        "component",
-        &format!(
-            "--registry {path} --target foo/bar@1.0.0",
-            path = path.display()
-        ),
-    )?;
+    let project = Project::with_root(&root, "component", "--target foo/bar@1.0.0")?;
 
     project
         .cargo_component("build")
@@ -63,34 +55,26 @@ fn test_update_without_changes_is_a_noop() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_update_without_compatible_changes_is_a_noop() -> Result<()> {
+#[tokio::test]
+async fn test_update_without_compatible_changes_is_a_noop() -> Result<()> {
+    let (_server, config) = start_warg_server().await?;
+
     let root = create_root()?;
-    let path = root.join("registry");
-    fs::write(
-        root.join("foo.wit"),
+    config.write_to_file(&root.join("warg-config.json"))?;
+
+    publish_wit(
+        &config,
+        "foo/bar",
+        "1.0.0",
         r#"default world foo {
     import foo: func() -> string
     export bar: func() -> string
 }"#,
-    )?;
+        true,
+    )
+    .await?;
 
-    cargo_component(&format!(
-        "registry publish --registry {path} --id foo/bar --version 1.0.0 foo.wit",
-        path = path.display()
-    ))
-    .current_dir(&root)
-    .assert()
-    .success();
-
-    let project = Project::with_root(
-        root,
-        "component",
-        &format!(
-            "--registry {path} --target foo/bar@1.0.0",
-            path = path.display()
-        ),
-    )?;
+    let project = Project::with_root(&root, "component", "--target foo/bar@1.0.0")?;
 
     project
         .cargo_component("build")
@@ -99,20 +83,16 @@ fn test_update_without_compatible_changes_is_a_noop() -> Result<()> {
         .success();
     validate_component(&project.debug_wasm("component"))?;
 
-    fs::write(
-        project.root().join("foo.wit"),
+    publish_wit(
+        &config,
+        "foo/bar",
+        "2.0.0",
         r#"default world foo {
     export bar: func() -> string
 }"#,
-    )?;
-
-    project
-        .cargo_component(&format!(
-            "registry publish --registry {path} --id foo/bar --version 2.0.0 foo.wit",
-            path = path.display()
-        ))
-        .assert()
-        .success();
+        false,
+    )
+    .await?;
 
     project
         .cargo_component("update")
@@ -130,34 +110,26 @@ fn test_update_without_compatible_changes_is_a_noop() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn test_update_with_compatible_changes() -> Result<()> {
+#[tokio::test]
+async fn test_update_with_compatible_changes() -> Result<()> {
+    let (_server, config) = start_warg_server().await?;
+
     let root = create_root()?;
-    let path = root.join("registry");
-    fs::write(
-        root.join("foo.wit"),
+    config.write_to_file(&root.join("warg-config.json"))?;
+
+    publish_wit(
+        &config,
+        "foo/bar",
+        "1.0.0",
         r#"default world foo {
     import foo: func() -> string
     export bar: func() -> string
 }"#,
-    )?;
+        true,
+    )
+    .await?;
 
-    cargo_component(&format!(
-        "registry publish --registry {path} --id foo/bar --version 1.0.0 foo.wit",
-        path = path.display()
-    ))
-    .current_dir(&root)
-    .assert()
-    .success();
-
-    let project = Project::with_root(
-        root,
-        "component",
-        &format!(
-            "--registry {path} --target foo/bar@1.0.0",
-            path = path.display()
-        ),
-    )?;
+    let project = Project::with_root(&root, "component", "--target foo/bar@1.0.0")?;
 
     project
         .cargo_component("build")
@@ -166,22 +138,18 @@ fn test_update_with_compatible_changes() -> Result<()> {
         .success();
     validate_component(&project.debug_wasm("component"))?;
 
-    fs::write(
-        project.root().join("../foo.wit"),
+    publish_wit(
+        &config,
+        "foo/bar",
+        "1.1.0",
         r#"default world foo {
     import foo: func() -> string
     import baz: func() -> string
     export bar: func() -> string
 }"#,
-    )?;
-
-    project
-        .cargo_component(&format!(
-            "registry publish --registry {path} --id foo/bar --version 1.1.0 ../foo.wit",
-            path = path.display()
-        ))
-        .assert()
-        .success();
+        false,
+    )
+    .await?;
 
     project
         .cargo_component("update")

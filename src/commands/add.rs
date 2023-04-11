@@ -1,7 +1,8 @@
 use super::workspace;
 use crate::{
-    metadata::{ComponentMetadata, PackageId},
-    registry, Config,
+    metadata::{ComponentMetadata, Dependency, PackageId, RegistryPackage},
+    registry::{DependencyResolution, DependencyResolver},
+    Config,
 };
 use anyhow::{bail, Context, Result};
 use cargo::{core::package::Package, ops::Packages};
@@ -111,26 +112,28 @@ impl AddCommand {
         config: &Config,
         metadata: &ComponentMetadata,
     ) -> Result<String> {
-        let registry = registry::create(
-            config,
-            self.registry.as_deref(),
-            &metadata.section.registries,
-        )?;
+        let mut resolver = DependencyResolver::new(config, &metadata.section.registries, None);
+        let dependency = Dependency::Package(RegistryPackage {
+            id: self.package.clone(),
+            version: self.version.as_ref().unwrap_or(&VersionReq::STAR).clone(),
+            registry: self.registry.clone(),
+        });
 
-        registry.synchronize(&[&self.package]).await?;
-        match registry.resolve(&self.package, self.version.as_ref().unwrap_or(&VersionReq::STAR))? {
-            Some(r) => Ok(self
+        resolver
+            .add_dependency(&self.name, &dependency, false)
+            .await?;
+
+        let (target, dependencies) = resolver.resolve().await?;
+        assert!(target.is_empty());
+        assert_eq!(dependencies.len(), 1);
+
+        match dependencies.values().next().expect("expected a resolution") {
+            DependencyResolution::Registry(resolution) => Ok(self
                 .version
                 .as_ref()
                 .map(ToString::to_string)
-                .unwrap_or_else(|| r.version.to_string())),
-            None => match &self.version {
-                Some(version) => bail!(
-                    "package `{package}` has no release that satisfies version requirement `{version}`",
-                    package = self.package,
-                ),
-                None => bail!("package `{package}` has not been released", package = self.package),
-            },
+                .unwrap_or_else(|| resolution.version.to_string())),
+            _ => unreachable!(),
         }
     }
 
