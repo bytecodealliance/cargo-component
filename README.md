@@ -235,7 +235,7 @@ The `cargo component` subcommand has some analogous commands to cargo itself:
   dependencies in the component lock file.
 * `cargo component publish` - publishes a WebAssembly component to a [warg](https://warg.io/)
   component registry.
-* `cargo component signing` - manages signing keys for publishing WebAssembly 
+* `cargo component key` - manages signing keys for publishing WebAssembly 
   components.
 
 More commands will be added over time.

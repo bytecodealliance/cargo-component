@@ -6,7 +6,7 @@ mod support;
 
 #[test]
 fn help() {
-    for arg in ["help signing", "signing -h", "signing --help"] {
+    for arg in ["help key", "key -h", "key --help"] {
         cargo_component(arg)
             .assert()
             .stdout(contains(
@@ -15,11 +15,7 @@ fn help() {
             .success();
     }
 
-    for arg in [
-        "help signing new-key",
-        "signing new-key -h",
-        "signing new-key --help",
-    ] {
+    for arg in ["help key new", "key new -h", "key new --help"] {
         cargo_component(arg)
             .assert()
             .stdout(contains(
@@ -28,11 +24,7 @@ fn help() {
             .success();
     }
 
-    for arg in [
-        "help signing set-key",
-        "signing set-key -h",
-        "signing set-key --help",
-    ] {
+    for arg in ["help key set", "key set -h", "key set --help"] {
         cargo_component(arg)
             .assert()
             .stdout(contains(
@@ -41,11 +33,7 @@ fn help() {
             .success();
     }
 
-    for arg in [
-        "help signing delete-key",
-        "signing delete-key -h",
-        "signing delete-key --help",
-    ] {
+    for arg in ["help key delete", "key delete -h", "key delete --help"] {
         cargo_component(arg)
             .assert()
             .stdout(contains(

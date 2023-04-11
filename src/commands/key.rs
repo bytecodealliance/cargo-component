@@ -12,7 +12,7 @@ use warg_crypto::signing::PrivateKey;
 
 /// Manage signing keys for publishing components to a registry.
 #[derive(Args)]
-pub struct SigningCommand {
+pub struct KeyCommand {
     /// Do not print cargo log messages
     #[clap(long = "quiet", short = 'q')]
     pub quiet: bool,
@@ -31,13 +31,13 @@ pub struct SigningCommand {
 
     /// The subcommand to execute.
     #[clap(subcommand)]
-    pub command: SigningSubcommand,
+    pub command: KeySubcommand,
 }
 
-impl SigningCommand {
+impl KeyCommand {
     /// Executes the command.
     pub async fn exec(self, config: &mut Config) -> Result<()> {
-        log::debug!("executing signing command");
+        log::debug!("executing key command");
 
         config.cargo_mut().configure(
             u32::from(self.verbose),
@@ -52,27 +52,27 @@ impl SigningCommand {
         )?;
 
         match self.command {
-            SigningSubcommand::NewKey(cmd) => cmd.exec(config).await,
-            SigningSubcommand::SetKey(cmd) => cmd.exec(config).await,
-            SigningSubcommand::DeleteKey(cmd) => cmd.exec(config).await,
+            KeySubcommand::New(cmd) => cmd.exec(config).await,
+            KeySubcommand::Set(cmd) => cmd.exec(config).await,
+            KeySubcommand::Delete(cmd) => cmd.exec(config).await,
         }
     }
 }
 
 /// The subcommand to execute.
 #[derive(Subcommand)]
-pub enum SigningSubcommand {
+pub enum KeySubcommand {
     /// Creates a new signing key for a registry in the local keyring.
-    NewKey(NewSigningKeyCommand),
+    New(KeyNewCommand),
     /// Sets the signing key for a registry in the local keyring.
-    SetKey(SetSigningKeyCommand),
+    Set(KeySetCommand),
     /// Deletes the signing key for a registry from the local keyring.
-    DeleteKey(DeleteSigningKeyCommand),
+    Delete(KeyDeleteCommand),
 }
 
 /// Creates a new signing key for a registry in the local keyring.
 #[derive(Args)]
-pub struct NewSigningKeyCommand {
+pub struct KeyNewCommand {
     /// The user name to use for the signing key.
     #[clap(long, short, value_name = "USER", default_value = "default")]
     pub user: String,
@@ -81,7 +81,7 @@ pub struct NewSigningKeyCommand {
     pub host: String,
 }
 
-impl NewSigningKeyCommand {
+impl KeyNewCommand {
     /// Executes the command.
     pub async fn exec(self, config: &mut Config) -> Result<()> {
         let entry = get_signing_key_entry(&self.host, &self.user)?;
@@ -121,7 +121,7 @@ impl NewSigningKeyCommand {
 
 /// Sets the signing key for a registry in the local keyring.
 #[derive(Args)]
-pub struct SetSigningKeyCommand {
+pub struct KeySetCommand {
     /// The user name to use for the signing key.
     #[clap(long, short, value_name = "USER", default_value = "default")]
     pub user: String,
@@ -130,7 +130,7 @@ pub struct SetSigningKeyCommand {
     pub host: String,
 }
 
-impl SetSigningKeyCommand {
+impl KeySetCommand {
     /// Executes the command.
     pub async fn exec(self, config: &mut Config) -> Result<()> {
         let key: PrivateKey =
@@ -153,7 +153,7 @@ impl SetSigningKeyCommand {
 
 /// Deletes the signing key for a registry from the local keyring.
 #[derive(Args)]
-pub struct DeleteSigningKeyCommand {
+pub struct KeyDeleteCommand {
     /// The user name to use for the signing key.
     #[clap(long, short, value_name = "USER", default_value = "default")]
     pub user: String,
@@ -162,7 +162,7 @@ pub struct DeleteSigningKeyCommand {
     pub host: String,
 }
 
-impl DeleteSigningKeyCommand {
+impl KeyDeleteCommand {
     /// Executes the command.
     pub async fn exec(self, config: &mut Config) -> Result<()> {
         let mut yellow = ColorSpec::new();
