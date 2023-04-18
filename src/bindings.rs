@@ -204,7 +204,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-"wit-bindgen" = {{ version = "0.4.0", features = ["realloc"], default-features = false }}
+"wit-bindgen" = {{ version = "0.5.0", features = ["realloc"], default-features = false }}
 "#,
                 name = self.name
             ),
@@ -301,7 +301,10 @@ publish = false
                     bail!("component dependency `{name}` is not a WebAssembly component")
                 }
                 DecodedWasm::Component(resolve, id) => {
-                    let id = merged.merge(resolve).worlds[id.index()];
+                    let id = merged
+                        .merge(resolve)
+                        .with_context(|| format!("failed to merge world of dependency `{name}`"))?
+                        .worlds[id.index()];
                     let interface = Self::import_world(&mut merged, id);
                     if merged.worlds[world_id]
                         .imports
@@ -354,7 +357,12 @@ publish = false
             };
             dependencies.insert(
                 name.clone(),
-                merged.merge(resolve).packages[package.index()],
+                merged
+                    .merge(resolve)
+                    .with_context(|| {
+                        format!("failed to merge world of target dependency `{name}`")
+                    })?
+                    .packages[package.index()],
             );
         }
 
