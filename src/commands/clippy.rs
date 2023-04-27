@@ -45,6 +45,13 @@ impl ClippyCommand {
     pub async fn exec(self, config: &mut Config) -> Result<()> {
         log::debug!("executing clippy command");
 
+        // Set the rustc wrapper to clippy's driver
+        // This is the magic that turns `cargo check` into `cargo clippy`
+        env::set_var("RUSTC_WORKSPACE_WRAPPER", Self::driver_path()?);
+
+        // However, for cargo to respect that variable, we must recreate the config
+        *config.cargo_mut() = cargo::Config::default()?;
+
         config.cargo_mut().configure(
             u32::from(self.options.verbose),
             self.options.quiet,
@@ -70,10 +77,6 @@ impl ClippyCommand {
             .map(|arg| format!("{arg}__CLIPPY_HACKERY__"))
             .collect();
         env::set_var("CLIPPY_ARGS", clippy_args);
-
-        // Set the rustc wrapper to clippy's driver
-        // This is the magic that turns `cargo check` into `cargo clippy`
-        env::set_var("RUSTC_WORKSPACE_WRAPPER", Self::driver_path()?);
 
         crate::check(config, workspace, &options, force_generation).await
     }
