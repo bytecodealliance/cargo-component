@@ -44,7 +44,7 @@ fn it_finds_errors() -> Result<()> {
         .assert()
         .stderr(
             contains("Checking foo-bindings v0.1.0")
-                .and(contains("expected struct `String`, found `&str`")),
+                .and(contains("expected `String`, found `&str`")),
         )
         .failure();
 
