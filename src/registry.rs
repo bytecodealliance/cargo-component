@@ -21,7 +21,7 @@ use termcolor::Color;
 use toml_edit::{Document, Item, Value};
 use url::Url;
 use warg_client::{
-    storage::{ContentStorage, PackageInfo, PackageStorage},
+    storage::{ContentStorage, PackageInfo, RegistryStorage},
     FileSystemClient, StorageLockResult,
 };
 use warg_crypto::hash::{DynHash, Sha256};
@@ -737,7 +737,7 @@ impl<'a> Registry<'a> {
         match packages.entry(id) {
             hash_map::Entry::Occupied(e) => Ok(Some(e.into_mut())),
             hash_map::Entry::Vacant(e) => {
-                match client.packages().load_package(id.as_str()).await? {
+                match client.registry().load_package(id.as_str()).await? {
                     Some(p) => Ok(Some(e.insert(p))),
                     None => Ok(None),
                 }

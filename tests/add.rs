@@ -39,11 +39,10 @@ fn validate_name_does_not_conflict_with_package() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn validate_the_package_exists() -> Result<()> {
-    let (_server, config) = start_warg_server().await?;
-
     let root = create_root()?;
+    let (_server, config) = spawn_server(&root).await?;
     config.write_to_file(&root.join("warg-config.json"))?;
 
     let project = Project::with_root(&root, "foo", "")?;
@@ -51,17 +50,16 @@ async fn validate_the_package_exists() -> Result<()> {
     project
         .cargo_component("add bar foo/bar")
         .assert()
-        .stderr(contains("package `foo/bar` not found"))
+        .stderr(contains("package `foo/bar` was not found"))
         .failure();
 
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn validate_the_version_exists() -> Result<()> {
-    let (_server, config) = start_warg_server().await?;
-
     let root = create_root()?;
+    let (_server, config) = spawn_server(&root).await?;
     config.write_to_file(&root.join("warg-config.json"))?;
 
     publish_component(&config, "foo/bar", "1.1.0", "(component)", true).await?;
@@ -108,11 +106,10 @@ fn checks_for_duplicate_dependencies() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn prints_modified_manifest_for_dry_run() -> Result<()> {
-    let (_server, config) = start_warg_server().await?;
-
     let root = create_root()?;
+    let (_server, config) = spawn_server(&root).await?;
     config.write_to_file(&root.join("warg-config.json"))?;
 
     publish_component(&config, "foo/bar", "1.2.3", "(component)", true).await?;

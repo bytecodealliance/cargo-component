@@ -129,11 +129,10 @@ fn it_rejects_rust_keywords() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_targets_a_world() -> Result<()> {
-    let (_server, config) = start_warg_server().await?;
-
     let root = create_root()?;
+    let (_server, config) = spawn_server(&root).await?;
     config.write_to_file(&root.join("warg-config.json"))?;
 
     publish_wit(
@@ -160,16 +159,15 @@ async fn it_targets_a_world() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_errors_if_target_does_not_exist() -> Result<()> {
-    let (_server, config) = start_warg_server().await?;
-
     let root = create_root()?;
+    let (_server, config) = spawn_server(&root).await?;
     config.write_to_file(&root.join("warg-config.json"))?;
 
     match Project::with_root(&root, "component", "--target foo/bar@1.0.0") {
         Ok(_) => panic!("expected error"),
-        Err(e) => assert!(contains("package `foo/bar` not found").eval(&e.to_string())),
+        Err(e) => assert!(contains("package `foo/bar` was not found").eval(&e.to_string())),
     }
 
     Ok(())

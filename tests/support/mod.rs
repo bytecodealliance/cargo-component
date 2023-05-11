@@ -1,19 +1,21 @@
 #![allow(dead_code)]
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{Context, Result};
 use assert_cmd::prelude::OutputAssertExt;
 use std::{
     env, fs,
-    net::TcpListener,
     path::{Path, PathBuf},
-    process::{Child, Command, Stdio},
+    process::Command,
     sync::atomic::{AtomicUsize, Ordering::SeqCst},
+    time::Duration,
 };
+use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 use warg_client::{
-    api,
     storage::{ContentStorage, PublishEntry, PublishInfo},
     FileSystemClient,
 };
+use warg_server::{Config, Server};
 use wasmparser::{Chunk, Encoding, Parser, Payload, Validator, WasmFeatures};
 use wit_parser::{Resolve, UnresolvedPackage};
 
@@ -65,27 +67,6 @@ pub fn cargo_component(args: &str) -> Command {
 
 pub fn project() -> Result<ProjectBuilder> {
     Ok(ProjectBuilder::new(create_root()?))
-}
-
-pub struct WargServer(Child);
-
-impl Drop for WargServer {
-    fn drop(&mut self) {
-        self.0.kill().ok();
-    }
-}
-
-fn find_free_port() -> Option<u16> {
-    // Attempt to find a free port
-    // Note that there will be a tiny window of opportunity for another
-    // process to grab this port before the server starts listening on it.
-    Some(
-        TcpListener::bind("127.0.0.1:0")
-            .ok()?
-            .local_addr()
-            .ok()?
-            .port(),
-    )
 }
 
 pub async fn publish_component(
@@ -184,84 +165,48 @@ pub async fn publish_wit(
     Ok(())
 }
 
-/// Starts a warg server in a background process.
-///
-/// Returns a drop handle for the server that will kill the server process and
-/// also a `warg_client::Config` that can be used to connect to the server.
-pub async fn start_warg_server() -> Result<(WargServer, warg_client::Config)> {
-    static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
-    std::thread_local! {
-        static TEST_ID: usize = NEXT_ID.fetch_add(1, SeqCst);
+pub struct ServerInstance {
+    task: Option<JoinHandle<()>>,
+    shutdown: CancellationToken,
+}
+
+impl Drop for ServerInstance {
+    fn drop(&mut self) {
+        futures::executor::block_on(async move {
+            self.shutdown.cancel();
+            self.task.take().unwrap().await.ok();
+        });
     }
+}
 
-    let id = TEST_ID.with(|n| *n);
+/// Spawns a server as a background task.
+pub async fn spawn_server(root: &Path) -> Result<(ServerInstance, warg_client::Config)> {
+    let shutdown = CancellationToken::new();
+    let config = Config::new(test_operator_key().parse()?)
+        .with_addr(([127, 0, 0, 1], 0))
+        .with_content_dir(root.join("server"))
+        .with_shutdown(shutdown.clone().cancelled_owned())
+        .with_checkpoint_interval(Duration::from_millis(100));
 
-    let mut path = env::current_exe()?;
-    path.pop(); // remove test exe name
-    path.pop(); // remove `deps`
-    path.pop(); // remove `debug` or `release`
-    path.push("tests");
-    path.push(format!("s{id}"));
+    let mut server = Server::new(config);
+    let addr = server.bind()?;
 
-    drop(fs::remove_dir_all(&path));
+    let task = tokio::spawn(async move {
+        server.run().await.unwrap();
+    });
 
-    let server_content_dir = path.join("server");
-    fs::create_dir_all(&server_content_dir)?;
-
-    let packages_dir = path.join("packages");
-    fs::create_dir_all(&packages_dir)?;
-
-    let content_dir = path.join("content");
-    fs::create_dir_all(&content_dir)?;
-
-    let mut cmd = Command::new("warg-server");
-
-    let port = find_free_port()
-        .ok_or_else(|| anyhow!("failed to find free port for the server to listen on"))?;
-    cmd.arg(format!(
-        "--content-dir={path}",
-        path = server_content_dir.display()
-    ));
-    cmd.arg(format!("--listen=127.0.0.1:{port}"));
-
-    // For now, use a dummy operator key for the server
-    cmd.env("WARG_DEMO_OPERATOR_KEY", test_operator_key());
-
-    cmd.stdin(Stdio::null());
-    cmd.stdout(Stdio::null());
-    cmd.stderr(Stdio::null());
-
-    let server = WargServer(
-        cmd.spawn()
-            .context("failed to start warg-server; is it installed?")?,
-    );
-
-    let url = format!("http://127.0.0.1:{port}");
-    let client = api::Client::new(&url)?;
-
-    // Attempt to wait for the server to start listening (up to 2.5 seconds)
-    // This isn't perfect, but it's better than nothing
-    let mut started = false;
-    for _ in 0..10 {
-        if client.latest_checkpoint().await.is_ok() {
-            started = true;
-            break;
-        }
-
-        tokio::time::sleep(std::time::Duration::from_millis(250)).await;
-    }
-
-    if !started {
-        bail!("failed to start warg-server (timeout)");
-    }
-
-    let config = warg_client::Config {
-        default_url: Some(url),
-        packages_dir: Some(packages_dir),
-        content_dir: Some(content_dir),
+    let instance = ServerInstance {
+        task: Some(task),
+        shutdown,
     };
 
-    Ok((server, config))
+    let config = warg_client::Config {
+        default_url: Some(format!("http://{addr}")),
+        registries_dir: Some(root.join("registries")),
+        content_dir: Some(root.join("content")),
+    };
+
+    Ok((instance, config))
 }
 
 pub struct Project {
