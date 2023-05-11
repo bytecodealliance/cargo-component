@@ -225,11 +225,10 @@ pub async fn start_warg_server() -> Result<(WargServer, warg_client::Config)> {
     cmd.arg(format!("--listen=127.0.0.1:{port}"));
 
     // For now, use a dummy operator key for the server
-    cmd.env("WARG_DEMO_OPERATOR_KEY", test_operator_key());
+    cmd.env("WARG_OPERATOR_KEY", test_operator_key());
 
     cmd.stdin(Stdio::null());
     cmd.stdout(Stdio::null());
-    cmd.stderr(Stdio::null());
 
     let server = WargServer(
         cmd.spawn()

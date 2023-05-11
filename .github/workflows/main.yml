@@ -25,7 +25,7 @@ jobs:
     - name: Build cargo-component
       run: cargo build
     - name: Install warg-server
-      run: cargo install --git https://github.com/bytecodealliance/registry --rev bfe599a warg-server
+      run: cargo install --git https://github.com/bytecodealliance/registry --rev 3d99311 warg-server
     - name: Test cargo-component
       run: cargo test
 

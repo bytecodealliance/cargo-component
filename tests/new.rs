@@ -169,7 +169,7 @@ async fn it_errors_if_target_does_not_exist() -> Result<()> {
 
     match Project::with_root(&root, "component", "--target foo/bar@1.0.0") {
         Ok(_) => panic!("expected error"),
-        Err(e) => assert!(contains("package `foo/bar` not found").eval(&e.to_string())),
+        Err(e) => assert!(contains("package `foo/bar` was not found").eval(&e.to_string())),
     }
 
     Ok(())

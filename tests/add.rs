@@ -51,7 +51,7 @@ async fn validate_the_package_exists() -> Result<()> {
     project
         .cargo_component("add bar foo/bar")
         .assert()
-        .stderr(contains("package `foo/bar` not found"))
+        .stderr(contains("package `foo/bar` was not found"))
         .failure();
 
     Ok(())
