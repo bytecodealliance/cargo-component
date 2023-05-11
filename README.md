@@ -291,14 +291,6 @@ git clone https://github.com/bytecodealliance/cargo-component
 
 ### Testing Changes
 
-To run tests, a [warg](https://warg.io/) registry server is required.
-
-To install `warg-server` locally, run:
-
-```
-cargo install --git https://github.com/bytecodealliance/registry warg-server
-```
-
 We'd like tests ideally to be written for all changes. Test can be run via:
 
 ```

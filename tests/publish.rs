@@ -17,11 +17,10 @@ fn help() {
     }
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_publishes_a_component() -> Result<()> {
-    let (_server, config) = start_warg_server().await?;
-
     let root = create_root()?;
+    let (_server, config) = spawn_server(&root).await?;
     config.write_to_file(&root.join("warg-config.json"))?;
 
     publish_wit(
@@ -50,11 +49,10 @@ async fn it_publishes_a_component() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_fails_if_package_does_not_exist() -> Result<()> {
-    let (_server, config) = start_warg_server().await?;
-
     let root = create_root()?;
+    let (_server, config) = spawn_server(&root).await?;
     config.write_to_file(&root.join("warg-config.json"))?;
 
     publish_wit(
@@ -81,11 +79,10 @@ async fn it_fails_if_package_does_not_exist() -> Result<()> {
     Ok(())
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_publishes_a_dependency() -> Result<()> {
-    let (_server, config) = start_warg_server().await?;
-
     let root = create_root()?;
+    let (_server, config) = spawn_server(&root).await?;
     config.write_to_file(&root.join("warg-config.json"))?;
 
     publish_wit(
