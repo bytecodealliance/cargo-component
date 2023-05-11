@@ -257,7 +257,7 @@ pub async fn start_warg_server() -> Result<(WargServer, warg_client::Config)> {
 
     let config = warg_client::Config {
         default_url: Some(url),
-        packages_dir: Some(packages_dir),
+        registries_dir: Some(packages_dir),
         content_dir: Some(content_dir),
     };
 
