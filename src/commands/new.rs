@@ -1,5 +1,5 @@
 use crate::{
-    bindings::SourceGenerator,
+    bindings::{SourceGenerator, WIT_BINDGEN_VERSION},
     metadata::{self},
     registry::{DependencyResolution, DependencyResolver, RegistryResolution},
     Config,
@@ -254,7 +254,7 @@ impl NewCommand {
         doc["package"]["metadata"] = Item::Table(metadata);
         doc["dependencies"]["wit-bindgen"] = value(InlineTable::from_iter(
             [
-                ("version", Value::from("0.6.0")),
+                ("version", Value::from(WIT_BINDGEN_VERSION)),
                 ("default_features", Value::from(false)),
             ]
             .into_iter(),

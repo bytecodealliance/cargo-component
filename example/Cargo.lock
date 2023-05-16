@@ -4,9 +4,9 @@ version = 3
 
 [[package]]
 name = "bitflags"
-version = "2.1.0"
+version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c70beb79cbb5ce9c4f8e20849978f34225931f665bb49efa6982875a4d5facb3"
+checksum = "24a6904aef64d73cf10ab17ebace7befb918b82164785cb89907993be7f83813"
 
 [[package]]
 name = "service"
@@ -25,9 +25,9 @@ dependencies = [
 
 [[package]]
 name = "wit-bindgen"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb2c38628008163b3fedefa9399ce5966ec27ea1b91e500ee569d81d9cf60418"
+checksum = "ad22d93d3f55847ac4b3df31607a26f35231754ef472382319de032770d8b5bf"
 dependencies = [
  "bitflags",
 ]
