@@ -137,9 +137,10 @@ async fn it_targets_a_world() -> Result<()> {
 
     publish_wit(
         &config,
-        "foo/bar",
+        "foo:bar",
         "1.2.3",
-        r#"default world foo {
+        r#"package foo:bar@1.2.3
+world foo {
     import foo: func() -> string
     export bar: func() -> string
 }"#,
@@ -147,7 +148,7 @@ async fn it_targets_a_world() -> Result<()> {
     )
     .await?;
 
-    let project = Project::with_root(&root, "component", "--target foo/bar@1.0.0")?;
+    let project = Project::with_root(&root, "component", "--target foo:bar@1.0.0")?;
 
     project
         .cargo_component("build")
@@ -165,9 +166,9 @@ async fn it_errors_if_target_does_not_exist() -> Result<()> {
     let (_server, config) = spawn_server(&root).await?;
     config.write_to_file(&root.join("warg-config.json"))?;
 
-    match Project::with_root(&root, "component", "--target foo/bar@1.0.0") {
+    match Project::with_root(&root, "component", "--target foo:bar@1.0.0") {
         Ok(_) => panic!("expected error"),
-        Err(e) => assert!(contains("package `foo/bar` was not found").eval(&e.to_string())),
+        Err(e) => assert!(contains("package `foo:bar` does not exist").eval(&e.to_string())),
     }
 
     Ok(())

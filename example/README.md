@@ -20,16 +20,3 @@ cargo component build
 ```
 
 The component should now exist at `target/wasm32-wasi/debug/service.wasm`.
-
-The resulting component will have the following imports:
-
-```wat
-(import "cache" (instance (type ...)))
-(import "origin" (instance (type ...)))
-```
-
-And export the following:
-
-```wat
-(export "backend" (instance ...))
-```

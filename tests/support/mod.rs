@@ -15,7 +15,7 @@ use warg_client::{
     storage::{ContentStorage, PublishEntry, PublishInfo},
     FileSystemClient,
 };
-use warg_server::{Config, Server};
+use warg_server::{policy::content::WasmContentPolicy, Config, Server};
 use wasmparser::{Chunk, Encoding, Parser, Payload, Validator, WasmFeatures};
 use wit_parser::{Resolve, UnresolvedPackage};
 
@@ -69,21 +69,19 @@ pub fn project() -> Result<ProjectBuilder> {
     Ok(ProjectBuilder::new(create_root()?))
 }
 
-pub async fn publish_component(
+pub async fn publish(
     config: &warg_client::Config,
     name: &str,
     version: &str,
-    wat: &str,
+    content: Vec<u8>,
     init: bool,
 ) -> Result<()> {
     let client = FileSystemClient::new_with_config(None, config)?;
 
-    let bytes = wat::parse_str(wat).context("failed to parse component for publishing")?;
-
     let digest = client
         .content()
         .store_content(
-            Box::pin(futures::stream::once(async move { Ok(bytes.into()) })),
+            Box::pin(futures::stream::once(async move { Ok(content.into()) })),
             None,
         )
         .await
@@ -98,18 +96,40 @@ pub async fn publish_component(
         content: digest,
     });
 
-    client
+    let record_id = client
         .publish_with_info(
             &test_signing_key().parse().unwrap(),
             PublishInfo {
                 package: name.to_string(),
+                head: None,
                 entries,
             },
         )
         .await
         .context("failed to publish component")?;
 
+    client
+        .wait_for_publish(name, &record_id, Duration::from_secs(1))
+        .await?;
+
     Ok(())
+}
+
+pub async fn publish_component(
+    config: &warg_client::Config,
+    name: &str,
+    version: &str,
+    wat: &str,
+    init: bool,
+) -> Result<()> {
+    publish(
+        config,
+        name,
+        version,
+        wat::parse_str(wat).context("failed to parse component for publishing")?,
+        init,
+    )
+    .await
 }
 
 pub async fn publish_wit(
@@ -119,50 +139,18 @@ pub async fn publish_wit(
     wit: &str,
     init: bool,
 ) -> Result<()> {
-    let client = FileSystemClient::new_with_config(None, config)?;
-
     let mut resolve = Resolve::new();
     let pkg = resolve
         .push(
             UnresolvedPackage::parse(Path::new("foo.wit"), wit)
                 .context("failed to parse wit for publishing")?,
-            &Default::default(),
         )
         .context("failed to resolve wit for publishing")?;
 
     let bytes =
         wit_component::encode(&resolve, pkg).context("failed to encode wit for publishing")?;
 
-    let digest = client
-        .content()
-        .store_content(
-            Box::pin(futures::stream::once(async move { Ok(bytes.into()) })),
-            None,
-        )
-        .await
-        .context("failed to store wit component for publishing")?;
-
-    let mut entries = Vec::with_capacity(2);
-    if init {
-        entries.push(PublishEntry::Init);
-    }
-    entries.push(PublishEntry::Release {
-        version: version.parse().unwrap(),
-        content: digest,
-    });
-
-    client
-        .publish_with_info(
-            &test_signing_key().parse().unwrap(),
-            PublishInfo {
-                package: name.to_string(),
-                entries,
-            },
-        )
-        .await
-        .context("failed to publish wit component")?;
-
-    Ok(())
+    publish(config, name, version, bytes, init).await
 }
 
 pub struct ServerInstance {
@@ -182,11 +170,11 @@ impl Drop for ServerInstance {
 /// Spawns a server as a background task.
 pub async fn spawn_server(root: &Path) -> Result<(ServerInstance, warg_client::Config)> {
     let shutdown = CancellationToken::new();
-    let config = Config::new(test_operator_key().parse()?)
+    let config = Config::new(test_operator_key().parse()?, root.join("server"))
         .with_addr(([127, 0, 0, 1], 0))
-        .with_content_dir(root.join("server"))
         .with_shutdown(shutdown.clone().cancelled_owned())
-        .with_checkpoint_interval(Duration::from_millis(100));
+        .with_checkpoint_interval(Duration::from_millis(100))
+        .with_content_policy(WasmContentPolicy::default());
 
     let mut server = Server::new(config);
     let addr = server.bind()?;

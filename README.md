@@ -187,10 +187,12 @@ This will create a `wit/world.wit` file describing the world that the
 component will target:
 
 ```wit
-default world component {
-  /// Say hello!
-  export hello-world: func() -> string
-}
+package component:example
+
+/// An example world for the component to target.
+world example {
+    export hello-world: func() -> string
+}                
 ```
 
 The component will export a `hello-world` function returning a string.
@@ -200,7 +202,8 @@ The implementation of the component will be in `src/lib.rs`:
 ```rust
 struct Component;
 
-impl bindings::Component for Component {
+impl bindings::Example for Component {
+    /// Say hello!
     fn hello_world() -> String {
         "Hello, World!".to_string()
     }

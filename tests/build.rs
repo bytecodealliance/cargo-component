@@ -177,6 +177,7 @@ fn it_regenerates_bindings_if_wit_changed() -> Result<()> {
     let manifest = fs::read_to_string(&manifest_path)?;
     let mut doc: Document = manifest.parse()?;
     doc["package"]["metadata"]["component"]["target"]["path"] = value("wit");
+    doc["package"]["metadata"]["component"]["target"]["world"] = value("example");
     fs::write(manifest_path, doc.to_string())?;
 
     project

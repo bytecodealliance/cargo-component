@@ -26,7 +26,7 @@ use std::{
     fs::{self, File},
     io::Read,
     path::Path,
-    time::SystemTime,
+    time::{Duration, SystemTime},
 };
 use termcolor::Color;
 use tokio::io::BufReader;
@@ -38,7 +38,6 @@ use wit_component::ComponentEncoder;
 pub mod bindings;
 pub mod commands;
 pub mod config;
-pub mod log;
 pub mod metadata;
 pub mod registry;
 mod signing;
@@ -402,6 +401,7 @@ pub async fn publish_wit(
 
     let mut info = PublishInfo {
         package: options.name.to_string(),
+        head: None,
         entries: Default::default(),
     };
 
@@ -414,7 +414,10 @@ pub async fn publish_wit(
         content,
     });
 
-    client.publish_with_info(&options.signing_key, info).await?;
+    let record_id = client.publish_with_info(&options.signing_key, info).await?;
+    client
+        .wait_for_publish(options.name, &record_id, Duration::from_secs(1))
+        .await?;
 
     config.shell().status(
         "Published",
@@ -523,6 +526,7 @@ pub async fn publish(
 
     let mut info = PublishInfo {
         package: options.name.to_string(),
+        head: None,
         entries: Default::default(),
     };
 
@@ -535,7 +539,10 @@ pub async fn publish(
         content,
     });
 
-    client.publish_with_info(&options.signing_key, info).await?;
+    let record_id = client.publish_with_info(&options.signing_key, info).await?;
+    client
+        .wait_for_publish(options.name, &record_id, Duration::from_secs(1))
+        .await?;
 
     config.shell().status(
         "Published",
@@ -614,6 +621,8 @@ pub async fn update_lockfile(
 
         let new_pkg = &new_lock_file.packages[new_pkg_index];
         for old_ver in &old_pkg.versions {
+            println!("searching {v:?}", v = new_pkg.versions);
+            println!("with {v:?}", v = old_ver.key());
             let new_ver_index = new_pkg
                 .versions
                 .binary_search_by_key(&old_ver.key(), LockedPackageVersion::key)
@@ -624,8 +633,8 @@ pub async fn update_lockfile(
                 config.shell().status_with_color(
                     "Updating",
                     format!(
-                        "component registry package `{id}` v{old} -> v{new}",
-                        id = old_pkg.id,
+                        "component registry package `{name}` v{old} -> v{new}",
+                        name = old_pkg.name,
                         old = old_ver.version,
                         new = new_ver.version
                     ),

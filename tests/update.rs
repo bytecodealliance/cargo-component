@@ -26,9 +26,10 @@ async fn test_update_without_changes_is_a_noop() -> Result<()> {
 
     publish_wit(
         &config,
-        "foo/bar",
+        "foo:bar",
         "1.0.0",
-        r#"default world foo {
+        r#"package foo:bar@1.0.0
+world foo {
     import foo: func() -> string
     export bar: func() -> string
 }"#,
@@ -36,7 +37,7 @@ async fn test_update_without_changes_is_a_noop() -> Result<()> {
     )
     .await?;
 
-    let project = Project::with_root(&root, "component", "--target foo/bar@1.0.0")?;
+    let project = Project::with_root(&root, "component", "--target foo:bar@1.0.0")?;
 
     project
         .cargo_component("build")
@@ -49,7 +50,7 @@ async fn test_update_without_changes_is_a_noop() -> Result<()> {
         .cargo_component("update")
         .assert()
         .success()
-        .stderr(contains("foo/bar").not());
+        .stderr(contains("foo:bar").not());
 
     Ok(())
 }
@@ -62,9 +63,10 @@ async fn test_update_without_compatible_changes_is_a_noop() -> Result<()> {
 
     publish_wit(
         &config,
-        "foo/bar",
+        "foo:bar",
         "1.0.0",
-        r#"default world foo {
+        r#"package foo:bar@1.0.0
+world foo {
     import foo: func() -> string
     export bar: func() -> string
 }"#,
@@ -72,7 +74,7 @@ async fn test_update_without_compatible_changes_is_a_noop() -> Result<()> {
     )
     .await?;
 
-    let project = Project::with_root(&root, "component", "--target foo/bar@1.0.0")?;
+    let project = Project::with_root(&root, "component", "--target foo:bar@1.0.0")?;
 
     project
         .cargo_component("build")
@@ -83,9 +85,10 @@ async fn test_update_without_compatible_changes_is_a_noop() -> Result<()> {
 
     publish_wit(
         &config,
-        "foo/bar",
+        "foo:bar",
         "2.0.0",
-        r#"default world foo {
+        r#"package foo:bar@2.0.0
+world foo {
     export bar: func() -> string
 }"#,
         false,
@@ -96,7 +99,7 @@ async fn test_update_without_compatible_changes_is_a_noop() -> Result<()> {
         .cargo_component("update")
         .assert()
         .success()
-        .stderr(contains("foo/bar").not());
+        .stderr(contains("foo:bar").not());
 
     project
         .cargo_component("build")
@@ -116,9 +119,10 @@ async fn test_update_with_compatible_changes() -> Result<()> {
 
     publish_wit(
         &config,
-        "foo/bar",
+        "foo:bar",
         "1.0.0",
-        r#"default world foo {
+        r#"package foo:bar@1.0.0
+world foo {
     import foo: func() -> string
     export bar: func() -> string
 }"#,
@@ -126,7 +130,7 @@ async fn test_update_with_compatible_changes() -> Result<()> {
     )
     .await?;
 
-    let project = Project::with_root(&root, "component", "--target foo/bar@1.0.0")?;
+    let project = Project::with_root(&root, "component", "--target foo:bar@1.0.0")?;
 
     project
         .cargo_component("build")
@@ -137,9 +141,10 @@ async fn test_update_with_compatible_changes() -> Result<()> {
 
     publish_wit(
         &config,
-        "foo/bar",
+        "foo:bar",
         "1.1.0",
-        r#"default world foo {
+        r#"package foo:bar@1.1.0
+world foo {
     import foo: func() -> string
     import baz: func() -> string
     export bar: func() -> string
@@ -152,7 +157,7 @@ async fn test_update_with_compatible_changes() -> Result<()> {
         .cargo_component("update")
         .assert()
         .success()
-        .stderr(contains("`foo/bar` v1.0.0 -> v1.1.0"));
+        .stderr(contains("`foo:bar` v1.0.0 -> v1.1.0"));
 
     let source = r#"use bindings::{baz, Foo};
 struct Component;

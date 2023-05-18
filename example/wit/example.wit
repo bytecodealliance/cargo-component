@@ -1,3 +1,5 @@
+package example:component
+
 /// An example cache interface.
 interface cache {
     /// Get a value from the cache.
@@ -14,13 +16,13 @@ interface backend {
 }
 
 /// An example world for the component to target.
-default world example {
+world example {
     /// The cache to use.
-    import cache: self.cache
+    import cache
 
     /// The origin backend to use.
-    import origin: self.backend
+    import backend
 
     /// Export the same backend interface as the origin
-    export backend: self.backend
+    export backend
 }

@@ -1,6 +1,6 @@
 use super::workspace;
 use crate::{
-    metadata::{ComponentMetadata, Dependency, PackageId, RegistryPackage},
+    metadata::{ComponentMetadata, Dependency, Id, RegistryPackage},
     registry::{DependencyResolution, DependencyResolver},
     Config,
 };
@@ -8,8 +8,8 @@ use anyhow::{bail, Context, Result};
 use cargo::{core::package::Package, ops::Packages};
 use clap::{ArgAction, Args};
 use semver::VersionReq;
-use std::{fs, path::PathBuf};
-use toml_edit::{value, Document};
+use std::{borrow::Cow, fs, path::PathBuf};
+use toml_edit::{value, Document, InlineTable, Value};
 
 /// Add a dependency for a WebAssembly component
 #[derive(Args)]
@@ -51,13 +51,13 @@ pub struct AddCommand {
     #[clap(long = "version", value_name = "VERSION")]
     pub version: Option<VersionReq>,
 
-    /// Name to use for the dependency.
-    #[clap(value_name = "NAME")]
-    pub name: String,
+    /// The id of the dependency to use; defaults to the package name.
+    #[clap(long, value_name = "ID")]
+    pub id: Option<Id>,
 
-    /// The package to add a dependency to.
+    /// The name of the package to add a dependency to.
     #[clap(value_name = "PACKAGE")]
-    pub package: PackageId,
+    pub package: String,
 }
 
 impl AddCommand {
@@ -91,17 +91,28 @@ impl AddCommand {
             ),
         };
 
-        self.validate(&metadata)?;
-        let version = self.resolve_version(config, &metadata).await?;
+        let id = match &self.id {
+            Some(id) => Cow::Borrowed(id),
+            None => {
+                let id = self.package.parse::<Id>().ok();
+                Cow::Owned(id.with_context(|| {
+                    format!(
+                        "package `{package}` is not a valid component model identifier; use the `--id` option to specify the identifier",
+                        package = self.package
+                    )
+                })?)
+            }
+        };
+
+        self.validate(&metadata, &id)?;
+
+        let version = self.resolve_version(config, &metadata, &id).await?;
         let version = version.trim_start_matches('^');
         self.add(package, version)?;
 
         config.shell().status(
             "Added",
-            format!(
-                "dependency `{name}` with version `{version}`",
-                name = self.name
-            ),
+            format!("dependency `{id}` with version `{version}`"),
         )?;
 
         Ok(())
@@ -111,17 +122,16 @@ impl AddCommand {
         &self,
         config: &Config,
         metadata: &ComponentMetadata,
+        id: &Id,
     ) -> Result<String> {
         let mut resolver = DependencyResolver::new(config, &metadata.section.registries, None);
         let dependency = Dependency::Package(RegistryPackage {
-            id: self.package.clone(),
+            name: Some(self.package.clone()),
             version: self.version.as_ref().unwrap_or(&VersionReq::STAR).clone(),
             registry: self.registry.clone(),
         });
 
-        resolver
-            .add_dependency(&self.name, &dependency, false)
-            .await?;
+        resolver.add_dependency(id, &dependency, false).await?;
 
         let (target, dependencies) = resolver.resolve().await?;
         assert!(target.is_empty());
@@ -162,7 +172,17 @@ impl AddCommand {
                 )
             })?;
 
-        dependencies[&self.name] = value(format!("{pkg}@{version}", pkg = self.package));
+        match self.id.as_ref() {
+            Some(id) => {
+                dependencies[&id.to_string()] = value(InlineTable::from_iter([
+                    ("package", Value::from(self.package.to_string())),
+                    ("version", Value::from(version)),
+                ]));
+            }
+            _ => {
+                dependencies[&self.package.to_string()] = value(version);
+            }
+        }
 
         if self.dry_run {
             println!("{document}");
@@ -178,19 +198,9 @@ impl AddCommand {
         Ok(())
     }
 
-    fn validate(&self, metadata: &ComponentMetadata) -> Result<()> {
-        if metadata.name == self.name {
-            bail!(
-                "cannot add dependency `{name}` as it conflicts with the component's package name",
-                name = self.name
-            );
-        }
-
-        if metadata.section.dependencies.contains_key(&self.name) {
-            bail!(
-                "cannot add dependency `{name}` as it conflicts with an existing dependency",
-                name = self.name
-            );
+    fn validate(&self, metadata: &ComponentMetadata, id: &Id) -> Result<()> {
+        if metadata.section.dependencies.contains_key(id) {
+            bail!("cannot add dependency `{id}` as it conflicts with an existing dependency");
         }
 
         Ok(())
