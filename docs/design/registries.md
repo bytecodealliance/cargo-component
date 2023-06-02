@@ -149,7 +149,7 @@ This design proposes the following tables in `Cargo.toml`:
 
   ```toml
   [package.metadata.component.dependencies]
-  "foo::bar" = { package = "foo:bar", version = "0.1.0", registry = "my-registry" }
+  "foo:bar" = { package = "foo:bar", version = "0.1.0", registry = "my-registry" }
   ```
 
   The `default` name is used when no `registry` field is specified in a
