@@ -12,11 +12,23 @@ use semver::VersionReq;
 use std::{
     borrow::Cow,
     collections::HashMap,
-    fmt, fs,
+    fs,
     path::{Path, PathBuf},
 };
 use toml_edit::{table, value, Document, InlineTable, Item, Table, Value};
 use url::Url;
+
+fn escape_wit(s: &str) -> Cow<str> {
+    match s {
+        "use" | "type" | "func" | "u8" | "u16" | "u32" | "u64" | "s8" | "s16" | "s32" | "s64"
+        | "float32" | "float64" | "char" | "record" | "flags" | "variant" | "enum" | "union"
+        | "bool" | "string" | "option" | "result" | "future" | "stream" | "list" | "_" | "as"
+        | "from" | "static" | "interface" | "tuple" | "import" | "export" | "world" | "package" => {
+            Cow::Owned(format!("%{s}"))
+        }
+        _ => s.into(),
+    }
+}
 
 /// Create a new WebAssembly component package at <path>
 #[derive(Args)]
@@ -60,6 +72,14 @@ pub struct NewCommand {
     #[clap(long = "frozen")]
     pub frozen: bool,
 
+    /// The component package namespace to use.
+    #[clap(
+        long = "namespace",
+        value_name = "NAMESPACE",
+        default_value = "component"
+    )]
+    pub namespace: String,
+
     /// Set the resulting package name, defaults to the directory name
     #[clap(long = "name", value_name = "NAME")]
     pub name: Option<String>,
@@ -76,13 +96,9 @@ pub struct NewCommand {
     #[clap(long = "editor", value_name = "EDITOR", value_parser = ["vscode", "none"])]
     pub editor: Option<String>,
 
-    /// Use the specified target WIT package.
+    /// Use the specified target world from a WIT package.
     #[clap(long = "target", short = 't', value_name = "TARGET", requires = "lib")]
     pub target: Option<String>,
-
-    /// Use the specified world within the target WIT package.
-    #[clap(long = "world", short = 'w', value_name = "WORLD", requires = "target")]
-    pub world: Option<String>,
 
     /// Use the specified default registry when generating the package.
     #[clap(long = "registry", value_name = "REGISTRY")]
@@ -98,12 +114,14 @@ pub struct NewCommand {
 }
 
 struct PackageName<'a> {
+    namespace: String,
+    name: String,
     display: Cow<'a, str>,
 }
 
 impl<'a> PackageName<'a> {
-    fn new(name: Option<&'a str>, path: &'a Path) -> Result<Self> {
-        let (package, display) = match name {
+    fn new(namespace: &str, name: Option<&'a str>, path: &'a Path) -> Result<Self> {
+        let (name, display) = match name {
             Some(name) => (name.into(), name.into()),
             None => (
                 path.file_name().expect("invalid path").to_string_lossy(),
@@ -113,22 +131,28 @@ impl<'a> PackageName<'a> {
             ),
         };
 
-        let kebab = package.to_kebab_case();
-
-        if kebab.is_empty() {
-            bail!("invalid component name `{package}`");
+        let namespace_kebab = namespace.to_kebab_case();
+        if namespace_kebab.is_empty() {
+            bail!("invalid component namespace `{namespace}`");
         }
 
-        wit_parser::validate_id(&kebab)
-            .with_context(|| format!("component name `{package}` is not a legal WIT identifier"))?;
+        wit_parser::validate_id(&namespace_kebab).with_context(|| {
+            format!("component namespace `{namespace}` is not a legal WIT identifier")
+        })?;
 
-        Ok(Self { display })
-    }
-}
+        let name_kebab = name.to_kebab_case();
+        if name_kebab.is_empty() {
+            bail!("invalid component name `{name}`");
+        }
 
-impl fmt::Display for PackageName<'_> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{name}", name = self.display)
+        wit_parser::validate_id(&name_kebab)
+            .with_context(|| format!("component name `{name}` is not a legal WIT identifier"))?;
+
+        Ok(Self {
+            namespace: namespace_kebab,
+            name: name_kebab,
+            display,
+        })
     }
 }
 
@@ -137,7 +161,7 @@ impl NewCommand {
     pub async fn exec(self, config: &mut Config) -> Result<()> {
         log::debug!("executing new command");
 
-        let name = PackageName::new(self.name.as_deref(), &self.path)?;
+        let name = PackageName::new(&self.namespace, self.name.as_deref(), &self.path)?;
 
         config.cargo_mut().configure(
             u32::from(self.verbose),
@@ -153,21 +177,27 @@ impl NewCommand {
 
         let out_dir = config.cargo().cwd().join(&self.path);
         let registries = self.registries()?;
-        let target = self.resolve_target(config, &registries).await?;
+
+        let target: Option<metadata::Target> = match self.target.as_deref() {
+            Some(s) if s.contains('@') => Some(s.parse()?),
+            Some(s) => Some(format!("{s}@{version}", version = VersionReq::STAR).parse()?),
+            None => None,
+        };
+
+        let target = self.resolve_target(config, &registries, target).await?;
         let source = self.generate_source(&target)?;
 
         let opts = self.new_options(config)?;
         ops::new(&opts, config.cargo())?;
 
-        // `cargo new` prints the given path to the new package, so
-        // do the same here.
-        config
-            .shell()
-            .status("Created", format!("component `{name}` package"))?;
+        config.shell().status(
+            "Created",
+            format!("component `{name}` package", name = name.display),
+        )?;
 
-        self.update_manifest(&out_dir, &registries, &target)?;
+        self.update_manifest(&name, &out_dir, &registries, &target)?;
         self.create_source_file(config, &out_dir, source.as_ref(), &target)?;
-        self.create_targets_file(&out_dir)?;
+        self.create_targets_file(&name, &out_dir)?;
         self.create_editor_settings_file(&out_dir)?;
 
         Ok(())
@@ -196,9 +226,10 @@ impl NewCommand {
 
     fn update_manifest(
         &self,
+        name: &PackageName,
         out_dir: &Path,
         registries: &HashMap<String, Url>,
-        target: &Option<RegistryResolution>,
+        target: &Option<(RegistryResolution, Option<String>)>,
     ) -> Result<()> {
         let manifest_path = out_dir.join("Cargo.toml");
         let manifest = fs::read_to_string(&manifest_path).with_context(|| {
@@ -223,16 +254,31 @@ impl NewCommand {
         let mut component = Table::new();
         component.set_implicit(true);
 
+        component["package"] = value(format!(
+            "{ns}:{name}",
+            ns = name.namespace,
+            name = name.name
+        ));
+
         if !self.is_bin() {
             component["target"] = match target.as_ref() {
-                Some(target) => value(format!(
-                    "{id}@{version}",
-                    id = target.id,
-                    version = target.version
-                )),
-                None => value(InlineTable::from_iter(
-                    [("path", Value::from("wit/world.wit"))].into_iter(),
-                )),
+                Some((resolution, world)) => match world {
+                    Some(world) => value(format!(
+                        "{id}/{world}@{version}",
+                        id = resolution.id,
+                        version = resolution.version
+                    )),
+                    None => value(format!(
+                        "{id}@{version}",
+                        id = resolution.id,
+                        version = resolution.version
+                    )),
+                },
+                None => {
+                    let mut target_deps = Table::new();
+                    target_deps["path"] = value("wit/world.wit");
+                    Item::Table(target_deps)
+                }
             };
         }
 
@@ -272,7 +318,10 @@ impl NewCommand {
         self.bin || !self.lib
     }
 
-    fn generate_source(&self, target: &Option<RegistryResolution>) -> Result<Cow<str>> {
+    fn generate_source(
+        &self,
+        target: &Option<(RegistryResolution, Option<String>)>,
+    ) -> Result<Cow<str>> {
         if self.is_bin() {
             // Return empty source here to avoid creating a new source file
             // As a result, whatever source that was generated by `cargo new` will be kept
@@ -280,13 +329,14 @@ impl NewCommand {
         }
 
         match target {
-            Some(target) => {
-                let generator = SourceGenerator::new(&target.id, &target.path, !self.no_rustfmt);
-                generator.generate(self.world.as_deref()).map(Into::into)
+            Some((resolution, world)) => {
+                let generator =
+                    SourceGenerator::new(&resolution.id, &resolution.path, !self.no_rustfmt);
+                generator.generate(world.as_deref()).map(Into::into)
             }
             None => Ok(r#"struct Component;
 
-impl bindings::Component for Component {
+impl bindings::Example for Component {
     /// Say hello!
     fn hello_world() -> String {
         "Hello, World!".to_string()
@@ -304,20 +354,20 @@ bindings::export!(Component);
         config: &Config,
         out_dir: &Path,
         source: &str,
-        target: &Option<RegistryResolution>,
+        target: &Option<(RegistryResolution, Option<String>)>,
     ) -> Result<()> {
         if source.is_empty() {
             return Ok(());
         }
 
         match target {
-            Some(target) => {
+            Some((resolution, _)) => {
                 config.shell().status(
                     "Generating",
                     format!(
                         "source file for target `{id}` v{version}",
-                        id = target.id,
-                        version = target.version
+                        id = resolution.id,
+                        version = resolution.version
                     ),
                 )?;
             }
@@ -337,7 +387,7 @@ bindings::export!(Component);
         })
     }
 
-    fn create_targets_file(&self, out_dir: &Path) -> Result<()> {
+    fn create_targets_file(&self, name: &PackageName, out_dir: &Path) -> Result<()> {
         if self.is_bin() || self.target.is_some() {
             return Ok(());
         }
@@ -354,11 +404,17 @@ bindings::export!(Component);
 
         fs::write(
             &path,
-            r#"/// An example world for the component to target.
-default world component {
+            format!(
+                r#"package {ns}:{pkg}
+
+/// An example world for the component to target.
+world example {{
     export hello-world: func() -> string
-}                
+}}                
 "#,
+                ns = escape_wit(&name.namespace),
+                pkg = escape_wit(&name.name),
+            ),
         )
         .with_context(|| {
             format!(
@@ -399,24 +455,14 @@ default world component {
         &self,
         config: &Config,
         registries: &HashMap<String, Url>,
-    ) -> Result<Option<RegistryResolution>> {
-        match self.target.as_ref() {
-            Some(target) => {
-                let (id, version) = if target.contains('@') {
-                    let package: metadata::RegistryPackage = target.parse()?;
-                    (package.id, package.version)
-                } else {
-                    (target.as_str().into(), VersionReq::STAR)
-                };
-
+        target: Option<metadata::Target>,
+    ) -> Result<Option<(RegistryResolution, Option<String>)>> {
+        match target {
+            Some(metadata::Target::Package { id, package, world }) => {
                 let mut resolver = DependencyResolver::new(config, registries, None);
-                let dependency = metadata::Dependency::Package(metadata::RegistryPackage {
-                    id,
-                    version,
-                    registry: self.registry.clone(),
-                });
+                let dependency = metadata::Dependency::Package(package);
 
-                resolver.add_dependency("", &dependency, true).await?;
+                resolver.add_dependency(&id, &dependency, true).await?;
 
                 let (target, dependencies) = resolver.resolve().await?;
                 assert_eq!(target.len(), 1);
@@ -427,11 +473,11 @@ default world component {
                     .next()
                     .expect("expected a target resolution")
                 {
-                    DependencyResolution::Registry(resolution) => Ok(Some(resolution)),
+                    DependencyResolution::Registry(resolution) => Ok(Some((resolution, world))),
                     _ => unreachable!(),
                 }
             }
-            None => Ok(None),
+            _ => Ok(None),
         }
     }
 

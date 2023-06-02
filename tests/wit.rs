@@ -32,26 +32,28 @@ async fn it_publishes_a_wit_package() -> Result<()> {
 
     let project = Project::with_root(&root, "foo", "")?;
 
-    let wit = r#"default interface bar {
+    let wit = r#"package foo:bar
+interface baz {
     baz: func() -> string
 }
 
-default world foo {}
+world foo {}
 "#;
 
     fs::write(project.root().join("wit/world.wit"), wit)?;
 
     project
-        .cargo_component("wit publish foo --init")
+        .cargo_component("wit publish foo:bar --init")
         .env("CARGO_COMPONENT_PUBLISH_KEY", test_signing_key())
         .assert()
-        .stderr(contains("Published package `foo` v0.1.0"))
+        .stderr(contains("Published package `foo:bar` v0.1.0"))
         .success();
 
     let project = Project::with_root(&root, "bar", "")?;
 
-    let wit = r#"default world bar {
-    import bar: foo.%world.bar
+    let wit = r#"package bar:baz
+world jam {
+    import foo:bar/baz
 }
 "#;
 
@@ -66,7 +68,7 @@ default world foo {}
             (
                 "dependencies",
                 Value::from(InlineTable::from_iter(
-                    [("foo", Value::from("foo@0.1.0"))].into_iter(),
+                    [("foo:bar", Value::from("0.1.0"))].into_iter(),
                 )),
             ),
         ]
@@ -75,10 +77,10 @@ default world foo {}
     fs::write(manifest_path, doc.to_string())?;
 
     project
-        .cargo_component("wit publish bar --init")
+        .cargo_component("wit publish bar:baz --init")
         .env("CARGO_COMPONENT_PUBLISH_KEY", test_signing_key())
         .assert()
-        .stderr(contains("Published package `bar` v0.1.0"))
+        .stderr(contains("Published package `bar:baz` v0.1.0"))
         .success();
 
     Ok(())

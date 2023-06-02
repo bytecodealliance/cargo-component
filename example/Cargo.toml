@@ -9,6 +9,9 @@ crate-type = ["cdylib"]
 [dependencies]
 wit-bindgen = { version = "0.6.0", features = ["realloc"], default-features = false }
 
+[package.metadata.component]
+package = "example:component"
+
 [package.metadata.component.target]
 path = "wit"
 

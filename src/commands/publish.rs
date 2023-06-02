@@ -155,7 +155,7 @@ impl PublishCommand {
             ),
         };
 
-        let package_name = metadata.section.package.or(self.name.take()).ok_or_else(|| {
+        let package_name = self.name.take().or(metadata.section.package).ok_or_else(|| {
             anyhow!(
                 "package name not specified in manifest `{path}`; use the `--name` option to specify a name",
                 path = package.manifest_path().display(),

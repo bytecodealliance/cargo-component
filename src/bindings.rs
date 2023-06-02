@@ -5,7 +5,7 @@ use crate::{
     metadata::{self, ComponentMetadata, Target},
     registry::PackageDependencyResolution,
 };
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{bail, Context, Result};
 use heck::{ToSnakeCase, ToUpperCamelCase};
 use indexmap::IndexMap;
 use std::{
@@ -21,56 +21,23 @@ use wit_bindgen_rust::Opts;
 use wit_bindgen_rust_lib::to_rust_ident;
 use wit_component::DecodedWasm;
 use wit_parser::{
-    Document, Function, Interface, InterfaceId, Package, PackageId, Resolve, Type, TypeDef,
-    TypeDefKind, TypeId, TypeOwner, UnresolvedPackage, World, WorldId, WorldItem,
+    Function, Interface, Package, PackageName, Resolve, Type, TypeDef, TypeDefKind, TypeId,
+    TypeOwner, UnresolvedPackage, World, WorldId, WorldItem, WorldKey,
 };
 
 pub(crate) const BINDINGS_VERSION: &str = "0.1.0";
 pub(crate) const WIT_BINDGEN_VERSION: &str = "0.6.0";
 
-fn select_world(
-    resolve: &Resolve,
-    id: &metadata::PackageId,
-    package: PackageId,
-    world: Option<&str>,
-) -> Result<WorldId> {
-    // Currently, "default" isn't encodable for worlds, so try to
-    // use `select_world` here, but otherwise fall back to a search
-    match resolve.select_world(package, world) {
-        Ok(world) => Ok(world),
-        Err(_) => {
-            let (document, world) = match world {
-                Some(world) => world
-                    .split_once('.')
-                    .map(|(d, w)| (Some(d), Some(w)))
-                    .unwrap_or((Some(world), None)),
-                None => (None, None),
-            };
-
-            // Resolve the document to use
-            let package = &resolve.packages[package];
-            let document = match document {
-                Some(name) => *package.documents.get(name).ok_or_else(|| {
-                    anyhow!("target package `{id}` does not contain a document named `{name}`")
-                })?,
-                None if package.documents.len() == 1 => package.documents[0],
-                None if package.documents.len() > 1 => bail!("target package `{id}` contains multiple documents; specify the one to use with the `world` field in the manifest file"),
-                None => bail!("target package `{id}` contains no documents"),
-            };
-
-            // Resolve the world to use
-            let document = &resolve.documents[document];
-            match world {
-                Some(name) => Ok(*document.worlds.get(name).ok_or_else(|| {
-                    anyhow!("target package `{id}` does not contain a world named `{name}` in document `{document}`", document = document.name)
-                })?),
-                None if document.default_world.is_some() => Ok(document.default_world.unwrap()),
-                None if document.worlds.len() == 1 => Ok(document.worlds[0]),
-                None if document.worlds.len() > 1 => bail!("target document `{document}` in package `{id}` contains multiple worlds; specify the one to use with the `world` field in the manifest file", document = document.name),
-                None => bail!("target document `{document}` in package `{id}` contains no worlds", document = document.name),
-            }
+fn named_world_key<'a>(resolve: &'a Resolve, orig: &'a WorldKey, prefix: &str) -> WorldKey {
+    let name = match orig {
+        WorldKey::Name(n) => n,
+        WorldKey::Interface(id) => {
+            let iface = &resolve.interfaces[*id];
+            iface.name.as_ref().expect("unnamed interface")
         }
-    }
+    };
+
+    WorldKey::Name(format!("{prefix}-{name}"))
 }
 
 /// A generator for bindings crates.
@@ -198,9 +165,9 @@ impl<'a> BindingsGenerator<'a> {
     pub fn encode_target_world(&self) -> Result<Vec<u8>> {
         wit_component::encode(
             &self.resolve,
-            self.resolve.documents[self.resolve.worlds[self.world].document]
+            self.resolve.worlds[self.world]
                 .package
-                .unwrap(),
+                .context("world has no package")?,
         )
     }
 
@@ -291,13 +258,12 @@ publish = false
         resolution: &PackageDependencyResolution,
     ) -> Result<(Resolve, WorldId, Vec<PathBuf>)> {
         let (mut merged, world_id, deps) = match &resolution.metadata.section.target {
-            Some(Target::Package { package, world }) => {
-                let (merged, world) =
-                    Self::target_package(resolution, &package.id, world.as_deref())?;
+            Some(Target::Package { id, world, .. }) => {
+                let (merged, world) = Self::target_package(resolution, id, world.as_deref())?;
                 (merged, world, Vec::new())
             }
             Some(Target::Local { path, world, .. }) => {
-                Self::target_local_file(resolution, path, world.as_deref())?
+                Self::target_local_path(resolution, path, world.as_deref())?
             }
             None => {
                 let (merged, world) = Self::target_empty_world(resolution);
@@ -306,16 +272,21 @@ publish = false
         };
 
         // Merge all component dependencies as interface imports
-        for (name, dependency) in &resolution.resolutions {
+        for (id, dependency) in &resolution.resolutions {
             match dependency.decode()? {
                 DecodedWasm::WitPackage(_, _) => {
-                    bail!("component dependency `{name}` is not a WebAssembly component")
+                    bail!("component dependency `{id}` is not a WebAssembly component")
                 }
-                DecodedWasm::Component(resolve, id) => {
+                DecodedWasm::Component(mut resolve, component_world_id) => {
+                    // Set the world name as currently it defaults to "root"
+                    // For now, set it to the package name from the id
+                    let world = &mut resolve.worlds[component_world_id];
+                    world.name = id.package_name().to_string();
+
                     let source = merged
                         .merge(resolve)
-                        .with_context(|| format!("failed to merge world of dependency `{name}`"))?
-                        .worlds[id.index()];
+                        .with_context(|| format!("failed to merge world of dependency `{id}`"))?
+                        .worlds[component_world_id.index()];
                     Self::import_world(&mut merged, source, world_id)?;
                 }
             }
@@ -326,7 +297,7 @@ publish = false
 
     fn target_package(
         resolution: &PackageDependencyResolution,
-        id: &metadata::PackageId,
+        id: &metadata::Id,
         world: Option<&str>,
     ) -> Result<(Resolve, WorldId)> {
         // We must have resolved a target package dependency at this point
@@ -341,11 +312,14 @@ publish = false
             DecodedWasm::Component(resolve, _) => resolve,
         };
 
-        let world = select_world(&resolve, id, package, world)?;
+        let world = resolve
+            .select_world(package, world)
+            .with_context(|| format!("failed to select world from target package `{id}`"))?;
+
         Ok((resolve, world))
     }
 
-    fn target_local_file(
+    fn target_local_path(
         resolution: &PackageDependencyResolution,
         path: &Path,
         world: Option<&str>,
@@ -353,39 +327,77 @@ publish = false
         let mut merged = Resolve::default();
 
         // Start by decoding and merging all of the target dependencies
-        let mut dependencies = HashMap::new();
-        for (name, dependency) in &resolution.target_resolutions {
+        let mut dependencies: HashMap<_, Vec<_>> = HashMap::new();
+        for (id, dependency) in &resolution.target_resolutions {
             let (resolve, package) = match dependency.decode()? {
                 DecodedWasm::WitPackage(resolve, package) => (resolve, package),
-                DecodedWasm::Component(..) => bail!("target dependency `{name}` is a WIT package"),
+                DecodedWasm::Component(..) => {
+                    bail!("target dependency `{id}` is not a WIT package")
+                }
             };
-            dependencies.insert(
-                name.clone(),
-                merged
-                    .merge(resolve)
-                    .with_context(|| {
-                        format!("failed to merge world of target dependency `{name}`")
-                    })?
-                    .packages[package.index()],
-            );
+
+            let pkg = &resolve.packages[package];
+            dependencies
+                .entry(PackageName {
+                    namespace: pkg.name.namespace.clone(),
+                    name: pkg.name.name.clone(),
+                    version: None,
+                })
+                .or_default()
+                .push(
+                    merged
+                        .merge(resolve)
+                        .with_context(|| {
+                            format!("failed to merge world of target dependency `{id}`")
+                        })?
+                        .packages[package.index()],
+                );
         }
 
-        // Next parse the local target file, giving it the packages we just merged
-        let (package, deps) = if path.is_dir() {
-            merged.push_dir(path)?
+        let mut unresolved = if path.is_dir() {
+            UnresolvedPackage::parse_dir(path).with_context(|| {
+                format!(
+                    "failed to parse local target from directory `{}`",
+                    path.display()
+                )
+            })?
         } else {
-            (
-                merged
-                    .push(UnresolvedPackage::parse_file(path)?, &dependencies)
-                    .with_context(|| {
-                        format!(
-                            "failed to parse local target `{path}`",
-                            path = path.display()
-                        )
-                    })?,
-                Vec::new(),
-            )
+            UnresolvedPackage::parse_file(path).with_context(|| {
+                format!(
+                    "failed to parse local target `{path}`",
+                    path = path.display()
+                )
+            })?
         };
+
+        unresolved.foreign_deps = unresolved
+            .foreign_deps
+            .into_iter()
+            .map(|(mut k, v)| {
+                // Resolve the foreign dependency against the target dependencies if a
+                // version was not explicitly specified.
+                if k.version.is_none() {
+                    match dependencies.get(&k) {
+                        // Only assign the version if there's exactly one matching package
+                        // Otherwise, let `wit-parser` handle the ambiguity
+                        Some(pkgs) if pkgs.len() == 1 => {
+                            k.version = merged.packages[pkgs[0]].name.version.clone();
+                        }
+                        _ => {}
+                    }
+                }
+
+                Ok((k, v))
+            })
+            .collect::<Result<_>>()?;
+
+        let source_files = unresolved.source_files().map(Path::to_path_buf).collect();
+        let package = merged.push(unresolved).with_context(|| {
+            format!(
+                "failed to merge local target `{path}`",
+                path = path.display()
+            )
+        })?;
 
         let world = merged
             .select_world(package, world)
@@ -402,41 +414,29 @@ publish = false
                 ),
             })?;
 
-        Ok((merged, world, deps))
+        Ok((merged, world, source_files))
     }
 
     fn target_empty_world(resolution: &PackageDependencyResolution) -> (Resolve, WorldId) {
         let mut resolve = Resolve::default();
         let name = resolution.metadata.name.clone();
         let package = resolve.packages.alloc(Package {
-            name: name.clone(),
-            url: None,
-            documents: Default::default(),
-        });
-
-        let document = resolve.documents.alloc(Document {
-            name: name.clone(),
+            name: PackageName {
+                namespace: "component".to_string(),
+                name: name.clone(),
+                version: None,
+            },
             interfaces: Default::default(),
             worlds: Default::default(),
-            default_interface: None,
-            default_world: None,
-            package: Some(package),
         });
 
         let world = resolve.worlds.alloc(World {
-            name: name.clone(),
+            name,
             docs: Default::default(),
             imports: Default::default(),
             exports: Default::default(),
-            document,
+            package: Some(package),
         });
-
-        let pkg = &mut resolve.packages[package];
-        pkg.documents.insert(name.clone(), document);
-
-        let doc = &mut resolve.documents[document];
-        doc.worlds.insert(name, world);
-        doc.default_world = Some(world);
 
         (resolve, world)
     }
@@ -447,41 +447,38 @@ publish = false
         let mut functions = IndexMap::default();
         let mut interfaces = IndexMap::new();
         let name;
-        let document;
 
         {
             let source = &resolve.worlds[source];
             name = source.name.clone();
-            document = source.document;
-            for (name, item) in &source.exports {
+            for (key, item) in &source.exports {
                 match item {
                     WorldItem::Function(f) => {
-                        functions.insert(name.clone(), f.clone());
+                        functions.insert(key.clone().unwrap_name(), f.clone());
                     }
                     WorldItem::Interface(i) => {
-                        interfaces.insert(name.clone(), *i);
+                        interfaces.insert(named_world_key(resolve, key, &name), *i);
                     }
                     WorldItem::Type(t) => {
-                        types.insert(name.clone(), *t);
+                        types.insert(key.clone().unwrap_name(), *t);
                     }
                 }
             }
         }
+
         let target = &mut resolve.worlds[target];
-        for (name, id) in interfaces {
-            let name = format!(
-                "{name}-{iface}",
-                iface = resolve.interfaces[id]
-                    .name
-                    .as_ref()
-                    .ok_or_else(|| anyhow!("interface `{name}` does not have a name"))?
-            );
+        for (key, id) in interfaces {
             if target
                 .imports
-                .insert(name.clone(), WorldItem::Interface(id))
+                .insert(key.clone(), WorldItem::Interface(id))
                 .is_some()
             {
-                bail!("cannot import dependency `{name}` because it conflicts with an import in the target world");
+                let iface = &resolve.interfaces[id];
+                let pkg = &resolve.packages[iface.package.expect("interface has no package")];
+                let id = pkg
+                    .name
+                    .interface_id(iface.name.as_deref().expect("interface has no name"));
+                bail!("cannot import dependency `{id}` because it conflicts with an import in the target world");
             }
         }
 
@@ -491,12 +488,15 @@ publish = false
                 docs: Default::default(),
                 types,
                 functions,
-                document,
+                package: target.package,
             });
 
             if target
                 .imports
-                .insert(name.clone(), WorldItem::Interface(interface))
+                .insert(
+                    WorldKey::Name(name.clone()),
+                    WorldItem::Interface(interface),
+                )
                 .is_some()
             {
                 bail!("cannot import dependency `{name}` because it conflicts with an import in the target world");
@@ -507,12 +507,32 @@ publish = false
     }
 }
 
+fn export_trait_path(resolve: &Resolve, key: &WorldKey) -> String {
+    match key {
+        WorldKey::Name(n) => format!(
+            "bindings::exports::{n}::{camel}",
+            camel = n.to_upper_camel_case()
+        ),
+        WorldKey::Interface(id) => {
+            let iface = &resolve.interfaces[*id];
+            let pkg = &resolve.packages[iface.package.expect("interface should have a package")];
+            let name = iface.name.as_deref().expect("unnamed interface");
+            format!(
+                "bindings::exports::{ns}::{pkg}::{name}::{camel}",
+                ns = pkg.name.namespace,
+                pkg = pkg.name.name,
+                camel = name.to_upper_camel_case()
+            )
+        }
+    }
+}
+
 /// Represents a Rust source code generator for targeting a given wit package.
 ///
 /// The generated source defines a component that will implement the expected
 /// export traits for the given world.
 pub struct SourceGenerator<'a> {
-    id: &'a metadata::PackageId,
+    id: &'a metadata::Id,
     path: &'a Path,
     format: bool,
 }
@@ -522,7 +542,7 @@ impl<'a> SourceGenerator<'a> {
     /// a binary-encoded target wit package.
     ///
     /// If `format` is true, then `cargo fmt` will be run on the generated source.
-    pub fn new(id: &'a metadata::PackageId, path: &'a Path, format: bool) -> Self {
+    pub fn new(id: &'a metadata::Id, path: &'a Path, format: bool) -> Self {
         Self { id, path, format }
     }
 
@@ -537,21 +557,9 @@ impl<'a> SourceGenerator<'a> {
             return Ok(source);
         }
 
-        let interface_names = world
-            .exports
-            .iter()
-            .chain(world.imports.iter())
-            .filter_map(|(name, item)| {
-                if let WorldItem::Interface(i) = item {
-                    Some((*i, to_rust_ident(name)))
-                } else {
-                    None
-                }
-            })
-            .collect::<HashMap<_, _>>();
-
+        let mut export_count = 0;
         let mut function_exports = Vec::new();
-        for (name, item) in &world.exports {
+        for (key, item) in &world.exports {
             match item {
                 WorldItem::Function(f) => {
                     function_exports.push(f);
@@ -560,9 +568,8 @@ impl<'a> SourceGenerator<'a> {
                     let interface = &resolve.interfaces[*i];
                     writeln!(
                         &mut source,
-                        "\nimpl bindings::{module}::{name} for Component {{",
-                        module = to_rust_ident(name),
-                        name = name.to_upper_camel_case(),
+                        "\nimpl {path} for Component {{",
+                        path = export_trait_path(&resolve, key),
                     )
                     .unwrap();
 
@@ -570,12 +577,8 @@ impl<'a> SourceGenerator<'a> {
                         if i > 0 {
                             source.push('\n');
                         }
-                        Self::print_unimplemented_func(
-                            &resolve,
-                            func,
-                            &interface_names,
-                            &mut source,
-                        )?;
+                        Self::print_unimplemented_func(&resolve, func, &mut source)?;
+                        export_count += 1;
                     }
 
                     source.push_str("}\n");
@@ -596,13 +599,16 @@ impl<'a> SourceGenerator<'a> {
                 if i > 0 {
                     source.push('\n');
                 }
-                Self::print_unimplemented_func(&resolve, func, &interface_names, &mut source)?;
+                Self::print_unimplemented_func(&resolve, func, &mut source)?;
+                export_count += 1;
             }
 
             source.push_str("}\n");
         }
 
-        source.push_str("\nbindings::export!(Component);\n");
+        if export_count > 0 {
+            source.push_str("\nbindings::export!(Component);\n");
+        }
 
         if self.format {
             let mut child = Command::new("rustfmt")
@@ -638,7 +644,7 @@ impl<'a> SourceGenerator<'a> {
             )
         })?;
 
-        let decoded = wit_component::decode("target", &bytes).with_context(|| {
+        let decoded = wit_component::decode(&bytes).with_context(|| {
             format!(
                 "failed to decode the content of target package `{id}` path `{path}`",
                 id = self.id,
@@ -648,7 +654,12 @@ impl<'a> SourceGenerator<'a> {
 
         match decoded {
             DecodedWasm::WitPackage(resolve, package) => {
-                let world = select_world(&resolve, self.id, package, world)?;
+                let world = resolve.select_world(package, world).with_context(|| {
+                    format!(
+                        "failed to select world from target package `{id}`",
+                        id = self.id
+                    )
+                })?;
                 Ok((resolve, world))
             }
             DecodedWasm::Component(..) => bail!("target is not a WIT package"),
@@ -658,7 +669,6 @@ impl<'a> SourceGenerator<'a> {
     fn print_unimplemented_func(
         resolve: &Resolve,
         func: &Function,
-        interface_names: &HashMap<InterfaceId, String>,
         source: &mut String,
     ) -> Result<()> {
         // TODO: it would be nice to share the printing of the signature of the function
@@ -670,19 +680,14 @@ impl<'a> SourceGenerator<'a> {
             }
             source.push_str(&to_rust_ident(name));
             source.push_str(": ");
-            Self::print_type(resolve, param, interface_names, source)?;
+            Self::print_type(resolve, param, source)?;
         }
         source.push(')');
         match func.results.len() {
             0 => {}
             1 => {
                 source.push_str(" -> ");
-                Self::print_type(
-                    resolve,
-                    func.results.iter_types().next().unwrap(),
-                    interface_names,
-                    source,
-                )?;
+                Self::print_type(resolve, func.results.iter_types().next().unwrap(), source)?;
             }
             _ => {
                 source.push_str(" -> (");
@@ -690,7 +695,7 @@ impl<'a> SourceGenerator<'a> {
                     if i > 0 {
                         source.push_str(", ");
                     }
-                    Self::print_type(resolve, ty, interface_names, source)?;
+                    Self::print_type(resolve, ty, source)?;
                 }
                 source.push(')');
             }
@@ -699,12 +704,7 @@ impl<'a> SourceGenerator<'a> {
         Ok(())
     }
 
-    fn print_type(
-        resolve: &Resolve,
-        ty: &Type,
-        interface_names: &HashMap<InterfaceId, String>,
-        source: &mut String,
-    ) -> Result<()> {
+    fn print_type(resolve: &Resolve, ty: &Type, source: &mut String) -> Result<()> {
         match ty {
             Type::Bool => source.push_str("bool"),
             Type::U8 => source.push_str("u8"),
@@ -719,41 +719,36 @@ impl<'a> SourceGenerator<'a> {
             Type::Float64 => source.push_str("f64"),
             Type::Char => source.push_str("char"),
             Type::String => source.push_str("String"),
-            Type::Id(id) => Self::print_type_id(resolve, *id, interface_names, source)?,
+            Type::Id(id) => Self::print_type_id(resolve, *id, source)?,
         }
 
         Ok(())
     }
 
-    fn print_type_id(
-        resolve: &Resolve,
-        id: TypeId,
-        interface_names: &HashMap<InterfaceId, String>,
-        source: &mut String,
-    ) -> Result<()> {
+    fn print_type_id(resolve: &Resolve, id: TypeId, source: &mut String) -> Result<()> {
         let ty = &resolve.types[id];
 
         if ty.name.is_some() {
-            Self::print_type_path(ty, interface_names, source);
+            Self::print_type_path(resolve, ty, source);
             return Ok(());
         }
 
         match &ty.kind {
             TypeDefKind::List(ty) => {
                 source.push_str("Vec<");
-                Self::print_type(resolve, ty, interface_names, source)?;
+                Self::print_type(resolve, ty, source)?;
                 source.push('>');
             }
             TypeDefKind::Option(ty) => {
                 source.push_str("Option<");
-                Self::print_type(resolve, ty, interface_names, source)?;
+                Self::print_type(resolve, ty, source)?;
                 source.push('>');
             }
             TypeDefKind::Result(r) => {
                 source.push_str("Result<");
-                Self::print_optional_type(resolve, r.ok.as_ref(), interface_names, source)?;
+                Self::print_optional_type(resolve, r.ok.as_ref(), source)?;
                 source.push_str(", ");
-                Self::print_optional_type(resolve, r.err.as_ref(), interface_names, source)?;
+                Self::print_optional_type(resolve, r.err.as_ref(), source)?;
                 source.push('>');
             }
             TypeDefKind::Variant(_) => {
@@ -765,7 +760,7 @@ impl<'a> SourceGenerator<'a> {
                     if i > 0 {
                         source.push_str(", ");
                     }
-                    Self::print_type(resolve, ty, interface_names, source)?;
+                    Self::print_type(resolve, ty, source)?;
                 }
                 source.push(')');
             }
@@ -783,38 +778,36 @@ impl<'a> SourceGenerator<'a> {
             }
             TypeDefKind::Future(ty) => {
                 source.push_str("Future<");
-                Self::print_optional_type(resolve, ty.as_ref(), interface_names, source)?;
+                Self::print_optional_type(resolve, ty.as_ref(), source)?;
                 source.push('>');
             }
             TypeDefKind::Stream(stream) => {
                 source.push_str("Stream<");
-                Self::print_optional_type(
-                    resolve,
-                    stream.element.as_ref(),
-                    interface_names,
-                    source,
-                )?;
+                Self::print_optional_type(resolve, stream.element.as_ref(), source)?;
                 source.push_str(", ");
-                Self::print_optional_type(resolve, stream.end.as_ref(), interface_names, source)?;
+                Self::print_optional_type(resolve, stream.end.as_ref(), source)?;
                 source.push('>');
             }
-            TypeDefKind::Type(ty) => Self::print_type(resolve, ty, interface_names, source)?,
+            TypeDefKind::Type(ty) => Self::print_type(resolve, ty, source)?,
             TypeDefKind::Unknown => unreachable!(),
         }
 
         Ok(())
     }
 
-    fn print_type_path(
-        ty: &TypeDef,
-        interface_names: &HashMap<InterfaceId, String>,
-        source: &mut String,
-    ) {
+    fn print_type_path(resolve: &Resolve, ty: &TypeDef, source: &mut String) {
         let name = ty.name.as_ref().unwrap().to_upper_camel_case();
 
         if let TypeOwner::Interface(id) = ty.owner {
-            if let Some(path) = interface_names.get(&id) {
-                write!(source, "bindings::{path}::{name}").unwrap();
+            if let Some(pkg) = resolve.interfaces[id].package {
+                let name = &resolve.packages[pkg].name;
+                write!(
+                    source,
+                    "bindings::{ns}::{pkg}::{name}",
+                    ns = name.namespace,
+                    pkg = name.name
+                )
+                .unwrap();
                 return;
             }
         }
@@ -825,11 +818,10 @@ impl<'a> SourceGenerator<'a> {
     fn print_optional_type(
         resolve: &Resolve,
         ty: Option<&Type>,
-        interface_names: &HashMap<InterfaceId, String>,
         source: &mut String,
     ) -> Result<()> {
         match ty {
-            Some(ty) => Self::print_type(resolve, ty, interface_names, source)?,
+            Some(ty) => Self::print_type(resolve, ty, source)?,
             None => source.push_str("()"),
         }
 

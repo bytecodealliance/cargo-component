@@ -1,6 +1,6 @@
 //! Module for component metadata representation in `Cargo.toml`.
 
-use anyhow::{anyhow, bail, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use semver::{Version, VersionReq};
 use serde::{
     de::{self, value::MapAccessDeserializer, IntoDeserializer},
@@ -9,46 +9,75 @@ use serde::{
 use std::{borrow::Cow, collections::HashMap, fmt, path::PathBuf, str::FromStr, time::SystemTime};
 use url::Url;
 
-/// Represents a unique package identifier in a registry.
+/// Represents a component model identifier.
 ///
-/// This identifier is unique within a specific registry.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize, Ord, PartialOrd)]
-#[serde(transparent)]
-pub struct PackageId(String);
+/// In the component model, an identifier is a string composed of a
+/// namespace and a package name, separated by a colon (`:`).
+///
+/// An example of an identifier would be `wasi:http`.
+///
+/// The namespace and package name must be valid WIT identifiers
+/// (i.e. kebab-cased).
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
+pub struct Id {
+    namespace: String,
+    name: String,
+}
 
-impl PackageId {
-    /// Creates a new package id.
-    pub fn new(s: impl Into<String>) -> Self {
-        s.into().into()
+impl Id {
+    /// Returns the namespace of the identifier.
+    pub fn namespace(&self) -> &str {
+        &self.namespace
     }
 
-    /// Gets a string reference of the package id.
-    pub fn as_str(&self) -> &str {
-        &self.0
+    /// Returns the package name of the identifier.
+    pub fn package_name(&self) -> &str {
+        &self.name
     }
 }
 
-impl From<String> for PackageId {
-    fn from(s: String) -> Self {
-        Self(s)
+impl FromStr for Id {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.split_once(':') {
+            Some((ns, name)) => {
+                wit_parser::validate_id(ns)
+                    .with_context(|| format!("invalid package namespace `{ns}`"))?;
+                wit_parser::validate_id(name)
+                    .with_context(|| format!("invalid package name `{name}`"))?;
+
+                Ok(Self {
+                    namespace: ns.into(),
+                    name: name.into(),
+                })
+            }
+            None => bail!("expected package identifier with format `<namespace>:<name>`"),
+        }
     }
 }
 
-impl From<&str> for PackageId {
-    fn from(s: &str) -> Self {
-        Self(s.to_string())
-    }
-}
-
-impl AsRef<str> for PackageId {
-    fn as_ref(&self) -> &str {
-        &self.0
-    }
-}
-
-impl fmt::Display for PackageId {
+impl fmt::Display for Id {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{s}", s = self.0)
+        write!(f, "{ns}:{name}", ns = self.namespace, name = self.name)
+    }
+}
+
+impl Serialize for Id {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for Id {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        Self::from_str(&String::deserialize(deserializer)?).map_err(de::Error::custom)
     }
 }
 
@@ -56,8 +85,10 @@ impl fmt::Display for PackageId {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RegistryPackage {
-    /// The id of package.
-    pub id: PackageId,
+    /// The name of the package.
+    ///
+    /// If not specified, the id from the mapping will be used.
+    pub name: Option<String>,
 
     /// The version requirement of the package.
     pub version: VersionReq,
@@ -72,14 +103,11 @@ impl FromStr for RegistryPackage {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self> {
-        match s.rsplit_once('@') {
-            Some((id, version)) => Ok(Self {
-                id: id.into(),
-                version: version.parse()?,
-                registry: None,
-            }),
-            None => bail!("expected package with format `<package-id>@<version>`"),
-        }
+        Ok(Self {
+            name: None,
+            version: s.parse()?,
+            registry: None,
+        })
     }
 }
 
@@ -131,9 +159,9 @@ impl<'de> Deserialize<'de> for Dependency {
 
                 match (entry.path, entry.package, entry.version, entry.registry) {
                     (Some(path), None, None, None) => Ok(Self::Value::Local(path)),
-                    (None, Some(package), Some(version), registry) => {
+                    (None, name, Some(version), registry) => {
                         Ok(Self::Value::Package(RegistryPackage {
-                            id: package.into(),
+                            name,
                             version,
                             registry,
                         }))
@@ -164,14 +192,16 @@ impl<'de> Deserialize<'de> for Dependency {
 pub enum Target {
     /// The target is a world from a registry package.
     Package {
-        /// The package being targeted.
+        /// The id of the target package (e.g. `wasi:http`).
+        id: Id,
+        /// The registry package being targeted.
         package: RegistryPackage,
         /// The name of the world being targeted.
         ///
         /// [Resolve::select_world][select-world] will be used
         /// to select world.
         ///
-        /// [select-world]: https://docs.rs/wit-parser/0.6.1/wit_parser/struct.Resolve.html#method.select_world
+        /// [select-world]: https://docs.rs/wit-parser/latest/wit_parser/struct.Resolve.html#method.select_world
         world: Option<String>,
     },
     /// The target is a world from a local wit document.
@@ -183,23 +213,58 @@ pub enum Target {
         /// [Resolve::select_world][select-world] will be used
         /// to select world.
         ///
-        /// [select-world]: https://docs.rs/wit-parser/0.6.1/wit_parser/struct.Resolve.html#method.select_world
+        /// [select-world]: https://docs.rs/wit-parser/latest/wit_parser/struct.Resolve.html#method.select_world
         world: Option<String>,
         /// The dependencies of the wit document being targeted.
-        dependencies: HashMap<String, Dependency>,
+        dependencies: HashMap<Id, Dependency>,
     },
 }
 
 impl Target {
     /// Gets the dependencies of the target.
-    pub fn dependencies(&self) -> Cow<HashMap<String, Dependency>> {
+    pub fn dependencies(&self) -> Cow<HashMap<Id, Dependency>> {
         match self {
-            Self::Package { package, .. } => Cow::Owned(HashMap::from_iter([(
-                String::new(),
+            Self::Package { id, package, .. } => Cow::Owned(HashMap::from_iter([(
+                id.clone(),
                 Dependency::Package(package.clone()),
             )])),
             Self::Local { dependencies, .. } => Cow::Borrowed(dependencies),
         }
+    }
+}
+
+impl FromStr for Target {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self> {
+        let (id, version) = match s.split_once('@') {
+            Some((id, version)) => (
+                id,
+                version
+                    .parse()
+                    .with_context(|| format!("invalid target version `{version}`"))?,
+            ),
+            None => bail!("expected target format `<package-id>[/<world>]@<version>`"),
+        };
+
+        let (id, world) = match id.split_once('/') {
+            Some((id, world)) => {
+                wit_parser::validate_id(world)
+                    .with_context(|| format!("invalid target world name `{world}`"))?;
+                (id, Some(world.to_string()))
+            }
+            None => (id, None),
+        };
+
+        Ok(Self::Package {
+            id: id.parse()?,
+            package: RegistryPackage {
+                name: None,
+                version,
+                registry: None,
+            },
+            world,
+        })
     }
 }
 
@@ -221,10 +286,7 @@ impl<'de> Deserialize<'de> for Target {
             where
                 E: de::Error,
             {
-                Ok(Self::Value::Package {
-                    package: s.parse().map_err(de::Error::custom)?,
-                    world: None,
-                })
+                Target::from_str(s).map_err(de::Error::custom)
             }
 
             fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
@@ -239,7 +301,7 @@ impl<'de> Deserialize<'de> for Target {
                     world: Option<String>,
                     registry: Option<String>,
                     path: Option<PathBuf>,
-                    dependencies: HashMap<String, Dependency>,
+                    dependencies: HashMap<Id, Dependency>,
                 }
 
                 let entry = Entry::deserialize(MapAccessDeserializer::new(map))?;
@@ -255,8 +317,9 @@ impl<'de> Deserialize<'de> for Target {
                         }
 
                         Ok(Target::Package {
+                            id: package.parse().map_err(de::Error::custom)?,
                             package: RegistryPackage {
-                                id: package.into(),
+                                name: None,
                                 version: entry
                                     .version
                                     .ok_or_else(|| de::Error::missing_field("version"))?,
@@ -303,7 +366,7 @@ pub struct ComponentSection {
     /// The world targeted by the component.
     pub target: Option<Target>,
     /// The dependencies of the component.
-    pub dependencies: HashMap<String, Dependency>,
+    pub dependencies: HashMap<Id, Dependency>,
     /// The registries to use for the component.
     pub registries: HashMap<String, Url>,
 }

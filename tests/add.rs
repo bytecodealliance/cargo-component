@@ -18,25 +18,11 @@ fn help() {
 }
 
 #[test]
-fn requires_name_and_package() {
+fn requires_package() {
     cargo_component("add")
         .assert()
-        .stderr(contains("cargo component add <NAME> <PACKAGE>"))
+        .stderr(contains("cargo component add <PACKAGE>"))
         .failure();
-}
-
-#[test]
-fn validate_name_does_not_conflict_with_package() -> Result<()> {
-    let project = Project::new("foo")?;
-    project
-        .cargo_component("add foo bar")
-        .assert()
-        .stderr(contains(
-            "cannot add dependency `foo` as it conflicts with the component's package name",
-        ))
-        .failure();
-
-    Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
@@ -48,9 +34,9 @@ async fn validate_the_package_exists() -> Result<()> {
     let project = Project::with_root(&root, "foo", "")?;
 
     project
-        .cargo_component("add bar foo/bar")
+        .cargo_component("add foo:bar")
         .assert()
-        .stderr(contains("package `foo/bar` was not found"))
+        .stderr(contains("package `foo:bar` does not exist"))
         .failure();
 
     Ok(())
@@ -62,24 +48,24 @@ async fn validate_the_version_exists() -> Result<()> {
     let (_server, config) = spawn_server(&root).await?;
     config.write_to_file(&root.join("warg-config.json"))?;
 
-    publish_component(&config, "foo/bar", "1.1.0", "(component)", true).await?;
+    publish_component(&config, "foo:bar", "1.1.0", "(component)", true).await?;
 
     let project = Project::with_root(&root, "foo", "")?;
 
     project
-        .cargo_component("add bar foo/bar")
+        .cargo_component("add foo:bar")
         .assert()
-        .stderr(contains("Added dependency `bar` with version `1.1.0`"))
+        .stderr(contains("Added dependency `foo:bar` with version `1.1.0`"))
         .success();
 
     let manifest = fs::read_to_string(project.root().join("Cargo.toml"))?;
-    assert!(contains(r#"bar = "foo/bar@1.1.0""#).eval(&manifest));
+    assert!(contains(r#""foo:bar" = "1.1.0""#).eval(&manifest));
 
     project
-        .cargo_component("add --version 2.0.0 baz foo/bar")
+        .cargo_component("add --version 2.0.0 --id foo:bar2 foo:bar")
         .assert()
         .stderr(contains(
-            "component package `foo/bar` has no release matching version requirement `^2.0.0`",
+            "component registry package `foo:bar` has no release matching version requirement `^2.0.0`",
         ))
         .failure();
 
@@ -92,14 +78,14 @@ fn checks_for_duplicate_dependencies() -> Result<()> {
     let manifest_path = project.root().join("Cargo.toml");
     let manifest = fs::read_to_string(&manifest_path)?;
     let mut doc: Document = manifest.parse()?;
-    doc["package"]["metadata"]["component"]["dependencies"]["bar"] = value("foo/bar@1.2.3");
+    doc["package"]["metadata"]["component"]["dependencies"]["foo:bar"] = value("1.2.3");
     fs::write(manifest_path, doc.to_string())?;
 
     project
-        .cargo_component("add bar foo/bar")
+        .cargo_component("add foo:bar")
         .assert()
         .stderr(contains(
-            "cannot add dependency `bar` as it conflicts with an existing dependency",
+            "cannot add dependency `foo:bar` as it conflicts with an existing dependency",
         ))
         .failure();
 
@@ -112,20 +98,22 @@ async fn prints_modified_manifest_for_dry_run() -> Result<()> {
     let (_server, config) = spawn_server(&root).await?;
     config.write_to_file(&root.join("warg-config.json"))?;
 
-    publish_component(&config, "foo/bar", "1.2.3", "(component)", true).await?;
+    publish_component(&config, "foo:bar", "1.2.3", "(component)", true).await?;
 
     let project = Project::with_root(&root, "foo", "")?;
 
     project
-        .cargo_component("add --dry-run bar foo/bar")
+        .cargo_component("add --dry-run foo:bar")
         .assert()
-        .stderr(contains(r#"Added dependency `bar` with version `1.2.3`"#))
+        .stderr(contains(
+            r#"Added dependency `foo:bar` with version `1.2.3`"#,
+        ))
         .success();
 
     let manifest = fs::read_to_string(project.root().join("Cargo.toml"))?;
 
     // Assert the dependency was added to the manifest
-    assert!(!contains(r#"bar = "foo/baz@1.2.3""#).eval(&manifest));
+    assert!(!contains(r#"\"foo:bar\" = "1.2.3""#).eval(&manifest));
 
     Ok(())
 }

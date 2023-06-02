@@ -89,37 +89,39 @@ This design proposes the following tables in `Cargo.toml`:
 
   Each entry in the table must reference a WebAssembly component.
 
-  An import will be added for each component dependency in the world that the 
-  component targets.
+  A named import will be added for each component dependency in the world that 
+  the component targets.
   
   The dependencies may come from a component registry or local components.
 
   Specifying dependencies from a registry is done in the general form of:
 
   ```toml
-  name = { package = "<package-id>", version = "<version>", registry = "<registry>" }
+  id = { package = "<id>", version = "<version>", registry = "<registry>" }
   ```
 
   The `registry` field is optional and defaults to `default` (see the `[package.metadata.component.registries]`
   table below).
 
   As packages in a component registry are namespaced (unlike Rust crate 
-  registries), the shorthand form differs from what is supported by `cargo`:
+  registries), package ids must be quoted.
+
+  For example:
 
   ```toml
-  name = "<package-id>@<version>"
+  "my:component" = "0.1.0"
   ```
 
   Which is equivalent to:
 
   ```toml
-  name = { package = "<package-id>", version = "<version>" }
+  "my:component" = { package = "my:component", version = "0.1.0" }
   ```
 
   Local components are specified using the `path` field:
 
   ```toml
-  name = { path = "<path>" }
+  id = { path = "<path>" }
   ```
 
   In the future, it may be possible to specify a path to a directory containing 
@@ -147,25 +149,13 @@ This design proposes the following tables in `Cargo.toml`:
 
   ```toml
   [package.metadata.component.dependencies]
-  foo = { package = "ns/foo", version = "0.1.0", registry = "my-registry" }
+  "foo:bar" = { package = "foo:bar", version = "0.1.0", registry = "my-registry" }
   ```
 
   The `default` name is used when no `registry` field is specified in a
   dependency. Therefore, specifying a registry with name `default` will 
   override the built-in default in `cargo-component` (expected to be a 
   future Bytecode Alliance component registry instance).
-
-  A local filesystem registry (i.e. a directory containing vendored packages 
-  and their package logs) may be specified using the `path` field of a registry 
-  entry:
-
-  ```toml
-  name = { path = "<path>" }
-  ```
-
-  Local filesystem registries will be the first supported registry 
-  implementation in `cargo-component` while the implementation of 
-  component registries is still in progress.
 
   It should be possible to specify the registries at the workspace root `Cargo.toml`
   as well, allowing for a single set of registries to be used across a 
@@ -185,14 +175,16 @@ You may use a shorthand form of specifying a target as follows:
 
 ```toml
 [package.metadata.component]
-target = "<package-id>@<version>"
+target = "<package-id>[/<world>]@<version>"
 ```
 
 This is equivalent to:
 
 ```toml
-[package.metadata.component]
-target = { package = "<package-id>", version = "<version>" }
+[package.metadata.component.target]
+package = "<package-id>"
+version = "<version>"
+world = "<world>" # optional
 ```
 
 The supported fields of `target` when referencing a registry package are:
@@ -215,7 +207,7 @@ the WIT package as defined by [`Resolve::select_world`][select-world].
 
 The referenced package may be either a WIT package or a component.
 
-[select-world]: https://docs.rs/wit-parser/0.6.1/wit_parser/struct.Resolve.html#method.select_world
+[select-world]: https://docs.rs/wit-parser/latest/wit_parser/struct.Resolve.html#method.select_world
 
 #### Targeting a local WIT document
 
@@ -227,7 +219,7 @@ path = "<path>"
 world = "<world>"
 
 [package.metadata.component.target.dependencies]
-"<name>" = "<package-id>@<version>" # or any of the other forms of specifying a dependency
+"<package-id>" = "<version>" # or any of the other forms of specifying a dependency
 
 # ...
 ```
@@ -263,8 +255,8 @@ version = "1.2.3"
 # Rust crate dependencies here
 
 [package.metadata.component]
-package = "my-org/my-component"
-target = { package = "webassembly/wasi", version = "1.2.3", world = "cli.command" }
+package = "my-org:my-component"
+target = "wasi:cli/command@1.2.3"
 
 [package.metadata.component.dependencies]
 ```
@@ -291,12 +283,12 @@ version = "1.2.3"
 # Rust crate dependencies here
 
 [package.metadata.component]
-package = "my-org/my-component"
-target = { package = "webassembly/wasi", version = "1.2.3", world = "cli.command" }
+package = "my-org:my-component"
+target = "wasi:cli/command@1.2.3"
 
 [package.metadata.component.dependencies]
-regex = "fancy-components/regex@1.0.0"
-transcoder = "fancy-components/transcoder@1.0.0"
+"fancy-components:regex" = "1.0.0"
+"fancy-components:transcoder" = "1.0.0"
 ```
 
 In this example, the component still targets the WASI command world as above.
@@ -327,23 +319,25 @@ version = "1.2.3"
 # Rust crate dependencies here
 
 [package.metadata.component]
-package = "my-org/my-component"
+package = "my-org:my-component"
 
 [package.metadata.component.target]
 path = "wit"
 
 [package.metadata.component.target.dependencies]
-wasi = "webassembly/wasi@1.2.3"
+"wasi:cli" = "1.2.3"
 
 [package.metadata.component.dependencies]
-regex = "fancy-components/regex@1.0.0"
-transcoder = "fancy-components/transcoder@1.0.0"
+"fancy-components:regex" = "1.0.0"
+"fancy-components:transcoder" = "1.0.0"
 ```
 An example `wit/component.wit`:
 
 ```wit
-default world my-component {
-  include wasi.command # a theoretical syntax for including a world in another
+package my-org:my-component
+
+world my-world {
+  include wasi:cli/command // a theoretical syntax for including a world in another
   export parse: func(x: string) -> result<_, string>
 }
 ```
@@ -352,7 +346,7 @@ The resulting type for this component will be the same as the previous example,
 but it will also export a `parse` function of type `(string) -> result<_, string>`
 as specified in the world.
 
-The WIT document package name of `wasi` maps directly to the name of the 
+The WIT document package name of `wasi:cli` maps directly to the name of the 
 dependency in `[package.metadata.component.target.dependencies]`.
 
 ### Exporting only functions from a component
@@ -368,14 +362,18 @@ version = "1.2.3"
 # Rust crate dependencies here
 
 [package.metadata.component]
-package = "my-org/my-component"
-target = { path = "wit" }
+package = "my-org:my-component"
+
+[package.metadata.component.target]
+path = "wit"
 ```
 
 An example `wit/component.wit`:
 
 ```wit
-default world my-component {
+package my-org:my-component
+
+world my-world {
   export greet: func(name: string) -> string
 }
 ```

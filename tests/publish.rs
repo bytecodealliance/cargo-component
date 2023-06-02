@@ -24,9 +24,10 @@ async fn it_publishes_a_component() -> Result<()> {
 
     publish_wit(
         &config,
-        "world",
+        "my:world",
         "1.0.0",
-        r#"default world foo {
+        r#"package my:%world@1.0.0
+world foo {
     import foo: func() -> string
     export bar: func() -> string
 }"#,
@@ -34,13 +35,13 @@ async fn it_publishes_a_component() -> Result<()> {
     )
     .await?;
 
-    let project = Project::with_root(&root, "foo", "--target world")?;
+    let project = Project::with_root(&root, "foo", "--target my:world")?;
 
     project
-        .cargo_component("publish --name foo --init")
+        .cargo_component("publish --name test:foo --init")
         .env("CARGO_COMPONENT_PUBLISH_KEY", test_signing_key())
         .assert()
-        .stderr(contains("Published package `foo` v0.1.0"))
+        .stderr(contains("Published package `test:foo` v0.1.0"))
         .success();
 
     validate_component(&project.release_wasm("foo"))?;
@@ -56,9 +57,10 @@ async fn it_fails_if_package_does_not_exist() -> Result<()> {
 
     publish_wit(
         &config,
-        "world",
+        "my:world",
         "1.0.0",
-        r#"default world foo {
+        r#"package my:%world@1.0.0
+world foo {
     import foo: func() -> string
     export bar: func() -> string
 }"#,
@@ -66,13 +68,13 @@ async fn it_fails_if_package_does_not_exist() -> Result<()> {
     )
     .await?;
 
-    let project = Project::with_root(&root, "foo", "--target world")?;
+    let project = Project::with_root(&root, "foo", "--target my:world")?;
 
     project
-        .cargo_component("publish --name foo")
+        .cargo_component("publish --name test:foo")
         .env("CARGO_COMPONENT_PUBLISH_KEY", test_signing_key())
         .assert()
-        .stderr(contains("error: package `foo` was not found"))
+        .stderr(contains("error: package `test:foo` does not exist"))
         .failure();
 
     Ok(())
@@ -86,32 +88,33 @@ async fn it_publishes_a_dependency() -> Result<()> {
 
     publish_wit(
         &config,
-        "world",
+        "my:world",
         "1.0.0",
-        r#"default world foo {
+        r#"package my:%world@1.0.0 
+world foo {
     export bar: func() -> string
 }"#,
         true,
     )
     .await?;
 
-    let project = Project::with_root(&root, "foo", "--target world")?;
+    let project = Project::with_root(&root, "foo", "--target my:world/foo")?;
 
     project
-        .cargo_component("publish --name test/foo --init")
+        .cargo_component("publish --name test:foo --init")
         .env("CARGO_COMPONENT_PUBLISH_KEY", test_signing_key())
         .assert()
-        .stderr(contains("Published package `test/foo` v0.1.0"))
+        .stderr(contains("Published package `test:foo` v0.1.0"))
         .success();
 
     validate_component(&project.release_wasm("foo"))?;
 
-    let project = Project::with_root(&root, "bar", "--target world")?;
+    let project = Project::with_root(&root, "bar", "--target my:world")?;
 
     project
-        .cargo_component("add foo test/foo")
+        .cargo_component("add test:foo")
         .assert()
-        .stderr(contains("Added dependency `foo` with version `0.1.0`"))
+        .stderr(contains("Added dependency `test:foo` with version `0.1.0`"))
         .success();
 
     let source = r#"use bindings::Foo;
@@ -127,10 +130,10 @@ bindings::export!(Component);
     fs::write(project.root().join("src/lib.rs"), source)?;
 
     project
-        .cargo_component("publish --name test/bar --init")
+        .cargo_component("publish --name test:bar --init")
         .env("CARGO_COMPONENT_PUBLISH_KEY", test_signing_key())
         .assert()
-        .stderr(contains("Published package `test/bar` v0.1.0"))
+        .stderr(contains("Published package `test:bar` v0.1.0"))
         .success();
 
     validate_component(&project.release_wasm("bar"))?;
