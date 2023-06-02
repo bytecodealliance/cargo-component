@@ -279,9 +279,9 @@ publish = false
                 }
                 DecodedWasm::Component(mut resolve, component_world_id) => {
                     // Set the world name as currently it defaults to "root"
-                    // For now, set it to the name used in the id
+                    // For now, set it to the package name from the id
                     let world = &mut resolve.worlds[component_world_id];
-                    world.name = id.name().to_string();
+                    world.name = id.package_name().to_string();
 
                     let source = merged
                         .merge(resolve)

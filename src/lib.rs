@@ -621,8 +621,6 @@ pub async fn update_lockfile(
 
         let new_pkg = &new_lock_file.packages[new_pkg_index];
         for old_ver in &old_pkg.versions {
-            println!("searching {v:?}", v = new_pkg.versions);
-            println!("with {v:?}", v = old_ver.key());
             let new_ver_index = new_pkg
                 .versions
                 .binary_search_by_key(&old_ver.key(), LockedPackageVersion::key)

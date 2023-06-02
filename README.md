@@ -187,7 +187,7 @@ This will create a `wit/world.wit` file describing the world that the
 component will target:
 
 ```wit
-package component:example
+package my-org:my-component
 
 /// An example world for the component to target.
 world example {

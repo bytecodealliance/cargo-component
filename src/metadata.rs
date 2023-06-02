@@ -10,6 +10,14 @@ use std::{borrow::Cow, collections::HashMap, fmt, path::PathBuf, str::FromStr, t
 use url::Url;
 
 /// Represents a component model identifier.
+///
+/// In the component model, an identifier is a string composed of a
+/// namespace and a package name, separated by a colon (`:`).
+///
+/// An example of an identifier would be `wasi:http`.
+///
+/// The namespace and package name must be valid WIT identifiers
+/// (i.e. kebab-cased).
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Ord, PartialOrd)]
 pub struct Id {
     namespace: String,
@@ -22,8 +30,8 @@ impl Id {
         &self.namespace
     }
 
-    /// Returns the name of the identifier.
-    pub fn name(&self) -> &str {
+    /// Returns the package name of the identifier.
+    pub fn package_name(&self) -> &str {
         &self.name
     }
 }

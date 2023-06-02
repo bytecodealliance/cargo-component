@@ -336,7 +336,7 @@ An example `wit/component.wit`:
 ```wit
 package my-org:my-component
 
-world my-component {
+world my-world {
   include wasi:cli/command // a theoretical syntax for including a world in another
   export parse: func(x: string) -> result<_, string>
 }
@@ -373,7 +373,7 @@ An example `wit/component.wit`:
 ```wit
 package my-org:my-component
 
-world my-component {
+world my-world {
   export greet: func(name: string) -> string
 }
 ```
