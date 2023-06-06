@@ -26,6 +26,7 @@ use warg_client::{
 };
 use warg_crypto::hash::AnyHash;
 use wit_component::DecodedWasm;
+use wit_parser::UnresolvedPackage;
 
 /// The name of the default registry.
 pub const DEFAULT_REGISTRY_NAME: &str = "default";
@@ -413,6 +414,22 @@ impl DependencyResolution {
                 path = self.path().display()
             )
         })?;
+
+        if &bytes[0..4] != b"\0asm" {
+            // If the dependency isn't a wasm file, assume it's a wit file to parse as a package.
+            let mut resolve = wit_parser::Resolve::new();
+            let pkg = resolve.push(UnresolvedPackage::parse(
+                self.path(),
+                std::str::from_utf8(&bytes).with_context(|| {
+                    format!(
+                        "dependency `{path}` is not UTF-8 encoded",
+                        path = self.path().display()
+                    )
+                })?,
+            )?)?;
+
+            return Ok((DecodedWasm::WitPackage(resolve, pkg), Vec::new()));
+        }
 
         Ok((
             wit_component::decode(&bytes).with_context(|| {

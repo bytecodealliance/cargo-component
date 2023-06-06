@@ -215,7 +215,7 @@ fn it_builds_with_local_wit_deps() -> Result<()> {
 
     let mut dependencies = Table::new();
     dependencies["foo:bar"]["path"] = value("wit/deps/foo-bar");
-    dependencies["bar:baz"]["path"] = value("wit/deps/bar-baz");
+    dependencies["bar:baz"]["path"] = value("wit/deps/bar-baz/qux.wit");
 
     doc["package"]["metadata"]["component"]["target"]["dependencies"] = Item::Table(dependencies);
     fs::write(manifest_path, doc.to_string())?;
@@ -223,9 +223,7 @@ fn it_builds_with_local_wit_deps() -> Result<()> {
     // Create the foo-bar wit package
     fs::create_dir_all(project.root().join("wit/deps/foo-bar/deps/baz-qux"))?;
     fs::write(
-        project
-            .root()
-            .join("wit/deps/foo-bar/deps/baz-qux/cakes.wit"),
+        project.root().join("wit/deps/foo-bar/deps/baz-qux/qux.wit"),
         "package baz:qux
 
 interface qux {
@@ -265,15 +263,16 @@ world example {
 
     fs::write(
         project.root().join("src/lib.rs"),
-        "struct Component;
+        "use bindings::exports::{foo::bar::baz::{Baz, Ty}, bar::baz::qux::Qux};
+struct Component;
 
-impl bindings::exports::foo::bar::baz::Baz for Component {
-    fn baz() -> bindings::exports::foo::bar::baz::Ty {
+impl Baz for Component {
+    fn baz() -> Ty {
         todo!()
     }
 }
 
-impl bindings::exports::bar::baz::qux::Qux for Component {
+impl Qux for Component {
     fn qux() {
         todo!()
     }
