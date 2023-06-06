@@ -398,7 +398,14 @@ impl DependencyResolution {
     }
 
     /// Decodes the resolved dependency.
-    pub fn decode(&self) -> Result<DecodedWasm> {
+    pub fn decode(&self) -> Result<(DecodedWasm, Vec<PathBuf>)> {
+        // If the dependency path is a directory, assume it contains wit to parse as a package.
+        if self.path().is_dir() {
+            let mut resolve = wit_parser::Resolve::new();
+            let (pkg, deps) = resolve.push_dir(self.path())?;
+            return Ok((DecodedWasm::WitPackage(resolve, pkg), deps));
+        }
+
         let bytes = fs::read(self.path()).with_context(|| {
             format!(
                 "failed to read content of dependency `{id}` at path `{path}`",
@@ -407,13 +414,16 @@ impl DependencyResolution {
             )
         })?;
 
-        wit_component::decode(&bytes).with_context(|| {
-            format!(
-                "failed to decode content of dependency `{id}` at path `{path}`",
-                id = self.id(),
-                path = self.path().display()
-            )
-        })
+        Ok((
+            wit_component::decode(&bytes).with_context(|| {
+                format!(
+                    "failed to decode content of dependency `{id}` at path `{path}`",
+                    id = self.id(),
+                    path = self.path().display()
+                )
+            })?,
+            Vec::new(),
+        ))
     }
 }
 

@@ -257,10 +257,9 @@ publish = false
     fn create_target_world(
         resolution: &PackageDependencyResolution,
     ) -> Result<(Resolve, WorldId, Vec<PathBuf>)> {
-        let (mut merged, world_id, deps) = match &resolution.metadata.section.target {
+        let (mut merged, world_id, mut deps) = match &resolution.metadata.section.target {
             Some(Target::Package { id, world, .. }) => {
-                let (merged, world) = Self::target_package(resolution, id, world.as_deref())?;
-                (merged, world, Vec::new())
+                Self::target_package(resolution, id, world.as_deref())?
             }
             Some(Target::Local { path, world, .. }) => {
                 Self::target_local_path(resolution, path, world.as_deref())?
@@ -273,7 +272,8 @@ publish = false
 
         // Merge all component dependencies as interface imports
         for (id, dependency) in &resolution.resolutions {
-            match dependency.decode()? {
+            let (decoded, additional) = dependency.decode()?;
+            match decoded {
                 DecodedWasm::WitPackage(_, _) => {
                     bail!("component dependency `{id}` is not a WebAssembly component")
                 }
@@ -290,6 +290,8 @@ publish = false
                     Self::import_world(&mut merged, source, world_id)?;
                 }
             }
+
+            deps.extend(additional);
         }
 
         Ok((merged, world_id, deps))
@@ -299,13 +301,13 @@ publish = false
         resolution: &PackageDependencyResolution,
         id: &metadata::Id,
         world: Option<&str>,
-    ) -> Result<(Resolve, WorldId)> {
+    ) -> Result<(Resolve, WorldId, Vec<PathBuf>)> {
         // We must have resolved a target package dependency at this point
         assert_eq!(resolution.target_resolutions.len(), 1);
 
         // Decode the target package dependency
         let dependency = resolution.target_resolutions.values().next().unwrap();
-        let decoded = dependency.decode()?;
+        let (decoded, deps) = dependency.decode()?;
         let package = decoded.package();
         let resolve = match decoded {
             DecodedWasm::WitPackage(resolve, _) => resolve,
@@ -316,7 +318,7 @@ publish = false
             .select_world(package, world)
             .with_context(|| format!("failed to select world from target package `{id}`"))?;
 
-        Ok((resolve, world))
+        Ok((resolve, world, deps))
     }
 
     fn target_local_path(
@@ -328,13 +330,17 @@ publish = false
 
         // Start by decoding and merging all of the target dependencies
         let mut dependencies: HashMap<_, Vec<_>> = HashMap::new();
+        let mut deps = Vec::new();
         for (id, dependency) in &resolution.target_resolutions {
-            let (resolve, package) = match dependency.decode()? {
+            let (decoded, additional) = dependency.decode()?;
+            let (resolve, package) = match decoded {
                 DecodedWasm::WitPackage(resolve, package) => (resolve, package),
                 DecodedWasm::Component(..) => {
                     bail!("target dependency `{id}` is not a WIT package")
                 }
             };
+
+            deps.extend(additional);
 
             let pkg = &resolve.packages[package];
             dependencies
@@ -391,7 +397,7 @@ publish = false
             })
             .collect::<Result<_>>()?;
 
-        let source_files = unresolved.source_files().map(Path::to_path_buf).collect();
+        deps.extend(unresolved.source_files().map(Path::to_path_buf));
         let package = merged.push(unresolved).with_context(|| {
             format!(
                 "failed to merge local target `{path}`",
@@ -414,7 +420,7 @@ publish = false
                 ),
             })?;
 
-        Ok((merged, world, source_files))
+        Ok((merged, world, deps))
     }
 
     fn target_empty_world(resolution: &PackageDependencyResolution) -> (Resolve, WorldId) {
