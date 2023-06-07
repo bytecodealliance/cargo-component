@@ -4,7 +4,7 @@ use assert_cmd::prelude::*;
 use cargo_component::registry::LOCK_FILE_NAME;
 use predicates::{prelude::PredicateBooleanExt, str::contains};
 use std::fs;
-use toml_edit::{value, Document};
+use toml_edit::{value, Document, Item, Table};
 
 mod support;
 
@@ -176,7 +176,6 @@ fn it_regenerates_bindings_if_wit_changed() -> Result<()> {
     let manifest_path = project.root().join("Cargo.toml");
     let manifest = fs::read_to_string(&manifest_path)?;
     let mut doc: Document = manifest.parse()?;
-    doc["package"]["metadata"]["component"]["target"]["path"] = value("wit");
     doc["package"]["metadata"]["component"]["target"]["world"] = value("example");
     fs::write(manifest_path, doc.to_string())?;
 
@@ -201,6 +200,94 @@ fn it_regenerates_bindings_if_wit_changed() -> Result<()> {
         .assert()
         .stderr(contains("Generating bindings"))
         .success();
+
+    Ok(())
+}
+
+#[test]
+fn it_builds_with_local_wit_deps() -> Result<()> {
+    let project = Project::new("foo")?;
+
+    let manifest_path = project.root().join("Cargo.toml");
+    let manifest = fs::read_to_string(&manifest_path)?;
+    let mut doc: Document = manifest.parse()?;
+    doc["package"]["metadata"]["component"]["target"]["path"] = value("wit");
+
+    let mut dependencies = Table::new();
+    dependencies["foo:bar"]["path"] = value("wit/deps/foo-bar");
+    dependencies["bar:baz"]["path"] = value("wit/deps/bar-baz/qux.wit");
+
+    doc["package"]["metadata"]["component"]["target"]["dependencies"] = Item::Table(dependencies);
+    fs::write(manifest_path, doc.to_string())?;
+
+    // Create the foo-bar wit package
+    fs::create_dir_all(project.root().join("wit/deps/foo-bar/deps/baz-qux"))?;
+    fs::write(
+        project.root().join("wit/deps/foo-bar/deps/baz-qux/qux.wit"),
+        "package baz:qux
+
+interface qux {
+    type ty = u32
+}",
+    )?;
+
+    fs::write(
+        project.root().join("wit/deps/foo-bar/bar.wit"),
+        "package foo:bar
+
+interface baz {
+    use baz:qux/qux.{ty}
+    baz: func() -> ty
+}",
+    )?;
+
+    fs::create_dir_all(project.root().join("wit/deps/bar-baz"))?;
+
+    fs::write(
+        project.root().join("wit/deps/bar-baz/qux.wit"),
+        "package bar:baz
+interface qux {
+    qux: func()
+}",
+    )?;
+
+    fs::write(
+        project.root().join("wit/world.wit"),
+        "package component:foo
+
+world example {
+    export foo:bar/baz
+    export bar:baz/qux
+}",
+    )?;
+
+    fs::write(
+        project.root().join("src/lib.rs"),
+        "use bindings::exports::{foo::bar::baz::{Baz, Ty}, bar::baz::qux::Qux};
+struct Component;
+
+impl Baz for Component {
+    fn baz() -> Ty {
+        todo!()
+    }
+}
+
+impl Qux for Component {
+    fn qux() {
+        todo!()
+    }
+}
+
+bindings::export!(Component);",
+    )?;
+
+    project
+        .cargo_component("build")
+        .assert()
+        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .success();
+
+    validate_component(&project.debug_wasm("foo"))?;
 
     Ok(())
 }

@@ -26,6 +26,7 @@ use warg_client::{
 };
 use warg_crypto::hash::AnyHash;
 use wit_component::DecodedWasm;
+use wit_parser::UnresolvedPackage;
 
 /// The name of the default registry.
 pub const DEFAULT_REGISTRY_NAME: &str = "default";
@@ -398,7 +399,14 @@ impl DependencyResolution {
     }
 
     /// Decodes the resolved dependency.
-    pub fn decode(&self) -> Result<DecodedWasm> {
+    pub fn decode(&self) -> Result<(DecodedWasm, Vec<PathBuf>)> {
+        // If the dependency path is a directory, assume it contains wit to parse as a package.
+        if self.path().is_dir() {
+            let mut resolve = wit_parser::Resolve::new();
+            let (pkg, deps) = resolve.push_dir(self.path())?;
+            return Ok((DecodedWasm::WitPackage(resolve, pkg), deps));
+        }
+
         let bytes = fs::read(self.path()).with_context(|| {
             format!(
                 "failed to read content of dependency `{id}` at path `{path}`",
@@ -407,13 +415,32 @@ impl DependencyResolution {
             )
         })?;
 
-        wit_component::decode(&bytes).with_context(|| {
-            format!(
-                "failed to decode content of dependency `{id}` at path `{path}`",
-                id = self.id(),
-                path = self.path().display()
-            )
-        })
+        if &bytes[0..4] != b"\0asm" {
+            // If the dependency isn't a wasm file, assume it's a wit file to parse as a package.
+            let mut resolve = wit_parser::Resolve::new();
+            let pkg = resolve.push(UnresolvedPackage::parse(
+                self.path(),
+                std::str::from_utf8(&bytes).with_context(|| {
+                    format!(
+                        "dependency `{path}` is not UTF-8 encoded",
+                        path = self.path().display()
+                    )
+                })?,
+            )?)?;
+
+            return Ok((DecodedWasm::WitPackage(resolve, pkg), Vec::new()));
+        }
+
+        Ok((
+            wit_component::decode(&bytes).with_context(|| {
+                format!(
+                    "failed to decode content of dependency `{id}` at path `{path}`",
+                    id = self.id(),
+                    path = self.path().display()
+                )
+            })?,
+            Vec::new(),
+        ))
     }
 }
 

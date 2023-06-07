@@ -276,7 +276,7 @@ impl NewCommand {
                 },
                 None => {
                     let mut target_deps = Table::new();
-                    target_deps["path"] = value("wit/world.wit");
+                    target_deps["path"] = value("wit");
                     Item::Table(target_deps)
                 }
             };
