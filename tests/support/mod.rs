@@ -15,6 +15,7 @@ use warg_client::{
     storage::{ContentStorage, PublishEntry, PublishInfo},
     FileSystemClient,
 };
+use warg_protocol::registry::PackageId;
 use warg_server::{policy::content::WasmContentPolicy, Config, Server};
 use wasmparser::{Chunk, Encoding, Parser, Payload, Validator, WasmFeatures};
 use wit_parser::{Resolve, UnresolvedPackage};
@@ -71,7 +72,7 @@ pub fn project() -> Result<ProjectBuilder> {
 
 pub async fn publish(
     config: &warg_client::Config,
-    name: &str,
+    id: &PackageId,
     version: &str,
     content: Vec<u8>,
     init: bool,
@@ -100,7 +101,7 @@ pub async fn publish(
         .publish_with_info(
             &test_signing_key().parse().unwrap(),
             PublishInfo {
-                package: name.to_string(),
+                id: id.clone(),
                 head: None,
                 entries,
             },
@@ -109,7 +110,7 @@ pub async fn publish(
         .context("failed to publish component")?;
 
     client
-        .wait_for_publish(name, &record_id, Duration::from_secs(1))
+        .wait_for_publish(id, &record_id, Duration::from_secs(1))
         .await?;
 
     Ok(())
@@ -117,14 +118,14 @@ pub async fn publish(
 
 pub async fn publish_component(
     config: &warg_client::Config,
-    name: &str,
+    id: &str,
     version: &str,
     wat: &str,
     init: bool,
 ) -> Result<()> {
     publish(
         config,
-        name,
+        &id.parse()?,
         version,
         wat::parse_str(wat).context("failed to parse component for publishing")?,
         init,
@@ -134,7 +135,7 @@ pub async fn publish_component(
 
 pub async fn publish_wit(
     config: &warg_client::Config,
-    name: &str,
+    id: &str,
     version: &str,
     wit: &str,
     init: bool,
@@ -150,7 +151,7 @@ pub async fn publish_wit(
     let bytes =
         wit_component::encode(&resolve, pkg).context("failed to encode wit for publishing")?;
 
-    publish(config, name, version, bytes, init).await
+    publish(config, &id.parse()?, version, bytes, init).await
 }
 
 pub struct ServerInstance {

@@ -346,7 +346,7 @@ The resulting type for this component will be the same as the previous example,
 but it will also export a `parse` function of type `(string) -> result<_, string>`
 as specified in the world.
 
-The WIT document package name of `wasi:cli` maps directly to the name of the 
+The WIT document package id of `wasi:cli` maps directly to the name of the
 dependency in `[package.metadata.component.target.dependencies]`.
 
 ### Exporting only functions from a component

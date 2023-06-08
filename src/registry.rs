@@ -25,8 +25,9 @@ use warg_client::{
     FileSystemClient, StorageLockResult,
 };
 use warg_crypto::hash::AnyHash;
+use warg_protocol::registry::PackageId;
 use wit_component::DecodedWasm;
-use wit_parser::{PackageId, PackageName, Resolve, UnresolvedPackage, WorldId};
+use wit_parser::{PackageName, Resolve, UnresolvedPackage, WorldId};
 
 /// The name of the default registry.
 pub const DEFAULT_REGISTRY_NAME: &str = "default";
@@ -119,8 +120,8 @@ impl LockedPackageVersion {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct LockedPackage {
-    /// The name of the locked package.
-    pub name: String,
+    /// The id of the locked package.
+    pub id: PackageId,
     /// The registry the package was resolved from.
     ///
     /// Defaults to the default registry if not specified.
@@ -136,9 +137,9 @@ pub struct LockedPackage {
 
 impl LockedPackage {
     /// The key used in sorting and searching the package list.
-    pub(crate) fn key(&self) -> (&str, &str) {
+    pub(crate) fn key(&self) -> (&PackageId, &str) {
         (
-            &self.name,
+            &self.id,
             self.registry.as_deref().unwrap_or(DEFAULT_REGISTRY_NAME),
         )
     }
@@ -171,21 +172,21 @@ pub struct LockFile {
 impl LockFile {
     /// Constructs a `LockFile` from a `PackageResolutionMap`.
     pub fn from_resolution_map(map: &PackageResolutionMap) -> Self {
-        type PackageKey = (String, Option<String>);
+        type PackageKey = (PackageId, Option<String>);
         type VersionsMap = HashMap<String, (Version, AnyHash)>;
         let mut packages: HashMap<PackageKey, VersionsMap> = HashMap::new();
 
         for resolution in map.values() {
             for (_, dep) in resolution.all() {
                 match dep.key() {
-                    Some((name, registry)) => {
+                    Some((id, registry)) => {
                         let pkg = match dep {
                             DependencyResolution::Registry(pkg) => pkg,
                             DependencyResolution::Local(_) => unreachable!(),
                         };
 
                         let prev = packages
-                            .entry((name.to_string(), registry.map(str::to_string)))
+                            .entry((id.clone(), registry.map(str::to_string)))
                             .or_default()
                             .insert(
                                 pkg.requirement.to_string(),
@@ -204,7 +205,7 @@ impl LockFile {
 
         let mut packages: Vec<_> = packages
             .into_iter()
-            .map(|((name, registry), versions)| {
+            .map(|((id, registry), versions)| {
                 let mut versions: Vec<LockedPackageVersion> = versions
                     .into_iter()
                     .map(|(requirement, (version, digest))| LockedPackageVersion {
@@ -217,7 +218,7 @@ impl LockFile {
                 versions.sort_by(|a, b| a.key().cmp(b.key()));
 
                 LockedPackage {
-                    name,
+                    id,
                     registry,
                     versions,
                 }
@@ -335,9 +336,11 @@ impl Default for LockFile {
 #[derive(Clone, Debug)]
 pub struct RegistryResolution {
     /// The id of the dependency that was resolved.
-    pub id: metadata::Id,
-    /// The name of the package that was resolved.
-    pub package: String,
+    ///
+    /// This may differ from the package id if the dependency was renamed.
+    pub id: PackageId,
+    /// The id of the package from the registry that was resolved.
+    pub package: PackageId,
     /// The name of the registry used to resolve the package.
     ///
     /// A value of `None` indicates that the default registry was used.
@@ -356,7 +359,7 @@ pub struct RegistryResolution {
 #[derive(Clone, Debug)]
 pub struct LocalResolution {
     /// The id of the dependency that was resolved.
-    pub id: metadata::Id,
+    pub id: PackageId,
     /// The path to the resolved dependency.
     pub path: PathBuf,
 }
@@ -373,7 +376,7 @@ pub enum DependencyResolution {
 
 impl DependencyResolution {
     /// Gets the id of the dependency that was resolved.
-    pub fn id(&self) -> &metadata::Id {
+    pub fn id(&self) -> &PackageId {
         match self {
             Self::Registry(res) => &res.id,
             Self::Local(res) => &res.id,
@@ -391,7 +394,7 @@ impl DependencyResolution {
     /// The key used in sorting and searching the lock file package list.
     ///
     /// Returns `None` if the dependency is not resolved from a registry package.
-    fn key(&self) -> Option<(&str, Option<&str>)> {
+    fn key(&self) -> Option<(&PackageId, Option<&str>)> {
         match self {
             DependencyResolution::Registry(pkg) => Some((&pkg.package, pkg.registry.as_deref())),
             DependencyResolution::Local(_) => None,
@@ -450,7 +453,7 @@ impl DependencyResolution {
 }
 
 /// Represents a map of dependency resolutions.
-pub type DependencyResolutionMap = HashMap<metadata::Id, DependencyResolution>;
+pub type DependencyResolutionMap = HashMap<PackageId, DependencyResolution>;
 
 /// Represents a decoded dependency.
 pub enum DecodedDependency<'a> {
@@ -475,7 +478,7 @@ impl<'a> DecodedDependency<'a> {
     ///
     /// If the dependency is an unresolved WIT package, it will assume that the
     /// package has no foreign dependencies.
-    pub fn resolve(self) -> Result<(Resolve, PackageId, Vec<PathBuf>)> {
+    pub fn resolve(self) -> Result<(Resolve, wit_parser::PackageId, Vec<PathBuf>)> {
         match self {
             Self::Wit { package, .. } => {
                 let mut resolve = Resolve::new();
@@ -540,13 +543,13 @@ impl<'a> LockFileResolver<'a> {
         &'a self,
         config: &Config,
         registry: &str,
-        name: &str,
+        id: &PackageId,
         requirement: &VersionReq,
     ) -> Result<Option<&'a LockedPackageVersion>> {
         if let Some(pkg) = self
             .lock_file
             .packages
-            .binary_search_by_key(&(name, registry), LockedPackage::key)
+            .binary_search_by_key(&(id, registry), LockedPackage::key)
             .ok()
             .map(|i| &self.lock_file.packages[i])
         {
@@ -555,13 +558,13 @@ impl<'a> LockFileResolver<'a> {
                 .binary_search_by_key(&requirement.to_string().as_str(), LockedPackageVersion::key)
             {
                 let locked = &pkg.versions[index];
-                log::info!("dependency package `{name}` from registry `{registry}` with requirement `{requirement}` was resolved by the lock file to version {version}", version = locked.version);
+                log::info!("dependency package `{id}` from registry `{registry}` with requirement `{requirement}` was resolved by the lock file to version {version}", version = locked.version);
                 return Ok(Some(locked));
             }
         }
 
         check_lock_update_allowed(config, self.workspace)?;
-        log::info!("dependency package `{name}` from registry `{registry}` with requirement `{requirement}` was not in the lock file");
+        log::info!("dependency package `{id}` from registry `{registry}` with requirement `{requirement}` was not in the lock file");
         Ok(None)
     }
 }
@@ -620,7 +623,7 @@ impl PackageDependencyResolution {
     }
 
     /// Iterates over all dependency resolutions of the package.
-    pub fn all(&self) -> impl Iterator<Item = (&metadata::Id, &DependencyResolution)> {
+    pub fn all(&self) -> impl Iterator<Item = (&PackageId, &DependencyResolution)> {
         self.target_resolutions
             .iter()
             .chain(self.resolutions.iter())
@@ -631,8 +634,10 @@ impl PackageDependencyResolution {
 pub type PackageResolutionMap = HashMap<cargo::core::PackageId, PackageDependencyResolution>;
 
 struct RegistryDependency<'a> {
-    id: &'a metadata::Id,
-    package: String,
+    /// The package ID assigned in the metadata.
+    id: &'a PackageId,
+    /// The package ID of the registry package.
+    package: PackageId,
     version: &'a VersionReq,
     locked: Option<(Version, AnyHash)>,
     resolution: Option<RegistryResolution>,
@@ -641,16 +646,16 @@ struct RegistryDependency<'a> {
 
 struct Registry<'a> {
     client: Arc<FileSystemClient>,
-    packages: HashMap<String, PackageInfo>,
+    packages: HashMap<PackageId, PackageInfo>,
     dependencies: Vec<RegistryDependency<'a>>,
-    upserts: HashSet<String>,
+    upserts: HashSet<PackageId>,
 }
 
 impl<'a> Registry<'a> {
     async fn add_dependency(
         &mut self,
-        id: &'a metadata::Id,
-        package: String,
+        id: &'a PackageId,
+        package: PackageId,
         version: &'a VersionReq,
         registry: &str,
         locked: Option<&LockedPackageVersion>,
@@ -797,10 +802,10 @@ impl<'a> Registry<'a> {
 
     async fn load_package<'b>(
         client: &FileSystemClient,
-        packages: &'b mut HashMap<String, PackageInfo>,
-        name: String,
+        packages: &'b mut HashMap<PackageId, PackageInfo>,
+        id: PackageId,
     ) -> Result<Option<&'b PackageInfo>> {
-        match packages.entry(name) {
+        match packages.entry(id) {
             hash_map::Entry::Occupied(e) => Ok(Some(e.into_mut())),
             hash_map::Entry::Vacant(e) => match client.registry().load_package(e.key()).await? {
                 Some(p) => Ok(Some(e.insert(p))),
@@ -810,7 +815,7 @@ impl<'a> Registry<'a> {
     }
 }
 
-type DownloadMapKey<'a> = (&'a str, String, Version);
+type DownloadMapKey<'a> = (&'a str, PackageId, Version);
 type DownloadMap<'a> = HashMap<DownloadMapKey<'a>, Vec<usize>>;
 
 /// A resolver of package dependencies.
@@ -819,8 +824,8 @@ pub struct DependencyResolver<'a> {
     urls: &'a HashMap<String, Url>,
     registries: IndexMap<&'a str, Registry<'a>>,
     lock_file: Option<LockFileResolver<'a>>,
-    target_resolutions: HashMap<metadata::Id, DependencyResolution>,
-    resolutions: HashMap<metadata::Id, DependencyResolution>,
+    target_resolutions: HashMap<PackageId, DependencyResolution>,
+    resolutions: HashMap<PackageId, DependencyResolution>,
 }
 
 impl<'a> DependencyResolver<'a> {
@@ -843,7 +848,7 @@ impl<'a> DependencyResolver<'a> {
     /// Add a dependency to the resolver.
     pub async fn add_dependency(
         &mut self,
-        id: &'a metadata::Id,
+        id: &'a PackageId,
         dependency: &'a metadata::Dependency,
         from_target: bool,
     ) -> Result<()> {
@@ -851,12 +856,12 @@ impl<'a> DependencyResolver<'a> {
             metadata::Dependency::Package(package) => {
                 // Dependency comes from a registry, add a dependency to the resolver
                 let registry_name = package.registry.as_deref().unwrap_or(DEFAULT_REGISTRY_NAME);
-                let package_name = package.name.clone().unwrap_or_else(|| id.to_string());
+                let package_id = package.id.clone().unwrap_or_else(|| id.clone());
 
                 // Resolve the version from the lock file if there is one
                 let locked = match self.lock_file.as_ref().and_then(|resolver| {
                     resolver
-                        .resolve(self.config, registry_name, &package_name, &package.version)
+                        .resolve(self.config, registry_name, &package_id, &package.version)
                         .transpose()
                 }) {
                     Some(Ok(locked)) => Some(locked),
@@ -880,7 +885,7 @@ impl<'a> DependencyResolver<'a> {
                 registry
                     .add_dependency(
                         id,
-                        package_name,
+                        package_id,
                         &package.version,
                         registry_name,
                         locked,
@@ -979,12 +984,7 @@ impl<'a> DependencyResolver<'a> {
 
             let client = registry.client.clone();
             futures.push(tokio::spawn(async move {
-                (
-                    index,
-                    client
-                        .upsert(&upserts.iter().map(|p| p.as_str()).collect::<Vec<_>>())
-                        .await,
-                )
+                (index, client.upsert(upserts.iter()).await)
             }))
         }
 

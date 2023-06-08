@@ -33,6 +33,7 @@ use tokio::io::BufReader;
 use tokio_util::io::ReaderStream;
 use warg_client::storage::{ContentStorage, PublishEntry, PublishInfo};
 use warg_crypto::signing::PrivateKey;
+use warg_protocol::registry::PackageId;
 use wit_component::ComponentEncoder;
 
 pub mod bindings;
@@ -320,8 +321,8 @@ pub async fn compile<'a>(
 pub struct PublishWitOptions<'a> {
     /// The name of the cargo package to publish for.
     pub cargo_package: Option<&'a str>,
-    /// The name of the registry package to publish.
-    pub name: &'a str,
+    /// The id of the registry package to publish.
+    pub id: &'a PackageId,
     /// The version of the registry package to publish.
     pub version: &'a Version,
     /// The url of the registry to publish to.
@@ -349,11 +350,8 @@ pub async fn publish_wit(
         workspace.current()?
     };
 
-    let lock_file = LockFile::open(config, &workspace)?;
-    let resolver = lock_file
-        .as_ref()
-        .map(|l| LockFileResolver::new(&workspace, l));
-    let resolution = match PackageDependencyResolution::new(config, package, resolver).await? {
+    let map = resolve_dependencies(config, &workspace).await?;
+    let resolution = match map.get(&package.package_id()) {
         Some(resolution) => resolution,
         None => bail!(
             "manifest `{path}` is not a WebAssembly component package",
@@ -365,18 +363,31 @@ pub async fn publish_wit(
         Some(Target::Local { .. }) => {
             // NOTE: we don't need to lock the bindings directory as we're not actually going to read or write any files.
             let bindings_dir = bindings_dir(&workspace);
-            let generator = BindingsGenerator::new(bindings_dir.as_path_unlocked(), &resolution)?;
-            generator.encode_target_world().with_context(|| {
-                anyhow!(
-                    "failed to encode target WIT for package `{package}`",
-                    package = package.name()
-                )
-            })?
+            let generator = BindingsGenerator::new(bindings_dir.as_path_unlocked(), resolution)?;
+            generator
+                .encode_target_world(options.version)
+                .with_context(|| {
+                    anyhow!(
+                        "failed to encode target WIT for package `{package}`",
+                        package = package.name()
+                    )
+                })?
         }
         _ => {
             bail!("a WIT package may only be published from a project using a local target");
         }
     };
+
+    let mut producers = wasm_metadata::Producers::empty();
+    producers.add(
+        "processed-by",
+        env!("CARGO_PKG_NAME"),
+        option_env!("CARGO_VERSION_INFO").unwrap_or(env!("CARGO_PKG_VERSION")),
+    );
+
+    let bytes = producers
+        .add_to_wasm(&bytes)
+        .context("failed to add producers metadata to output WIT package")?;
 
     if options.dry_run {
         config
@@ -400,7 +411,7 @@ pub async fn publish_wit(
         .status("Publishing", format!("target WIT package ({content})"))?;
 
     let mut info = PublishInfo {
-        package: options.name.to_string(),
+        id: options.id.clone(),
         head: None,
         entries: Default::default(),
     };
@@ -416,14 +427,14 @@ pub async fn publish_wit(
 
     let record_id = client.publish_with_info(&options.signing_key, info).await?;
     client
-        .wait_for_publish(options.name, &record_id, Duration::from_secs(1))
+        .wait_for_publish(options.id, &record_id, Duration::from_secs(1))
         .await?;
 
     config.shell().status(
         "Published",
         format!(
-            "package `{name}` v{version}",
-            name = options.name,
+            "package `{id}` v{version}",
+            id = options.id,
             version = options.version
         ),
     )?;
@@ -437,8 +448,8 @@ pub struct PublishOptions<'a> {
     pub force_generation: bool,
     /// The compile options to use for the build.
     pub compile_options: CompileOptions,
-    /// The name of the component to publish.
-    pub name: &'a str,
+    /// The id of the component to publish.
+    pub id: &'a PackageId,
     /// The version of the component to publish.
     pub version: &'a Version,
     /// The url of the registry to publish to.
@@ -525,7 +536,7 @@ pub async fn publish(
     )?;
 
     let mut info = PublishInfo {
-        package: options.name.to_string(),
+        id: options.id.clone(),
         head: None,
         entries: Default::default(),
     };
@@ -541,14 +552,14 @@ pub async fn publish(
 
     let record_id = client.publish_with_info(&options.signing_key, info).await?;
     client
-        .wait_for_publish(options.name, &record_id, Duration::from_secs(1))
+        .wait_for_publish(options.id, &record_id, Duration::from_secs(1))
         .await?;
 
     config.shell().status(
         "Published",
         format!(
-            "package `{name}` v{version}",
-            name = options.name,
+            "package `{id}` v{version}",
+            id = options.id,
             version = options.version
         ),
     )?;
@@ -631,8 +642,8 @@ pub async fn update_lockfile(
                 config.shell().status_with_color(
                     "Updating",
                     format!(
-                        "component registry package `{name}` v{old} -> v{new}",
-                        name = old_pkg.name,
+                        "component registry package `{id}` v{old} -> v{new}",
+                        id = old_pkg.id,
                         old = old_ver.version,
                         new = new_ver.version
                     ),

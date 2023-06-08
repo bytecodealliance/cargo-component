@@ -12,6 +12,7 @@ use semver::Version;
 use std::path::PathBuf;
 use url::Url;
 use warg_crypto::signing::PrivateKey;
+use warg_protocol::registry::PackageId;
 
 /// Publish a package to a registry.
 #[derive(Args)]
@@ -93,9 +94,9 @@ pub struct PublishCommand {
     #[clap(long = "dry-run")]
     pub dry_run: bool,
 
-    /// The user name to use for the signing key.
-    #[clap(long, short, value_name = "USER", default_value = "default")]
-    pub user: String,
+    /// The key name to use for the signing key.
+    #[clap(long, short, value_name = "KEY", default_value = "default")]
+    pub key_name: String,
 
     /// The registry to publish to.
     #[clap(long = "registry", value_name = "REGISTRY")]
@@ -109,9 +110,9 @@ pub struct PublishCommand {
     #[clap(long = "init")]
     pub init: bool,
 
-    /// Override the name of the package being published.
-    #[clap(long = "name", value_name = "NAME")]
-    pub name: Option<String>,
+    /// Override the id of the package being published.
+    #[clap(long = "id", value_name = "PACKAGE")]
+    pub id: Option<PackageId>,
 
     /// Overwrite the version of the package being published.
     #[clap(long = "version", value_name = "VERSION")]
@@ -155,9 +156,9 @@ impl PublishCommand {
             ),
         };
 
-        let package_name = self.name.take().or(metadata.section.package).ok_or_else(|| {
+        let package_id: PackageId = self.id.take().or(metadata.section.package).ok_or_else(|| {
             anyhow!(
-                "package name not specified in manifest `{path}`; use the `--name` option to specify a name",
+                "package id is not specified in manifest `{path}`; use the `--id` option to specify a package id",
                 path = package.manifest_path().display(),
             )
         })?;
@@ -179,13 +180,13 @@ impl PublishCommand {
             get_signing_key(
                 url.host_str()
                     .ok_or_else(|| anyhow!("registry URL `{url}` has no host"))?,
-                &self.user,
+                &self.key_name,
             )?
         };
 
         let options = PublishOptions {
             force_generation: self.generate,
-            name: &package_name,
+            id: &package_id,
             version: self.version.as_ref().unwrap_or(&metadata.version),
             compile_options: CompileOptions {
                 workspace: false,

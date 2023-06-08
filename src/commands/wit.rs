@@ -8,6 +8,7 @@ use semver::Version;
 use std::path::PathBuf;
 use url::Url;
 use warg_crypto::signing::PrivateKey;
+use warg_protocol::registry::PackageId;
 
 /// Manages the target WIT package.
 #[derive(Args)]
@@ -87,9 +88,9 @@ pub struct WitPublishCommand {
     #[clap(long = "package", short = 'p', value_name = "SPEC")]
     pub cargo_package: Option<String>,
 
-    /// The user name to use for the signing key.
-    #[clap(long, short, value_name = "USER", default_value = "default")]
-    pub user: String,
+    /// The key name to use for the signing key.
+    #[clap(long, short, value_name = "KEY", default_value = "default")]
+    pub key_name: String,
 
     /// The registry to publish to.
     #[clap(long = "registry", value_name = "REGISTRY")]
@@ -103,9 +104,9 @@ pub struct WitPublishCommand {
     #[clap(long = "version", value_name = "VERSION")]
     pub version: Option<Version>,
 
-    /// The name of the package being published.
+    /// The id of the package being published.
     #[clap(value_name = "PACKAGE")]
-    pub name: String,
+    pub id: PackageId,
 }
 
 impl WitPublishCommand {
@@ -156,13 +157,13 @@ impl WitPublishCommand {
             signing::get_signing_key(
                 url.host_str()
                     .ok_or_else(|| anyhow!("registry URL `{url}` has no host"))?,
-                &self.user,
+                &self.key_name,
             )?
         };
 
         let options = PublishWitOptions {
             cargo_package: self.cargo_package.as_deref(),
-            name: &self.name,
+            id: &self.id,
             version: self.version.as_ref().unwrap_or(&metadata.version),
             url,
             signing_key,
