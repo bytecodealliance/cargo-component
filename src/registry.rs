@@ -26,7 +26,7 @@ use warg_client::{
 };
 use warg_crypto::hash::AnyHash;
 use wit_component::DecodedWasm;
-use wit_parser::UnresolvedPackage;
+use wit_parser::{PackageId, PackageName, Resolve, UnresolvedPackage, WorldId};
 
 /// The name of the default registry.
 pub const DEFAULT_REGISTRY_NAME: &str = "default";
@@ -399,12 +399,18 @@ impl DependencyResolution {
     }
 
     /// Decodes the resolved dependency.
-    pub fn decode(&self) -> Result<(DecodedWasm, Vec<PathBuf>)> {
+    pub fn decode(&self) -> Result<DecodedDependency> {
         // If the dependency path is a directory, assume it contains wit to parse as a package.
         if self.path().is_dir() {
-            let mut resolve = wit_parser::Resolve::new();
-            let (pkg, deps) = resolve.push_dir(self.path())?;
-            return Ok((DecodedWasm::WitPackage(resolve, pkg), deps));
+            return Ok(DecodedDependency::Wit {
+                resolution: self,
+                package: UnresolvedPackage::parse_dir(self.path()).with_context(|| {
+                    format!(
+                        "failed to parse dependency `{path}`",
+                        path = self.path().display()
+                    )
+                })?,
+            });
         }
 
         let bytes = fs::read(self.path()).with_context(|| {
@@ -416,36 +422,98 @@ impl DependencyResolution {
         })?;
 
         if &bytes[0..4] != b"\0asm" {
-            // If the dependency isn't a wasm file, assume it's a wit file to parse as a package.
-            let mut resolve = wit_parser::Resolve::new();
-            let pkg = resolve.push(UnresolvedPackage::parse(
-                self.path(),
-                std::str::from_utf8(&bytes).with_context(|| {
-                    format!(
-                        "dependency `{path}` is not UTF-8 encoded",
-                        path = self.path().display()
-                    )
-                })?,
-            )?)?;
-
-            return Ok((DecodedWasm::WitPackage(resolve, pkg), Vec::new()));
+            return Ok(DecodedDependency::Wit {
+                resolution: self,
+                package: UnresolvedPackage::parse(
+                    self.path(),
+                    std::str::from_utf8(&bytes).with_context(|| {
+                        format!(
+                            "dependency `{path}` is not UTF-8 encoded",
+                            path = self.path().display()
+                        )
+                    })?,
+                )?,
+            });
         }
 
-        Ok((
-            wit_component::decode(&bytes).with_context(|| {
+        Ok(DecodedDependency::Wasm {
+            resolution: self,
+            decoded: wit_component::decode(&bytes).with_context(|| {
                 format!(
                     "failed to decode content of dependency `{id}` at path `{path}`",
                     id = self.id(),
                     path = self.path().display()
                 )
             })?,
-            Vec::new(),
-        ))
+        })
     }
 }
 
 /// Represents a map of dependency resolutions.
 pub type DependencyResolutionMap = HashMap<metadata::Id, DependencyResolution>;
+
+/// Represents a decoded dependency.
+pub enum DecodedDependency<'a> {
+    /// The dependency decoded from an unresolved WIT package.
+    Wit {
+        /// The resolution related to the decoded dependency.
+        resolution: &'a DependencyResolution,
+        /// The unresolved WIT package.
+        package: UnresolvedPackage,
+    },
+    /// The dependency decoded from a Wasm file.
+    Wasm {
+        /// The resolution related to the decoded dependency.
+        resolution: &'a DependencyResolution,
+        /// The decoded Wasm file.
+        decoded: DecodedWasm,
+    },
+}
+
+impl<'a> DecodedDependency<'a> {
+    /// Fully resolves the dependency.
+    ///
+    /// If the dependency is an unresolved WIT package, it will assume that the
+    /// package has no foreign dependencies.
+    pub fn resolve(self) -> Result<(Resolve, PackageId, Vec<PathBuf>)> {
+        match self {
+            Self::Wit { package, .. } => {
+                let mut resolve = Resolve::new();
+                let source_files = package.source_files().map(Path::to_path_buf).collect();
+                let pkg = resolve.push(package)?;
+                Ok((resolve, pkg, source_files))
+            }
+            Self::Wasm { decoded, .. } => match decoded {
+                DecodedWasm::WitPackage(resolve, pkg) => Ok((resolve, pkg, Vec::new())),
+                DecodedWasm::Component(resolve, world) => {
+                    let pkg = resolve.worlds[world].package.unwrap();
+                    Ok((resolve, pkg, Vec::new()))
+                }
+            },
+        }
+    }
+
+    /// Gets the package name of the decoded dependency.
+    pub fn package_name(&self) -> &PackageName {
+        match self {
+            Self::Wit { package, .. } => &package.name,
+            Self::Wasm { decoded, .. } => &decoded.resolve().packages[decoded.package()].name,
+        }
+    }
+
+    /// Converts the decoded dependency into a component world.
+    ///
+    /// Returns an error if the dependency is not a decoded component.
+    pub fn into_component_world(self) -> Result<(Resolve, WorldId)> {
+        match self {
+            Self::Wasm {
+                decoded: DecodedWasm::Component(resolve, world),
+                ..
+            } => Ok((resolve, world)),
+            _ => bail!("dependency is not a WebAssembly component"),
+        }
+    }
+}
 
 /// Represents a resolver for a lock file.
 #[derive(Clone, Copy, Debug)]

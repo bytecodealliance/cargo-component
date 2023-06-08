@@ -3,13 +3,14 @@
 use crate::{
     last_modified_time,
     metadata::{self, ComponentMetadata, Target},
-    registry::PackageDependencyResolution,
+    registry::{DecodedDependency, PackageDependencyResolution},
 };
 use anyhow::{bail, Context, Result};
 use heck::{ToSnakeCase, ToUpperCamelCase};
-use indexmap::IndexMap;
+use indexmap::{IndexMap, IndexSet};
+use semver::Version;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt::Write,
     fs,
     io::Read,
@@ -48,7 +49,7 @@ pub struct BindingsGenerator<'a> {
     source_path: PathBuf,
     resolve: Resolve,
     world: WorldId,
-    deps: Vec<PathBuf>,
+    source_files: Vec<PathBuf>,
 }
 
 impl<'a> BindingsGenerator<'a> {
@@ -66,7 +67,7 @@ impl<'a> BindingsGenerator<'a> {
         let manifest_path = package_dir.join("Cargo.toml");
         let source_path = package_dir.join("src").join("lib.rs");
 
-        let (resolve, world, deps) = Self::create_target_world(resolution)?;
+        let (resolve, world, source_files) = Self::create_target_world(resolution)?;
 
         Ok(Self {
             resolution,
@@ -75,7 +76,7 @@ impl<'a> BindingsGenerator<'a> {
             source_path,
             resolve,
             world,
-            deps,
+            source_files,
         })
     }
 
@@ -231,10 +232,10 @@ publish = false
     }
 
     fn dependencies_are_newer(&self, last_modified_output: SystemTime) -> Result<bool> {
-        for dep in &self.deps {
+        for dep in &self.source_files {
             if last_modified_time(dep)? > last_modified_output {
                 log::debug!(
-                    "dependency `{path}` has been modified",
+                    "target source file `{path}` has been modified",
                     path = dep.display()
                 );
                 return Ok(true);
@@ -257,7 +258,7 @@ publish = false
     fn create_target_world(
         resolution: &PackageDependencyResolution,
     ) -> Result<(Resolve, WorldId, Vec<PathBuf>)> {
-        let (mut merged, world_id, mut deps) = match &resolution.metadata.section.target {
+        let (mut merged, world_id, source_files) = match &resolution.metadata.section.target {
             Some(Target::Package { id, world, .. }) => {
                 Self::target_package(resolution, id, world.as_deref())?
             }
@@ -272,29 +273,24 @@ publish = false
 
         // Merge all component dependencies as interface imports
         for (id, dependency) in &resolution.resolutions {
-            let (decoded, additional) = dependency.decode()?;
-            match decoded {
-                DecodedWasm::WitPackage(_, _) => {
-                    bail!("component dependency `{id}` is not a WebAssembly component")
-                }
-                DecodedWasm::Component(mut resolve, component_world_id) => {
-                    // Set the world name as currently it defaults to "root"
-                    // For now, set it to the package name from the id
-                    let world = &mut resolve.worlds[component_world_id];
-                    world.name = id.package_name().to_string();
+            let (mut resolve, component_world_id) = dependency
+                .decode()?
+                .into_component_world()
+                .with_context(|| format!("failed to decode component dependency `{id}`"))?;
 
-                    let source = merged
-                        .merge(resolve)
-                        .with_context(|| format!("failed to merge world of dependency `{id}`"))?
-                        .worlds[component_world_id.index()];
-                    Self::import_world(&mut merged, source, world_id)?;
-                }
-            }
+            // Set the world name as currently it defaults to "root"
+            // For now, set it to the package name from the id
+            let world = &mut resolve.worlds[component_world_id];
+            world.name = id.package_name().to_string();
 
-            deps.extend(additional);
+            let source = merged
+                .merge(resolve)
+                .with_context(|| format!("failed to merge world of dependency `{id}`"))?
+                .worlds[component_world_id.index()];
+            Self::import_world(&mut merged, source, world_id)?;
         }
 
-        Ok((merged, world_id, deps))
+        Ok((merged, world_id, source_files))
     }
 
     fn target_package(
@@ -307,18 +303,18 @@ publish = false
 
         // Decode the target package dependency
         let dependency = resolution.target_resolutions.values().next().unwrap();
-        let (decoded, deps) = dependency.decode()?;
-        let package = decoded.package();
-        let resolve = match decoded {
-            DecodedWasm::WitPackage(resolve, _) => resolve,
-            DecodedWasm::Component(resolve, _) => resolve,
-        };
+        let (resolve, pkg, source_files) = dependency.decode()?.resolve().with_context(|| {
+            format!(
+                "failed to resolve target package `{id}`",
+                id = dependency.id()
+            )
+        })?;
 
         let world = resolve
-            .select_world(package, world)
+            .select_world(pkg, world)
             .with_context(|| format!("failed to select world from target package `{id}`"))?;
 
-        Ok((resolve, world, deps))
+        Ok((resolve, world, source_files))
     }
 
     fn target_local_path(
@@ -328,39 +324,32 @@ publish = false
     ) -> Result<(Resolve, WorldId, Vec<PathBuf>)> {
         let mut merged = Resolve::default();
 
-        // Start by decoding and merging all of the target dependencies
-        let mut dependencies: HashMap<_, Vec<_>> = HashMap::new();
-        let mut deps = Vec::new();
-        for (id, dependency) in &resolution.target_resolutions {
-            let (decoded, additional) = dependency.decode()?;
-            let (resolve, package) = match decoded {
-                DecodedWasm::WitPackage(resolve, package) => (resolve, package),
-                DecodedWasm::Component(..) => {
-                    bail!("target dependency `{id}` is not a WIT package")
-                }
+        // Start by decoding all of the target dependencies
+        let mut deps = IndexMap::new();
+        let mut unversioned: HashMap<_, Vec<_>> = HashMap::new();
+        for (id, resolution) in &resolution.target_resolutions {
+            let decoded = resolution.decode()?;
+            let name = decoded.package_name();
+
+            let versionless = PackageName {
+                namespace: name.namespace.clone(),
+                name: name.name.clone(),
+                version: None,
             };
 
-            deps.extend(additional);
+            let (index, prev) = deps.insert_full(name.clone(), decoded);
+            if let Some(prev) = prev {
+                bail!("duplicate definitions of package `{name}` found while decoding target dependency `{id}`", name = prev.package_name());
+            }
 
-            let pkg = &resolve.packages[package];
-            dependencies
-                .entry(PackageName {
-                    namespace: pkg.name.namespace.clone(),
-                    name: pkg.name.name.clone(),
-                    version: None,
-                })
-                .or_default()
-                .push(
-                    merged
-                        .merge(resolve)
-                        .with_context(|| {
-                            format!("failed to merge world of target dependency `{id}`")
-                        })?
-                        .packages[package.index()],
-                );
+            // We're storing the dependencies with versionless package names
+            // This allows us to resolve a versionless foreign dependency to a singular
+            // versioned dependency, if there is one
+            unversioned.entry(versionless).or_default().push(index);
         }
 
-        let mut unresolved = if path.is_dir() {
+        // Parse the target package itself
+        let mut root = if path.is_dir() {
             UnresolvedPackage::parse_dir(path).with_context(|| {
                 format!(
                     "failed to parse local target from directory `{}`",
@@ -376,29 +365,74 @@ publish = false
             })?
         };
 
-        unresolved.foreign_deps = unresolved
-            .foreign_deps
-            .into_iter()
-            .map(|(mut k, v)| {
-                // Resolve the foreign dependency against the target dependencies if a
-                // version was not explicitly specified.
-                if k.version.is_none() {
-                    match dependencies.get(&k) {
-                        // Only assign the version if there's exactly one matching package
-                        // Otherwise, let `wit-parser` handle the ambiguity
-                        Some(pkgs) if pkgs.len() == 1 => {
-                            k.version = merged.packages[pkgs[0]].name.version.clone();
-                        }
-                        _ => {}
-                    }
+        let mut source_files: Vec<_> = root.source_files().map(Path::to_path_buf).collect();
+
+        // Do a topological sort of the dependencies
+        let mut order = IndexSet::new();
+        let mut visiting = HashSet::new();
+        for dep in deps.values() {
+            visit(dep, &deps, &unversioned, &mut order, &mut visiting)?;
+        }
+
+        assert!(visiting.is_empty());
+
+        // Merge all of the dependencies first
+        let mut versions = HashMap::new();
+        for name in order {
+            let pkg = match deps.remove(&name).unwrap() {
+                DecodedDependency::Wit {
+                    resolution,
+                    mut package,
+                } => {
+                    fixup_foreign_deps(&mut package, &versions);
+                    source_files.extend(package.source_files().map(Path::to_path_buf));
+                    merged.push(package).with_context(|| {
+                        format!(
+                            "failed to merge target dependency `{id}`",
+                            id = resolution.id()
+                        )
+                    })?
                 }
+                DecodedDependency::Wasm {
+                    resolution,
+                    decoded,
+                } => {
+                    let (resolve, pkg) = match decoded {
+                        DecodedWasm::WitPackage(resolve, pkg) => (resolve, pkg),
+                        DecodedWasm::Component(resolve, world) => {
+                            let pkg = resolve.worlds[world].package.unwrap();
+                            (resolve, pkg)
+                        }
+                    };
 
-                Ok((k, v))
-            })
-            .collect::<Result<_>>()?;
+                    merged
+                        .merge(resolve)
+                        .with_context(|| {
+                            format!(
+                                "failed to merge world of target dependency `{id}`",
+                                id = resolution.id()
+                            )
+                        })?
+                        .packages[pkg.index()]
+                }
+            };
 
-        deps.extend(unresolved.source_files().map(Path::to_path_buf));
-        let package = merged.push(unresolved).with_context(|| {
+            let pkg = &merged.packages[pkg];
+            if let Some(version) = &pkg.name.version {
+                versions
+                    .entry(PackageName {
+                        namespace: pkg.name.namespace.clone(),
+                        name: pkg.name.name.clone(),
+                        version: None,
+                    })
+                    .or_default()
+                    .push(version.clone());
+            }
+        }
+
+        fixup_foreign_deps(&mut root, &versions);
+
+        let package = merged.push(root).with_context(|| {
             format!(
                 "failed to merge local target `{path}`",
                 path = path.display()
@@ -420,7 +454,83 @@ publish = false
                 ),
             })?;
 
-        Ok((merged, world, deps))
+        return Ok((merged, world, source_files));
+
+        fn fixup_foreign_deps(
+            package: &mut UnresolvedPackage,
+            versions: &HashMap<PackageName, Vec<Version>>,
+        ) {
+            package.foreign_deps = std::mem::take(&mut package.foreign_deps)
+                .into_iter()
+                .map(|(mut k, v)| {
+                    match versions.get(&k) {
+                        // Only assign the version if there's exactly one matching package
+                        // Otherwise, let `wit-parser` handle the ambiguity
+                        Some(versions) if versions.len() == 1 => {
+                            k.version = Some(versions[0].clone());
+                        }
+                        _ => {}
+                    }
+
+                    (k, v)
+                })
+                .collect();
+        }
+
+        fn visit<'a>(
+            dep: &'a DecodedDependency<'a>,
+            deps: &'a IndexMap<PackageName, DecodedDependency>,
+            unversioned: &HashMap<PackageName, Vec<usize>>,
+            order: &mut IndexSet<PackageName>,
+            visiting: &mut HashSet<&'a PackageName>,
+        ) -> Result<()> {
+            if order.contains(dep.package_name()) {
+                return Ok(());
+            }
+
+            // Visit any unresolved foreign dependencies
+            match dep {
+                DecodedDependency::Wit {
+                    package,
+                    resolution,
+                } => {
+                    for name in package.foreign_deps.keys() {
+                        if !visiting.insert(name) {
+                            bail!("foreign dependency `{name}` forms a dependency cycle while parsing target dependency `{id}`", id = resolution.id());
+                        }
+
+                        // Only visit known dependencies
+                        // wit-parser will error on unknown foreign dependencies when
+                        // the package is resolved
+                        match deps.get(name) {
+                            Some(dep) => {
+                                // Exact match on the dependency; visit it
+                                visit(dep, deps, unversioned, order, visiting)?
+                            }
+                            None => match unversioned.get(name) {
+                                // Only visit if there's exactly one unversioned dependency
+                                // If there's more than one, it's ambiguous and wit-parser
+                                // will error when the package is resolved.
+                                Some(indexes) if indexes.len() == 1 => {
+                                    let dep = &deps[indexes[0]];
+                                    visit(dep, deps, unversioned, order, visiting)?;
+                                }
+                                _ => {}
+                            },
+                        }
+
+                        assert!(visiting.remove(name));
+                    }
+                }
+                DecodedDependency::Wasm { .. } => {
+                    // No unresolved foreign dependencies for decoded wasm files
+                }
+            }
+
+            assert!(order.insert(dep.package_name().clone()));
+
+            Ok(())
+        }
     }
 
     fn target_empty_world(resolution: &PackageDependencyResolution) -> (Resolve, WorldId) {
