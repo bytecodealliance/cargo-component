@@ -216,6 +216,7 @@ fn it_builds_with_local_wit_deps() -> Result<()> {
     let mut dependencies = Table::new();
     dependencies["foo:bar"]["path"] = value("wit/deps/foo-bar");
     dependencies["bar:baz"]["path"] = value("wit/deps/bar-baz/qux.wit");
+    dependencies["baz:qux"]["path"] = value("wit/deps/foo-bar/deps/baz-qux/qux.wit");
 
     doc["package"]["metadata"]["component"]["target"]["dependencies"] = Item::Table(dependencies);
     fs::write(manifest_path, doc.to_string())?;
@@ -247,6 +248,7 @@ interface baz {
         project.root().join("wit/deps/bar-baz/qux.wit"),
         "package bar:baz
 interface qux {
+    use baz:qux/qux.{ty}
     qux: func()
 }",
     )?;
