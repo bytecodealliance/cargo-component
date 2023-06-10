@@ -38,7 +38,7 @@ world foo {
     let project = Project::with_root(&root, "foo", "--target my:world")?;
 
     project
-        .cargo_component("publish --name test:foo --init")
+        .cargo_component("publish --id test:foo --init")
         .env("CARGO_COMPONENT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("Published package `test:foo` v0.1.0"))
@@ -71,7 +71,7 @@ world foo {
     let project = Project::with_root(&root, "foo", "--target my:world")?;
 
     project
-        .cargo_component("publish --name test:foo")
+        .cargo_component("publish --id test:foo")
         .env("CARGO_COMPONENT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("error: package `test:foo` does not exist"))
@@ -101,7 +101,7 @@ world foo {
     let project = Project::with_root(&root, "foo", "--target my:world/foo")?;
 
     project
-        .cargo_component("publish --name test:foo --init")
+        .cargo_component("publish --id test:foo --init")
         .env("CARGO_COMPONENT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("Published package `test:foo` v0.1.0"))
@@ -130,7 +130,7 @@ bindings::export!(Component);
     fs::write(project.root().join("src/lib.rs"), source)?;
 
     project
-        .cargo_component("publish --name test:bar --init")
+        .cargo_component("publish --id test:bar --init")
         .env("CARGO_COMPONENT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("Published package `test:bar` v0.1.0"))

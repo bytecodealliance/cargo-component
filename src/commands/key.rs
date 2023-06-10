@@ -73,9 +73,9 @@ pub enum KeySubcommand {
 /// Creates a new signing key for a registry in the local keyring.
 #[derive(Args)]
 pub struct KeyNewCommand {
-    /// The user name to use for the signing key.
-    #[clap(long, short, value_name = "USER", default_value = "default")]
-    pub user: String,
+    /// The key name to use for the signing key.
+    #[clap(long, short, value_name = "NAME", default_value = "default")]
+    pub key_name: String,
     /// The host name of the registry to create a signing key for.
     #[clap(value_name = "HOST")]
     pub host: String,
@@ -84,7 +84,7 @@ pub struct KeyNewCommand {
 impl KeyNewCommand {
     /// Executes the command.
     pub async fn exec(self, config: &mut Config) -> Result<()> {
-        let entry = get_signing_key_entry(&self.host, &self.user)?;
+        let entry = get_signing_key_entry(&self.host, &self.key_name)?;
 
         match entry.get_password() {
             Err(keyring::Error::NoEntry) => {
@@ -92,26 +92,26 @@ impl KeyNewCommand {
             }
             Ok(_) | Err(keyring::Error::Ambiguous(_)) => {
                 bail!(
-                    "a signing key already exists for user `{user}` of registry `{host}`",
-                    user = self.user,
+                    "signing key `{name}` already exists for registry `{host}`",
+                    name = self.key_name,
                     host = self.host
                 );
             }
             Err(e) => {
                 bail!(
-                    "failed to get signing key for user `{user}` of registry `{host}`: {e}",
-                    user = self.user,
+                    "failed to get signing key `{name}` for registry `{host}`: {e}",
+                    name = self.key_name,
                     host = self.host
                 );
             }
         }
 
         let key = SigningKey::random(&mut OsRng).into();
-        set_signing_key(&self.host, &self.user, &key)?;
+        set_signing_key(&self.host, &self.key_name, &key)?;
 
         config.shell().note(format!(
-            "created signing key for user `{user}` of registry `{host}`",
-            user = self.user,
+            "created signing key `{name}` for registry `{host}`",
+            name = self.key_name,
             host = self.host,
         ))?;
 
@@ -122,9 +122,9 @@ impl KeyNewCommand {
 /// Sets the signing key for a registry in the local keyring.
 #[derive(Args)]
 pub struct KeySetCommand {
-    /// The user name to use for the signing key.
-    #[clap(long, short, value_name = "USER", default_value = "default")]
-    pub user: String,
+    /// The key name to use for the signing key.
+    #[clap(long, short, value_name = "NAME", default_value = "default")]
+    pub key_name: String,
     /// The host name of the registry to set the signing key for.
     #[clap(value_name = "HOST")]
     pub host: String,
@@ -139,11 +139,11 @@ impl KeySetCommand {
                 .parse()
                 .context("signing key is not in the correct format")?;
 
-        set_signing_key(&self.host, &self.user, &key)?;
+        set_signing_key(&self.host, &self.key_name, &key)?;
 
         config.shell().note(format!(
-            "signing key for user `{user}` of registry `{host}` was set successfully",
-            user = self.user,
+            "signing key `{name}` for registry `{host}` was set successfully",
+            name = self.key_name,
             host = self.host,
         ))?;
 
@@ -154,9 +154,9 @@ impl KeySetCommand {
 /// Deletes the signing key for a registry from the local keyring.
 #[derive(Args)]
 pub struct KeyDeleteCommand {
-    /// The user name to use for the signing key.
-    #[clap(long, short, value_name = "USER", default_value = "default")]
-    pub user: String,
+    /// The key name to use for the signing key.
+    #[clap(long, short, value_name = "NAME", default_value = "default")]
+    pub key_name: String,
     /// The host name of the registry to delete the signing key for.
     #[clap(value_name = "HOST")]
     pub host: String,
@@ -174,7 +174,7 @@ impl KeyDeleteCommand {
             &yellow,
         )?;
 
-        config.shell().write_stdout(format!("\nare you sure you want to delete the signing key for user `{user}` of registry `{host}`? [type `yes` to confirm] ", user = self.user, host = self.host),
+        config.shell().write_stdout(format!("\nare you sure you want to delete signing key `{name}` for registry `{host}`? [type `yes` to confirm] ", name = self.key_name, host = self.host),
             &ColorSpec::new(),
         )?;
 
@@ -192,11 +192,11 @@ impl KeyDeleteCommand {
             return Ok(());
         }
 
-        delete_signing_key(&self.host, &self.user)?;
+        delete_signing_key(&self.host, &self.key_name)?;
 
         config.shell().note(format!(
-            "signing key for user `{user}` of registry `{host}` was deleted successfully",
-            user = self.user,
+            "signing key `{name}` for registry `{host}` was deleted successfully",
+            name = self.key_name,
             host = self.host,
         ))?;
 

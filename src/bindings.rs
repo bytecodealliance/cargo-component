@@ -2,7 +2,7 @@
 
 use crate::{
     last_modified_time,
-    metadata::{self, ComponentMetadata, Target},
+    metadata::{ComponentMetadata, Target},
     registry::{DecodedDependency, PackageDependencyResolution},
 };
 use anyhow::{bail, Context, Result};
@@ -18,6 +18,7 @@ use std::{
     process::{Command, Stdio},
     time::SystemTime,
 };
+use warg_protocol::registry::PackageId;
 use wit_bindgen_rust::Opts;
 use wit_bindgen_rust_lib::to_rust_ident;
 use wit_component::DecodedWasm;
@@ -163,7 +164,26 @@ impl<'a> BindingsGenerator<'a> {
     }
 
     /// Encodes the target world used by the generator to a binary format.
-    pub fn encode_target_world(&self) -> Result<Vec<u8>> {
+    pub fn encode_target_world(mut self, version: &Version) -> Result<Vec<u8>> {
+        let world = &self.resolve.worlds[self.world];
+
+        let pkg_id = world.package.context("world has no package")?;
+        let pkg = &mut self.resolve.packages[pkg_id];
+
+        self.resolve
+            .package_names
+            .remove(&pkg.name)
+            .context("package name in map")?;
+        pkg.name.version = Some(version.clone());
+        if self
+            .resolve
+            .package_names
+            .insert(pkg.name.clone(), pkg_id)
+            .is_some()
+        {
+            bail!("duplicate package name `{name}`", name = pkg.name);
+        }
+
         wit_component::encode(
             &self.resolve,
             self.resolve.worlds[self.world]
@@ -279,9 +299,9 @@ publish = false
                 .with_context(|| format!("failed to decode component dependency `{id}`"))?;
 
             // Set the world name as currently it defaults to "root"
-            // For now, set it to the package name from the id
+            // For now, set it to the name from the id
             let world = &mut resolve.worlds[component_world_id];
-            world.name = id.package_name().to_string();
+            world.name = id.name().to_string();
 
             let source = merged
                 .merge(resolve)
@@ -295,7 +315,7 @@ publish = false
 
     fn target_package(
         resolution: &PackageDependencyResolution,
-        id: &metadata::Id,
+        id: &PackageId,
         world: Option<&str>,
     ) -> Result<(Resolve, WorldId, Vec<PathBuf>)> {
         // We must have resolved a target package dependency at this point
@@ -342,7 +362,7 @@ publish = false
                 bail!("duplicate definitions of package `{name}` found while decoding target dependency `{id}`", name = prev.package_name());
             }
 
-            // We're storing the dependencies with versionless package names
+            // We're storing the dependencies with versionless package ids
             // This allows us to resolve a versionless foreign dependency to a singular
             // versioned dependency, if there is one
             unversioned.entry(versionless).or_default().push(index);
@@ -623,22 +643,31 @@ publish = false
     }
 }
 
-fn export_trait_path(resolve: &Resolve, key: &WorldKey) -> String {
+fn export_world_key_path(resolve: &Resolve, key: &WorldKey) -> String {
     match key {
-        WorldKey::Name(n) => format!(
-            "bindings::exports::{n}::{camel}",
-            camel = n.to_upper_camel_case()
-        ),
+        WorldKey::Name(name) => format!("bindings::exports::{name}", name = name.to_snake_case(),),
         WorldKey::Interface(id) => {
             let iface = &resolve.interfaces[*id];
             let pkg = &resolve.packages[iface.package.expect("interface should have a package")];
             let name = iface.name.as_deref().expect("unnamed interface");
             format!(
-                "bindings::exports::{ns}::{pkg}::{name}::{camel}",
-                ns = pkg.name.namespace,
-                pkg = pkg.name.name,
-                camel = name.to_upper_camel_case()
+                "bindings::exports::{ns}::{pkg}::{name}",
+                ns = pkg.name.namespace.to_snake_case(),
+                pkg = pkg.name.name.to_snake_case(),
+                name = name.to_snake_case(),
             )
+        }
+    }
+}
+
+fn export_trait_path(resolve: &Resolve, key: &WorldKey) -> String {
+    let path = export_world_key_path(resolve, key);
+    match key {
+        WorldKey::Name(name) => format!("{path}::{name}", name = name.to_upper_camel_case()),
+        WorldKey::Interface(id) => {
+            let iface = &resolve.interfaces[*id];
+            let name = iface.name.as_deref().expect("unnamed interface");
+            format!("{path}::{camel}", camel = name.to_upper_camel_case())
         }
     }
 }
@@ -648,7 +677,7 @@ fn export_trait_path(resolve: &Resolve, key: &WorldKey) -> String {
 /// The generated source defines a component that will implement the expected
 /// export traits for the given world.
 pub struct SourceGenerator<'a> {
-    id: &'a metadata::Id,
+    id: &'a PackageId,
     path: &'a Path,
     format: bool,
 }
@@ -658,7 +687,7 @@ impl<'a> SourceGenerator<'a> {
     /// a binary-encoded target wit package.
     ///
     /// If `format` is true, then `cargo fmt` will be run on the generated source.
-    pub fn new(id: &'a metadata::Id, path: &'a Path, format: bool) -> Self {
+    pub fn new(id: &'a PackageId, path: &'a Path, format: bool) -> Self {
         Self { id, path, format }
     }
 
@@ -915,13 +944,11 @@ impl<'a> SourceGenerator<'a> {
         let name = ty.name.as_ref().unwrap().to_upper_camel_case();
 
         if let TypeOwner::Interface(id) = ty.owner {
-            if let Some(pkg) = resolve.interfaces[id].package {
-                let name = &resolve.packages[pkg].name;
+            if resolve.interfaces[id].package.is_some() {
                 write!(
                     source,
-                    "bindings::{ns}::{pkg}::{name}",
-                    ns = name.namespace,
-                    pkg = name.name
+                    "{path}::{name}",
+                    path = export_world_key_path(resolve, &WorldKey::Interface(id))
                 )
                 .unwrap();
                 return;
