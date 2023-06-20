@@ -93,7 +93,7 @@ impl UseTrie {
 
     /// Inserts a new use of the given type.
     ///
-    /// This method handles the proper casing for segment paths and type names.
+    /// This method handles the proper casing for path segments and type names.
     ///
     /// Returns the string to use when printing the type reference.
     fn insert<'a, I>(&mut self, path: I, ty: &str) -> Cow<str>
