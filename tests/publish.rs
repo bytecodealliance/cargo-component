@@ -37,6 +37,10 @@ world foo {
 
     let project = Project::with_root(&root, "foo", "--target my:world")?;
 
+    // Ensure there's a using declaration in the generated source
+    let source = fs::read_to_string(project.root().join("src/lib.rs"))?;
+    assert!(source.contains("use bindings::Foo;"));
+
     project
         .cargo_component("publish --id test:foo --init")
         .env("CARGO_COMPONENT_PUBLISH_KEY", test_signing_key())

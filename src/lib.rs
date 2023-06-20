@@ -39,6 +39,7 @@ use wit_component::ComponentEncoder;
 pub mod bindings;
 pub mod commands;
 pub mod config;
+mod generator;
 pub mod metadata;
 pub mod registry;
 mod signing;
