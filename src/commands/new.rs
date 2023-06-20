@@ -1,6 +1,7 @@
 use crate::{
-    bindings::{SourceGenerator, WIT_BINDGEN_VERSION},
-    metadata::{self},
+    bindings::WIT_BINDGEN_VERSION,
+    generator::SourceGenerator,
+    metadata,
     registry::{DependencyResolution, DependencyResolver, RegistryResolution},
     Config,
 };
