@@ -24,7 +24,7 @@ use wit_parser::{
 };
 
 pub(crate) const BINDINGS_VERSION: &str = "0.1.0";
-pub(crate) const WIT_BINDGEN_VERSION: &str = "0.7.0";
+pub(crate) const WIT_BINDGEN_VERSION: &str = "0.8.0";
 
 fn named_world_key<'a>(resolve: &'a Resolve, orig: &'a WorldKey, prefix: &str) -> WorldKey {
     let name = match orig {

@@ -169,9 +169,8 @@ impl PublishCommand {
             &metadata.section.registries,
         )?;
 
-        let signing_key: PrivateKey = if let Ok(key) = std::env::var("CARGO_COMPONENT_PUBLISH_KEY")
-        {
-            key.parse().context("failed to parse signing key from `CARGO_COMPONENT_PUBLISH_KEY` environment variable")?
+        let signing_key = if let Ok(key) = std::env::var("CARGO_COMPONENT_PUBLISH_KEY") {
+            PrivateKey::decode(key).context("failed to parse signing key from `CARGO_COMPONENT_PUBLISH_KEY` environment variable")?
         } else {
             let url: Url = url
                 .parse()

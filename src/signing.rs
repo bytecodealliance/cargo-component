@@ -16,7 +16,7 @@ pub fn get_signing_key(host: &str, name: &str) -> Result<PrivateKey> {
     let entry = get_signing_key_entry(host, name)?;
 
     match entry.get_password() {
-        Ok(secret) => secret.parse().context("failed to parse signing key"),
+        Ok(secret) => PrivateKey::decode(secret).context("failed to parse signing key"),
         Err(keyring::Error::NoEntry) => {
             bail!("no signing key found with name `{name}` for registry `{host}`");
         }
@@ -32,7 +32,7 @@ pub fn get_signing_key(host: &str, name: &str) -> Result<PrivateKey> {
 /// Sets the signing key for the given registry host and key name.
 pub fn set_signing_key(host: &str, name: &str, key: &PrivateKey) -> Result<()> {
     let entry = get_signing_key_entry(host, name)?;
-    match entry.set_password(&key.to_string()) {
+    match entry.set_password(&key.encode()) {
         Ok(()) => Ok(()),
         Err(keyring::Error::NoEntry) => {
             bail!("no signing key found with name `{name}` for registry `{host}`");
