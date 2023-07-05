@@ -15,6 +15,7 @@ use warg_client::{
     storage::{ContentStorage, PublishEntry, PublishInfo},
     FileSystemClient,
 };
+use warg_crypto::signing::PrivateKey;
 use warg_protocol::registry::PackageId;
 use warg_server::{policy::content::WasmContentPolicy, Config, Server};
 use wasmparser::{Chunk, Encoding, Parser, Payload, Validator, WasmFeatures};
@@ -99,7 +100,7 @@ pub async fn publish(
 
     let record_id = client
         .publish_with_info(
-            &test_signing_key().parse().unwrap(),
+            &PrivateKey::decode(test_signing_key().to_string()).unwrap(),
             PublishInfo {
                 id: id.clone(),
                 head: None,
@@ -171,11 +172,14 @@ impl Drop for ServerInstance {
 /// Spawns a server as a background task.
 pub async fn spawn_server(root: &Path) -> Result<(ServerInstance, warg_client::Config)> {
     let shutdown = CancellationToken::new();
-    let config = Config::new(test_operator_key().parse()?, root.join("server"))
-        .with_addr(([127, 0, 0, 1], 0))
-        .with_shutdown(shutdown.clone().cancelled_owned())
-        .with_checkpoint_interval(Duration::from_millis(100))
-        .with_content_policy(WasmContentPolicy::default());
+    let config = Config::new(
+        PrivateKey::decode(test_operator_key().to_string())?,
+        root.join("server"),
+    )
+    .with_addr(([127, 0, 0, 1], 0))
+    .with_shutdown(shutdown.clone().cancelled_owned())
+    .with_checkpoint_interval(Duration::from_millis(100))
+    .with_content_policy(WasmContentPolicy::default());
 
     let mut server = Server::new(config);
     let addr = server.bind()?;
