@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use assert_cmd::prelude::OutputAssertExt;
 use std::{
     env, fs,
@@ -11,6 +11,7 @@ use std::{
 };
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
+use toml_edit::{value, Document, InlineTable};
 use warg_client::{
     storage::{ContentStorage, PublishEntry, PublishInfo},
     FileSystemClient,
@@ -27,6 +28,13 @@ pub fn test_operator_key() -> &'static str {
 
 pub fn test_signing_key() -> &'static str {
     "ecdsa-p256:2CV1EpLaSYEn4In4OAEDAj5O4Hzu8AFAxgHXuG310Ew="
+}
+
+pub fn redirect_bindings_crate(doc: &mut Document) {
+    const PATH_TO_BINDINGS_CRATE: &str = "../../../../crates/bindings";
+
+    doc["dependencies"]["cargo-component-bindings"] =
+        value(InlineTable::from_iter([("path", PATH_TO_BINDINGS_CRATE)]));
 }
 
 pub fn root() -> Result<PathBuf> {
@@ -181,11 +189,11 @@ pub async fn spawn_server(root: &Path) -> Result<(ServerInstance, warg_client::C
     .with_checkpoint_interval(Duration::from_millis(100))
     .with_content_policy(WasmContentPolicy::default());
 
-    let mut server = Server::new(config);
-    let addr = server.bind()?;
+    let server = Server::new(config).initialize().await?;
+    let addr = server.local_addr()?;
 
     let task = tokio::spawn(async move {
-        server.run().await.unwrap();
+        server.serve().await.unwrap();
     });
 
     let instance = ServerInstance {
@@ -239,7 +247,7 @@ impl Project {
     pub fn new(name: &str) -> Result<Self> {
         let root = create_root()?;
 
-        cargo_component(&format!("new --lib {name}"))
+        cargo_component(&format!("new --reactor {name}"))
             .current_dir(&root)
             .assert()
             .try_success()?;
@@ -263,7 +271,7 @@ impl Project {
     }
 
     pub fn with_root(root: &Path, name: &str, args: &str) -> Result<Self> {
-        cargo_component(&format!("new --lib {name} {args}"))
+        cargo_component(&format!("new --reactor {name} {args}"))
             .current_dir(root)
             .assert()
             .try_success()?;
@@ -278,6 +286,13 @@ impl Project {
         fs::create_dir_all(path.parent().unwrap())?;
         fs::write(self.root().join(path), body)?;
         Ok(self)
+    }
+
+    pub fn update_manifest(&self, f: impl FnOnce(Document) -> Result<Document>) -> Result<()> {
+        let manifest_path = self.root.join("Cargo.toml");
+        let manifest = fs::read_to_string(&manifest_path)?;
+        fs::write(manifest_path, f(manifest.parse()?)?.to_string())?;
+        Ok(())
     }
 
     pub fn root(&self) -> &Path {
@@ -331,10 +346,9 @@ pub fn validate_component(path: &Path) -> Result<()> {
                 },
             ..
         } => Ok(()),
-        Chunk::Parsed { payload, .. } => Err(anyhow::anyhow!(
-            "expected component version payload, got {:?}",
-            payload
-        )),
+        Chunk::Parsed { payload, .. } => {
+            bail!("expected component version payload, got {:?}", payload)
+        }
         Chunk::NeedMoreData(_) => unreachable!(),
     }
 }

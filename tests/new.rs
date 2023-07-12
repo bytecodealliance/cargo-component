@@ -22,10 +22,10 @@ fn help() {
 fn it_creates_the_expected_files_for_bin() -> Result<()> {
     let root = create_root()?;
 
-    cargo_component("new --bin foo")
+    cargo_component("new --command foo")
         .current_dir(&root)
         .assert()
-        .stderr(contains("Created component `foo` package"))
+        .stderr(contains("Updated manifest of package `foo"))
         .success();
 
     let proj_dir = root.join("foo");
@@ -43,10 +43,10 @@ fn it_creates_the_expected_files_for_bin() -> Result<()> {
 fn it_creates_the_expected_files() -> Result<()> {
     let root = create_root()?;
 
-    cargo_component("new --lib foo")
+    cargo_component("new --reactor foo")
         .current_dir(&root)
         .assert()
-        .stderr(contains("Created component `foo` package"))
+        .stderr(contains("Updated manifest of package `foo`"))
         .success();
 
     let proj_dir = root.join("foo");
@@ -64,10 +64,10 @@ fn it_creates_the_expected_files() -> Result<()> {
 fn it_supports_editor_option() -> Result<()> {
     let root = create_root()?;
 
-    cargo_component("new --lib foo --editor none")
+    cargo_component("new --reactor foo --editor none")
         .current_dir(&root)
         .assert()
-        .stderr(contains("Created component `foo` package"))
+        .stderr(contains("Updated manifest of package `foo"))
         .success();
 
     let proj_dir = root.join("foo");
@@ -84,10 +84,10 @@ fn it_supports_editor_option() -> Result<()> {
 fn it_supports_edition_option() -> Result<()> {
     let root = create_root()?;
 
-    cargo_component("new --lib foo --edition 2018")
+    cargo_component("new --reactor foo --edition 2018")
         .current_dir(&root)
         .assert()
-        .stderr(contains("Created component `foo` package"))
+        .stderr(contains("Updated manifest of package `foo"))
         .success();
 
     let proj_dir = root.join("foo");
@@ -101,10 +101,10 @@ fn it_supports_edition_option() -> Result<()> {
 fn it_supports_name_option() -> Result<()> {
     let root = create_root()?;
 
-    cargo_component("new --lib foo --name bar")
+    cargo_component("new --reactor foo --name bar")
         .current_dir(&root)
         .assert()
-        .stderr(contains("Created component `bar` package"))
+        .stderr(contains("Updated manifest of package `bar`"))
         .success();
 
     let proj_dir = root.join("foo");
@@ -118,7 +118,7 @@ fn it_supports_name_option() -> Result<()> {
 fn it_rejects_rust_keywords() -> Result<()> {
     let root = create_root()?;
 
-    cargo_component("new --lib foo --name fn")
+    cargo_component("new --reactor foo --name fn")
         .current_dir(&root)
         .assert()
         .stderr(contains(
@@ -149,6 +149,10 @@ world foo {
     .await?;
 
     let project = Project::with_root(&root, "component", "--target foo:bar@1.0.0")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
 
     project
         .cargo_component("build")

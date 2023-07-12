@@ -3,7 +3,7 @@ use anyhow::Result;
 use assert_cmd::prelude::*;
 use predicates::{prelude::*, str::contains};
 use std::fs;
-use toml_edit::{value, Document};
+use toml_edit::value;
 
 mod support;
 
@@ -62,7 +62,7 @@ async fn validate_the_version_exists() -> Result<()> {
     assert!(contains(r#""foo:bar" = "1.1.0""#).eval(&manifest));
 
     project
-        .cargo_component("add --version 2.0.0 --id foo:bar2 foo:bar")
+        .cargo_component("add --id foo:bar2 foo:bar@2.0.0")
         .assert()
         .stderr(contains(
             "component registry package `foo:bar` has no release matching version requirement `^2.0.0`",
@@ -75,11 +75,11 @@ async fn validate_the_version_exists() -> Result<()> {
 #[test]
 fn checks_for_duplicate_dependencies() -> Result<()> {
     let project = Project::new("foo")?;
-    let manifest_path = project.root().join("Cargo.toml");
-    let manifest = fs::read_to_string(&manifest_path)?;
-    let mut doc: Document = manifest.parse()?;
-    doc["package"]["metadata"]["component"]["dependencies"]["foo:bar"] = value("1.2.3");
-    fs::write(manifest_path, doc.to_string())?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        doc["package"]["metadata"]["component"]["dependencies"]["foo:bar"] = value("1.2.3");
+        Ok(doc)
+    })?;
 
     project
         .cargo_component("add foo:bar")

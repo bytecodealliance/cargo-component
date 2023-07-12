@@ -7,24 +7,17 @@ use std::{fmt::Write, fs};
 mod support;
 
 #[test]
-fn help() {
-    for arg in ["help clippy", "clippy -h", "clippy --help"] {
-        cargo_component(arg)
-            .assert()
-            .stdout(contains(
-                "Checks a package to catch common mistakes and improve your Rust code",
-            ))
-            .success();
-    }
-}
-
-#[test]
 fn it_checks_a_new_project() -> Result<()> {
     let project = Project::new("foo")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
+
     project
         .cargo_component("clippy")
         .assert()
-        .stderr(contains("Checking foo-bindings v0.1.0"))
+        .stderr(contains("Checking foo v0.1.0"))
         .success();
 
     Ok(())
@@ -33,6 +26,10 @@ fn it_checks_a_new_project() -> Result<()> {
 #[test]
 fn it_finds_errors() -> Result<()> {
     let project = Project::new("foo")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
 
     let mut src = fs::read_to_string(project.root().join("src/lib.rs"))?;
     write!(&mut src, "\n\nfn foo() -> String {{\n  \"foo\"\n}}\n")?;
@@ -42,10 +39,7 @@ fn it_finds_errors() -> Result<()> {
     project
         .cargo_component("clippy")
         .assert()
-        .stderr(
-            contains("Checking foo-bindings v0.1.0")
-                .and(contains("expected `String`, found `&str`")),
-        )
+        .stderr(contains("Checking foo v0.1.0").and(contains("expected `String`, found `&str`")))
         .failure();
 
     Ok(())
@@ -54,6 +48,10 @@ fn it_finds_errors() -> Result<()> {
 #[test]
 fn it_finds_clippy_warnings() -> Result<()> {
     let project = Project::new("foo")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
 
     let mut src = fs::read_to_string(project.root().join("src/lib.rs"))?;
     write!(
@@ -66,7 +64,7 @@ fn it_finds_clippy_warnings() -> Result<()> {
     project
         .cargo_component("clippy")
         .assert()
-        .stderr(contains("Checking foo-bindings v0.1.0").and(contains("clippy::needless_return")))
+        .stderr(contains("Checking foo v0.1.0").and(contains("clippy::needless_return")))
         .success();
 
     Ok(())
@@ -95,23 +93,33 @@ edition = "2021"
         .build();
 
     project
-        .cargo_component("new --lib foo")
+        .cargo_component("new --reactor foo")
         .assert()
-        .stderr(contains("Created component `foo` package"))
+        .stderr(contains("Updated manifest of package `foo`"))
         .success();
 
+    let member = ProjectBuilder::new(project.root().join("foo")).build();
+    member.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
+
     project
-        .cargo_component("new --lib bar")
+        .cargo_component("new --reactor bar")
         .assert()
-        .stderr(contains("Created component `bar` package"))
+        .stderr(contains("Updated manifest of package `bar`"))
         .success();
+
+    let member = ProjectBuilder::new(project.root().join("bar")).build();
+    member.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
 
     project
         .cargo_component("clippy")
         .assert()
-        .stderr(
-            contains("Checking foo-bindings v0.1.0").and(contains("Checking bar-bindings v0.1.0")),
-        )
+        .stderr(contains("Checking foo v0.1.0").and(contains("Checking bar v0.1.0")))
         .success();
 
     Ok(())

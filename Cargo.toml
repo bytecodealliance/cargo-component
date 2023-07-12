@@ -2,49 +2,93 @@
 name = "cargo-component"
 version = "0.1.0"
 edition = "2021"
+authors = ["Peter Huene <peter@huene.dev>"]
+description = "A cargo extension for authoring WebAssembly components"
+license = "Apache-2.0 WITH LLVM-exception"
+documentation = "https://docs.rs/cargo-component"
+categories = ["wasm"]
+keywords = ["webassembly", "wasm", "components", "component-model"]
+repository = "https://github.com/bytecodealliance/cargo-component"
 
 [dependencies]
-anyhow = "1.0.71"
-cargo = "0.71.0"
-cargo-util = "0.2.4"
-clap = { version = "4.3.11", features = ["derive"] }
-toml_edit = { version = "0.19.12", features = ["serde"] }
+cargo-component-core = { workspace = true }
+anyhow = { workspace = true }
+clap = { workspace = true }
+toml_edit = { workspace = true }
+pretty_env_logger = { workspace = true }
+log = { workspace = true }
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+heck = { workspace = true }
+semver = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+indexmap = { workspace = true }
+url = { workspace = true }
+wit-bindgen-rust-lib = { workspace = true }
+wit-parser = { workspace = true }
+wit-component = { workspace = true }
+wasm-metadata = { workspace = true }
+parse_arg = { workspace = true }
+cargo_metadata = { workspace = true }
+libc = { workspace = true }
+warg-protocol = { workspace = true }
+warg-crypto = { workspace = true }
+warg-client = { workspace = true }
+p256 = { workspace = true }
+rand_core = { workspace = true }
+rpassword = { workspace = true }
+futures = { workspace = true }
+bytes = { workspace = true }
+
+[dev-dependencies]
+assert_cmd = "2.0.12"
+predicates = "3.0.3"
+wasmparser = "0.109.0"
+wat = "1.0.68"
+warg-server = { git = "https://github.com/bytecodealliance/registry" }
+
+[workspace]
+members = ["crates/bindings", "crates/macro", "crates/core"]
+exclude = ["target/tests"]
+
+[workspace.dependencies]
+cargo-component-core = { path = "crates/core" }
+cargo-component-macro = { path = "crates/macro" }
 warg-protocol = { git = "https://github.com/bytecodealliance/registry" }
 warg-crypto = { git = "https://github.com/bytecodealliance/registry" }
 warg-client = { git = "https://github.com/bytecodealliance/registry" }
-wit-bindgen-core = "0.8.0"
-wit-bindgen-rust = "0.8.0"
-wit-bindgen-rust-lib = "0.8.0"
-wit-parser = "0.8.0"
-wit-component = "0.11.0"
-pretty_env_logger = { version = "0.5.0", optional = true }
+anyhow = "1.0.72"
+clap = { version = "4.3.19", features = ["derive"] }
+toml_edit = { version = "0.19.14", features = ["serde"] }
+pretty_env_logger = "0.5.0"
 log = "0.4.19"
-heck = "0.4.1"
-semver = "1.0.17"
-serde = { version = "1.0.166", features = ["derive"] }
-url = { version = "2.4.0", features = ["serde"] }
 tokio = { version = "1.29.1", default-features = false, features = ["macros", "rt-multi-thread"] }
-home = "0.5.5"
-p256 = "0.13.2"
+tokio-util = "0.7.8"
+heck = "0.4.1"
+semver = "1.0.18"
+serde = { version = "1.0.175", features = ["derive"] }
+serde_json = "1.0.103"
+indexmap = "2.0.0"
+url = { version = "2.4.0", features = ["serde"] }
+wit-bindgen-rust-lib = { git = "https://github.com/bytecodealliance/wit-bindgen" }
+wit-parser = "0.9.1"
+wit-component = "0.13.0"
+wasm-metadata = "0.10.0"
+parse_arg = "0.1.4"
+cargo_metadata = "0.17.0"
+keyring = "2.0.4"
+libc = "0.2.147"
+owo-colors = "3.5.0"
+unicode-width = "0.1.10"
+p256 = "0.13.2" 
 rand_core = "0.6.4"
-serde_json = "1.0.100"
-async-trait = "0.1.71"
-wat = "1.0.66"
-indexmap = "1.9.3"
-hex = "0.4.3"
-termcolor = "1.2.0"
-wasm-metadata = "0.8.0"
+rpassword = "7.2.0"
 futures = "0.3.28"
 bytes = "1.4.0"
-tokio-util = "0.7.8"
-rpassword = "7.2.0"
-keyring = "2.0.4"
-
-[features]
-default = ["pretty_env_logger"]
-
-[dev-dependencies]
-assert_cmd = "2.0.11"
-predicates = "3.0.3"
-wasmparser = "0.107.0"
-warg-server = { git = "https://github.com/bytecodealliance/registry" }
+proc-macro2 = "1.0.66"
+quote = "1.0.32"
+syn = "2.0.27"
+wit-bindgen-core = { git = "https://github.com/peterhuene/wit-bindgen", branch = "runtime-path" }
+wit-bindgen-rust = { git = "https://github.com/peterhuene/wit-bindgen", branch = "runtime-path" }
+wit-bindgen = { git = "https://github.com/peterhuene/wit-bindgen", default_features = false, features = ["realloc"], branch = "runtime-path" }

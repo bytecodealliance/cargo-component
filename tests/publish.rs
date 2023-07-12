@@ -35,14 +35,18 @@ world foo {
     )
     .await?;
 
-    let project = Project::with_root(&root, "foo", "--target my:world")?;
+    let project = Project::with_root(&root, "foo", "--namespace test --target my:world")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
 
     // Ensure there's a using declaration in the generated source
     let source = fs::read_to_string(project.root().join("src/lib.rs"))?;
     assert!(source.contains("use bindings::Foo;"));
 
     project
-        .cargo_component("publish --id test:foo --init")
+        .cargo_component("publish --init")
         .env("CARGO_COMPONENT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("Published package `test:foo` v0.1.0"))
@@ -72,10 +76,14 @@ world foo {
     )
     .await?;
 
-    let project = Project::with_root(&root, "foo", "--target my:world")?;
+    let project = Project::with_root(&root, "foo", "--namespace test --target my:world")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
 
     project
-        .cargo_component("publish --id test:foo")
+        .cargo_component("publish")
         .env("CARGO_COMPONENT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("error: package `test:foo` does not exist"))
@@ -102,10 +110,14 @@ world foo {
     )
     .await?;
 
-    let project = Project::with_root(&root, "foo", "--target my:world/foo")?;
+    let project = Project::with_root(&root, "foo", "--namespace test --target my:world/foo")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
 
     project
-        .cargo_component("publish --id test:foo --init")
+        .cargo_component("publish --init")
         .env("CARGO_COMPONENT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("Published package `test:foo` v0.1.0"))
@@ -113,7 +125,11 @@ world foo {
 
     validate_component(&project.release_wasm("foo"))?;
 
-    let project = Project::with_root(&root, "bar", "--target my:world")?;
+    let project = Project::with_root(&root, "bar", "--namespace test --target my:world")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
 
     project
         .cargo_component("add test:foo")
@@ -121,20 +137,20 @@ world foo {
         .stderr(contains("Added dependency `test:foo` with version `0.1.0`"))
         .success();
 
-    let source = r#"use bindings::Foo;
+    let source = r#"cargo_component_bindings::generate!();
+use bindings::Foo;
 struct Component;
 impl Foo for Component {
     fn bar() -> String {
         bindings::foo::bar()
     }
 }
-bindings::export!(Component);
 "#;
 
     fs::write(project.root().join("src/lib.rs"), source)?;
 
     project
-        .cargo_component("publish --id test:bar --init")
+        .cargo_component("publish --init")
         .env("CARGO_COMPONENT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("Published package `test:bar` v0.1.0"))

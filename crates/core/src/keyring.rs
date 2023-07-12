@@ -1,5 +1,8 @@
+//! Module for managing the keyring.
+
 use anyhow::{bail, Context, Result};
 use keyring::Entry;
+pub use keyring::Error;
 use warg_crypto::signing::PrivateKey;
 
 /// Gets the signing key entry for the given registry and key name.
@@ -46,6 +49,7 @@ pub fn set_signing_key(host: &str, name: &str, key: &PrivateKey) -> Result<()> {
     }
 }
 
+/// Deletes the signing key for the given registry host and key name.
 pub fn delete_signing_key(host: &str, name: &str) -> Result<()> {
     let entry = get_signing_key_entry(host, name)?;
     match entry.delete_password() {

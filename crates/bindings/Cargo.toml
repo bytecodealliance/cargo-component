@@ -1,0 +1,15 @@
+[package]
+name = "cargo-component-bindings"
+version = "0.1.0"
+edition = "2021"
+authors = ["Peter Huene <peter@huene.dev>"]
+description = "A crate for generating bindings of WebAssembly components."
+license = "Apache-2.0 WITH LLVM-exception"
+documentation = "https://docs.rs/cargo-component-bindings"
+categories = ["wasm"]
+keywords = ["webassembly", "wasm", "components", "component model"]
+repository = "https://github.com/bytecodealliance/cargo-component"
+
+[dependencies]
+cargo-component-macro = { workspace = true }
+wit-bindgen = { workspace = true }

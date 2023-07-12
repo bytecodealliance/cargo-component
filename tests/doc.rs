@@ -7,27 +7,20 @@ use std::fs;
 mod support;
 
 #[test]
-fn help() {
-    for arg in ["help doc", "doc -h", "doc --help"] {
-        cargo_component(arg)
-            .assert()
-            .stdout(contains(
-                "Generate API documentation for a WebAssembly component API",
-            ))
-            .success();
-    }
-}
-
-#[test]
 fn it_documents() -> Result<()> {
     let project = Project::new("foo")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
+
     project
         .cargo_component("doc")
         .assert()
         .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
         .success();
 
-    let doc = project.build_dir().join("wasm32-wasi").join("doc");
+    let doc = project.build_dir().join("doc");
 
     let path = doc.join("src").join("foo").join("lib.rs.html");
     let content = fs::read(&path).with_context(|| {
