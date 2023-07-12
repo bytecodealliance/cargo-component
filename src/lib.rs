@@ -138,6 +138,7 @@ async fn generate_workspace_bindings(
             dependencies,
             manifest.original().features().unwrap_or(&BTreeMap::new()),
             manifest.links(),
+            None::<String>,
         )?;
     }
 

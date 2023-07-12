@@ -491,6 +491,9 @@ impl<'a> SourceGenerator<'a> {
                 source.push('>');
             }
             TypeDefKind::Type(ty) => Self::print_type(resolve, ty, source, trie)?,
+            TypeDefKind::Resource | TypeDefKind::Handle(_) => {
+                todo!("implement resources support")
+            }
             TypeDefKind::Unknown => unreachable!(),
         }
 

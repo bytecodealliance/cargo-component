@@ -568,6 +568,8 @@ publish = false
             imports: Default::default(),
             exports: Default::default(),
             package: Some(package),
+            includes: Default::default(),
+            include_names: Default::default(),
         });
 
         (resolve, world)
