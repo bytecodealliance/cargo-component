@@ -5,10 +5,10 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.71"
-cargo = "0.72.0"
+cargo = "0.71.0"
 cargo-util = "0.2.4"
 clap = { version = "4.3.11", features = ["derive"] }
-toml_edit = { version = "0.19.12", features = ["serde"] }
+toml_edit = { version = "0.19.13", features = ["serde"] }
 warg-protocol = { git = "https://github.com/bytecodealliance/registry" }
 warg-crypto = { git = "https://github.com/bytecodealliance/registry" }
 warg-client = { git = "https://github.com/bytecodealliance/registry" }
