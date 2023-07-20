@@ -75,7 +75,7 @@ members = ["foo", "bar", "baz"]
 name = "baz"
 version = "0.1.0"
 edition = "2021"
-    
+
 [dependencies]
 "#,
         )?
@@ -290,6 +290,74 @@ bindings::export!(Component);",
         .success();
 
     validate_component(&project.debug_wasm("foo"))?;
+
+    Ok(())
+}
+
+#[test]
+fn empty_world_with_dep_valid() -> Result<()> {
+    let project = Project::new("dep")?;
+
+    fs::write(
+        project.root().join("wit/world.wit"),
+        "
+            package foo:bar
+
+            world the-world {
+                export hello: func()
+            }
+        ",
+    )?;
+
+    fs::write(
+        project.root().join("src/lib.rs"),
+        "
+            use bindings::TheWorld;
+            struct Component;
+
+            impl TheWorld for Component {
+                fn hello() {
+                    todo!()
+                }
+            }
+
+            bindings::export!(Component);
+        ",
+    )?;
+
+    project.cargo_component("build").assert().success();
+
+    let dep = project.debug_wasm("dep");
+    validate_component(&dep)?;
+
+    let project = Project::with_root(project.root().parent().unwrap(), "main", "")?;
+    let manifest_path = project.root().join("Cargo.toml");
+    let manifest = fs::read_to_string(&manifest_path)?;
+    let mut doc: Document = manifest.parse()?;
+    let table = doc["package"]["metadata"]["component"]
+        .as_table_mut()
+        .unwrap();
+    table.remove("package");
+    table.remove("target");
+    let mut dependencies = Table::new();
+    dependencies["foo:bar"]["path"] = value(dep.display().to_string());
+    doc["package"]["metadata"]["component"]["dependencies"] = Item::Table(dependencies);
+    fs::write(manifest_path, doc.to_string())?;
+
+    fs::remove_dir_all(project.root().join("wit"))?;
+
+    fs::write(
+        project.root().join("src/lib.rs"),
+        "
+            #[no_mangle]
+            pub extern \"C\" fn foo() {
+                bindings::bar::hello();
+            }
+        ",
+    )?;
+
+    project.cargo_component("build").assert().success();
+    validate_component(&project.debug_wasm("main"))?;
 
     Ok(())
 }

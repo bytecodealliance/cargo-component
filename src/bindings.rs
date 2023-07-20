@@ -563,12 +563,13 @@ publish = false
         });
 
         let world = resolve.worlds.alloc(World {
-            name,
+            name: name.clone(),
             docs: Default::default(),
             imports: Default::default(),
             exports: Default::default(),
             package: Some(package),
         });
+        resolve.packages[package].worlds.insert(name, world);
 
         (resolve, world)
     }
