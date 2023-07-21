@@ -298,6 +298,9 @@ pub struct ComponentSection {
     pub dependencies: HashMap<PackageId, Dependency>,
     /// The registries to use for the component.
     pub registries: HashMap<String, Url>,
+    /// Whether or not to run `rustfmt` over generated bindings.
+    #[serde(rename = "rustfmt-bindings")]
+    pub rustfmt_bindings: Option<bool>,
 }
 
 /// Represents cargo metadata for a WebAssembly component.

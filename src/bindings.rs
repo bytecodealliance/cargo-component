@@ -222,7 +222,12 @@ publish = false
         })?;
 
         let opts = Opts {
-            rustfmt: true,
+            rustfmt: self
+                .resolution
+                .metadata
+                .section
+                .rustfmt_bindings
+                .unwrap_or(true),
             macro_export: true,
             macro_call_prefix: Some("bindings::".to_string()),
             export_macro_name: Some("export".to_string()),
