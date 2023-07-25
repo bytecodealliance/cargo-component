@@ -427,7 +427,7 @@ mod imp {
     }
 
     pub fn stderr_erase_line() {
-        match imp::stderr_width() {
+        match stderr_width() {
             Some(width) => {
                 let blank = " ".repeat(width);
                 eprint!("{}\r", blank);
