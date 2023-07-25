@@ -490,7 +490,7 @@ dependencies = [
  "wasm-metadata 0.10.0",
  "wasmparser 0.109.0",
  "wat",
- "wit-bindgen-rust-lib 0.9.0",
+ "wit-bindgen-rust-lib",
  "wit-component 0.13.0",
  "wit-parser",
 ]
@@ -535,7 +535,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.27",
- "wit-bindgen-core 0.8.0",
+ "wit-bindgen-core",
  "wit-bindgen-rust",
  "wit-component 0.13.0",
 ]
@@ -1463,9 +1463,9 @@ dependencies = [
 
 [[package]]
 name = "keyring"
-version = "2.0.4"
+version = "2.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "04ac4b8b0884cdf23c4619d139acf43839eac4f0739b92980c2a6d460d9c84f5"
+checksum = "9549a129bd08149e0a71b2d1ce2729780d47127991bfd0a78cc1df697ec72492"
 dependencies = [
  "byteorder",
  "lazy_static",
@@ -3264,7 +3264,7 @@ dependencies = [
 [[package]]
 name = "warg-api"
 version = "0.1.0"
-source = "git+https://github.com/bytecodealliance/registry#1cbd8d56beaac6e42fd91d2191e71cac2efce261"
+source = "git+https://github.com/bytecodealliance/registry#b6f0f4060dca587f661d3d1a2605d70d561aea9b"
 dependencies = [
  "serde",
  "serde_with",
@@ -3276,7 +3276,7 @@ dependencies = [
 [[package]]
 name = "warg-client"
 version = "0.1.0"
-source = "git+https://github.com/bytecodealliance/registry#1cbd8d56beaac6e42fd91d2191e71cac2efce261"
+source = "git+https://github.com/bytecodealliance/registry#b6f0f4060dca587f661d3d1a2605d70d561aea9b"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3309,7 +3309,7 @@ dependencies = [
 [[package]]
 name = "warg-crypto"
 version = "0.1.0"
-source = "git+https://github.com/bytecodealliance/registry#1cbd8d56beaac6e42fd91d2191e71cac2efce261"
+source = "git+https://github.com/bytecodealliance/registry#b6f0f4060dca587f661d3d1a2605d70d561aea9b"
 dependencies = [
  "anyhow",
  "base64 0.21.2",
@@ -3329,7 +3329,7 @@ dependencies = [
 [[package]]
 name = "warg-protobuf"
 version = "0.1.0"
-source = "git+https://github.com/bytecodealliance/registry#1cbd8d56beaac6e42fd91d2191e71cac2efce261"
+source = "git+https://github.com/bytecodealliance/registry#b6f0f4060dca587f661d3d1a2605d70d561aea9b"
 dependencies = [
  "anyhow",
  "pbjson",
@@ -3347,7 +3347,7 @@ dependencies = [
 [[package]]
 name = "warg-protocol"
 version = "0.1.0"
-source = "git+https://github.com/bytecodealliance/registry#1cbd8d56beaac6e42fd91d2191e71cac2efce261"
+source = "git+https://github.com/bytecodealliance/registry#b6f0f4060dca587f661d3d1a2605d70d561aea9b"
 dependencies = [
  "anyhow",
  "base64 0.21.2",
@@ -3369,7 +3369,7 @@ dependencies = [
 [[package]]
 name = "warg-server"
 version = "0.1.0"
-source = "git+https://github.com/bytecodealliance/registry#1cbd8d56beaac6e42fd91d2191e71cac2efce261"
+source = "git+https://github.com/bytecodealliance/registry#b6f0f4060dca587f661d3d1a2605d70d561aea9b"
 dependencies = [
  "anyhow",
  "axum",
@@ -3399,7 +3399,7 @@ dependencies = [
 [[package]]
 name = "warg-transparency"
 version = "0.1.0"
-source = "git+https://github.com/bytecodealliance/registry#1cbd8d56beaac6e42fd91d2191e71cac2efce261"
+source = "git+https://github.com/bytecodealliance/registry#b6f0f4060dca587f661d3d1a2605d70d561aea9b"
 dependencies = [
  "anyhow",
  "prost",
@@ -3711,9 +3711,9 @@ checksum = "1a515f5799fe4961cb532f983ce2b23082366b898e52ffbce459c86f67c8378a"
 
 [[package]]
 name = "winnow"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "81fac9742fd1ad1bd9643b991319f72dd031016d44b77039a26977eb667141e7"
+checksum = "25b5872fa2e10bd067ae946f927e726d7d603eaeb6e02fa6a350e0722d2b8c11"
 dependencies = [
  "memchr",
 ]
@@ -3729,60 +3729,61 @@ dependencies = [
 
 [[package]]
 name = "wit-bindgen"
-version = "0.8.0"
-source = "git+https://github.com/peterhuene/wit-bindgen?branch=runtime-path#a5dbe4924a7631b68666a63343b6cff3ae5b9156"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f5c3d15a04ce994fad2c5442a754b404ab1fee23c903a04a560f84f94fdf63c0"
 dependencies = [
  "bitflags 2.3.3",
-]
-
-[[package]]
-name = "wit-bindgen-core"
-version = "0.8.0"
-source = "git+https://github.com/peterhuene/wit-bindgen?branch=runtime-path#a5dbe4924a7631b68666a63343b6cff3ae5b9156"
-dependencies = [
- "anyhow",
- "wit-component 0.12.0",
- "wit-parser",
+ "wit-bindgen-rust-macro",
 ]
 
 [[package]]
 name = "wit-bindgen-core"
 version = "0.9.0"
-source = "git+https://github.com/bytecodealliance/wit-bindgen#6122f489b99ae6bb237ee407f58e02c95b888d0b"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c9658ec54d4a3c9e2f079bc65a131093337595b595fbf82f805008469838cdea"
 dependencies = [
  "anyhow",
- "wit-component 0.13.0",
+ "wit-component 0.12.0",
  "wit-parser",
 ]
 
 [[package]]
 name = "wit-bindgen-rust"
-version = "0.8.0"
-source = "git+https://github.com/peterhuene/wit-bindgen?branch=runtime-path#a5dbe4924a7631b68666a63343b6cff3ae5b9156"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21ae6a6198ba9765771b977e2af985a0d5ac71b59f999da5c4ee1c7bbd8ca8dc"
 dependencies = [
  "heck",
  "wasm-metadata 0.9.0",
- "wit-bindgen-core 0.8.0",
- "wit-bindgen-rust-lib 0.8.0",
+ "wit-bindgen-core",
+ "wit-bindgen-rust-lib",
  "wit-component 0.12.0",
 ]
 
 [[package]]
 name = "wit-bindgen-rust-lib"
-version = "0.8.0"
-source = "git+https://github.com/peterhuene/wit-bindgen?branch=runtime-path#a5dbe4924a7631b68666a63343b6cff3ae5b9156"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5c31de8c6c77cac1fd4927c7584d1314cd5e838cfb40b53333d6dffc7a132dda"
 dependencies = [
  "heck",
- "wit-bindgen-core 0.8.0",
+ "wit-bindgen-core",
 ]
 
 [[package]]
-name = "wit-bindgen-rust-lib"
+name = "wit-bindgen-rust-macro"
 version = "0.9.0"
-source = "git+https://github.com/bytecodealliance/wit-bindgen#6122f489b99ae6bb237ee407f58e02c95b888d0b"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0a2abe5c7c4c08468d01590aa96c8a684dd94fb9241a248af88eef7edac61e43"
 dependencies = [
- "heck",
- "wit-bindgen-core 0.9.0",
+ "anyhow",
+ "proc-macro2",
+ "syn 2.0.27",
+ "wit-bindgen-core",
+ "wit-bindgen-rust",
+ "wit-bindgen-rust-lib",
+ "wit-component 0.12.0",
 ]
 
 [[package]]
