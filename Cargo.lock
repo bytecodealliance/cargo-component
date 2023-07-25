@@ -3264,8 +3264,9 @@ dependencies = [
 [[package]]
 name = "warg-api"
 version = "0.1.0"
-source = "git+https://github.com/bytecodealliance/registry#b6f0f4060dca587f661d3d1a2605d70d561aea9b"
+source = "git+https://github.com/bytecodealliance/registry#f143b25635c6e7d1afefc78e883b4fbc3542f44e"
 dependencies = [
+ "itertools 0.11.0",
  "serde",
  "serde_with",
  "thiserror",
@@ -3276,7 +3277,7 @@ dependencies = [
 [[package]]
 name = "warg-client"
 version = "0.1.0"
-source = "git+https://github.com/bytecodealliance/registry#b6f0f4060dca587f661d3d1a2605d70d561aea9b"
+source = "git+https://github.com/bytecodealliance/registry#f143b25635c6e7d1afefc78e883b4fbc3542f44e"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -3309,7 +3310,7 @@ dependencies = [
 [[package]]
 name = "warg-crypto"
 version = "0.1.0"
-source = "git+https://github.com/bytecodealliance/registry#b6f0f4060dca587f661d3d1a2605d70d561aea9b"
+source = "git+https://github.com/bytecodealliance/registry#f143b25635c6e7d1afefc78e883b4fbc3542f44e"
 dependencies = [
  "anyhow",
  "base64 0.21.2",
@@ -3329,7 +3330,7 @@ dependencies = [
 [[package]]
 name = "warg-protobuf"
 version = "0.1.0"
-source = "git+https://github.com/bytecodealliance/registry#b6f0f4060dca587f661d3d1a2605d70d561aea9b"
+source = "git+https://github.com/bytecodealliance/registry#f143b25635c6e7d1afefc78e883b4fbc3542f44e"
 dependencies = [
  "anyhow",
  "pbjson",
@@ -3347,7 +3348,7 @@ dependencies = [
 [[package]]
 name = "warg-protocol"
 version = "0.1.0"
-source = "git+https://github.com/bytecodealliance/registry#b6f0f4060dca587f661d3d1a2605d70d561aea9b"
+source = "git+https://github.com/bytecodealliance/registry#f143b25635c6e7d1afefc78e883b4fbc3542f44e"
 dependencies = [
  "anyhow",
  "base64 0.21.2",
@@ -3369,7 +3370,7 @@ dependencies = [
 [[package]]
 name = "warg-server"
 version = "0.1.0"
-source = "git+https://github.com/bytecodealliance/registry#b6f0f4060dca587f661d3d1a2605d70d561aea9b"
+source = "git+https://github.com/bytecodealliance/registry#f143b25635c6e7d1afefc78e883b4fbc3542f44e"
 dependencies = [
  "anyhow",
  "axum",
@@ -3399,7 +3400,7 @@ dependencies = [
 [[package]]
 name = "warg-transparency"
 version = "0.1.0"
-source = "git+https://github.com/bytecodealliance/registry#b6f0f4060dca587f661d3d1a2605d70d561aea9b"
+source = "git+https://github.com/bytecodealliance/registry#f143b25635c6e7d1afefc78e883b4fbc3542f44e"
 dependencies = [
  "anyhow",
  "prost",
