@@ -419,14 +419,14 @@ mod imp {
                 // resize the console correctly, but there's no reasonable way
                 // to detect which kind of terminal we are running in, or if
                 // GetConsoleScreenBufferInfo returns accurate information.
-                return cmp::min(60, width);
+                return Some(cmp::min(60, width));
             }
 
             None
         }
     }
 
-    fn stderr_erase_line() {
+    pub fn stderr_erase_line() {
         match imp::stderr_width() {
             Some(width) => {
                 let blank = " ".repeat(width);
