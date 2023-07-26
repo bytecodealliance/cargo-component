@@ -168,7 +168,7 @@ impl<'a> ProgressBar<'a> {
 
     /// Updates the state of the progress bar.
     ///
-    /// This is the same as [`Progress::tick`], but ignores rate throttling
+    /// This is the same as [`ProgressBar::tick`], but ignores rate throttling
     /// and forces the display to be updated immediately.
     ///
     /// This may be useful for situations where you know you aren't calling
