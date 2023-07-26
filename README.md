@@ -226,8 +226,12 @@ The `cargo component` subcommand has some analogous commands to cargo itself:
 * `cargo component key` - manages signing keys for publishing WebAssembly
   components.
 
-Unrecognized commands are passed through to `cargo` itself, but only after the 
+Unrecognized commands are passed through to `cargo` itself, but only after the
 bindings information for component packages has been updated.
+
+Some examples of commands that are passed directly to `cargo` are: `build`,
+`check`, `doc`, `clippy` and extension commands such as `expand` from
+`cargo-expand`.
 
 Certain command line options, like `--target` and `--release`, are detected by
 `cargo component` to determine what output files of a `build` command should be
@@ -242,8 +246,8 @@ provide code completion and other features.
 rust-analyzer depends on `cargo metadata` and `cargo check` to discover
 workspace information and to check for errors.
 
-To ensure that rust-analyzer is able to discover the latest bindings 
-information, rust-analyzer must be configured to use `cargo component check` as 
+To ensure that rust-analyzer is able to discover the latest bindings
+information, rust-analyzer must be configured to use `cargo component check` as
 the check command.
 
 To configure rust-analyzer to use the `cargo-component` executable, set the
