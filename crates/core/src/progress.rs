@@ -126,7 +126,7 @@ impl<'a> ProgressBar<'a> {
 
     /// Creates a new `Progress` with the [`ProgressStyle::Percentage`] style.
     ///
-    /// See [`Progress::with_style`] for more information.
+    /// See [`ProgressBar::with_style`] for more information.
     pub fn new(name: &str, terminal: &'a Terminal) -> Self {
         Self::with_style(name, ProgressStyle::Percentage, terminal)
     }
