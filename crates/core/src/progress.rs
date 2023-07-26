@@ -22,7 +22,7 @@ pub struct ProgressBar<'a> {
 
 /// Indicates the style of information for displaying the amount of progress.
 ///
-/// See also [`Progress::print_now`] for displaying progress without a bar.
+/// See also [`ProgressBar::print_now`] for displaying progress without a bar.
 pub enum ProgressStyle {
     /// Displays progress as a percentage.
     ///
