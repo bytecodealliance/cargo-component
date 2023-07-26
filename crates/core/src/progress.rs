@@ -184,7 +184,7 @@ impl<'a> ProgressBar<'a> {
     /// Returns whether or not updates are currently being throttled.
     ///
     /// This can be useful if computing the values for calling the
-    /// [`Progress::tick`] function may require some expensive work.
+    /// [`ProgressBar::tick`] function may require some expensive work.
     pub fn update_allowed(&mut self) -> bool {
         match &mut self.state {
             Some(s) => s.throttle.allowed(),
