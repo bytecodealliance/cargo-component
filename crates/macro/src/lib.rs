@@ -173,7 +173,7 @@ impl Config {
         let input = self.input.display().to_string();
 
         Ok(quote! {
-            mod bindings {
+            pub(crate) mod bindings {
                 #source
 
                 #use_export
