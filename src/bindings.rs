@@ -49,7 +49,14 @@ impl<'a> BindingsEncoder<'a> {
     /// Creates a new bindings encoder for the given bindings directory
     /// and package dependency resolution.
     pub fn new(resolution: &'a PackageDependencyResolution<'a>) -> Result<Self> {
-        let (resolve, world, source_files) = Self::create_target_world(resolution)?;
+        let (resolve, world, source_files) =
+            Self::create_target_world(resolution).with_context(|| {
+                format!(
+                    "failed to create a target world for package `{name}` ({path})",
+                    name = resolution.metadata.name,
+                    path = resolution.metadata.manifest_path.display()
+                )
+            })?;
 
         Ok(Self {
             resolution,
