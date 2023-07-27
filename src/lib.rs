@@ -261,7 +261,7 @@ async fn encode_targets(
     cargo_args: &CargoArguments,
 ) -> Result<()> {
     let bindings_dir = metadata.target_directory.join("bindings");
-    let file_lock = acquire_lock_file_ro(config, metadata)?;
+    let file_lock = acquire_lock_file_ro(config.terminal(), metadata)?;
     let lock_file = file_lock
         .as_ref()
         .map(|f| {
@@ -290,7 +290,12 @@ async fn encode_targets(
     let new_lock_file = map.to_lock_file();
     if Some(&new_lock_file) != lock_file.as_ref() {
         drop(file_lock);
-        let file_lock = acquire_lock_file_rw(config, cargo_args, metadata)?;
+        let file_lock = acquire_lock_file_rw(
+            config.terminal(),
+            metadata,
+            cargo_args.lock_update_allowed(),
+            cargo_args.locked,
+        )?;
         new_lock_file
             .write(file_lock.file(), "cargo-component")
             .with_context(|| {
@@ -601,7 +606,7 @@ pub async fn update_lockfile(
     // Read the current lock file and generate a new one
     let map = create_resolution_map(config, packages, None, cargo_args.network_allowed()).await?;
 
-    let file_lock = acquire_lock_file_ro(config, metadata)?;
+    let file_lock = acquire_lock_file_ro(config.terminal(), metadata)?;
     let orig_lock_file = file_lock
         .as_ref()
         .map(|f| {
@@ -655,10 +660,14 @@ pub async fn update_lockfile(
             .warn("not updating component lock file due to --dry-run option")?;
     } else {
         // Update the lock file
-        let new_lock_file = map.to_lock_file();
         if new_lock_file != orig_lock_file {
             drop(file_lock);
-            let file_lock = acquire_lock_file_rw(config, cargo_args, metadata)?;
+            let file_lock = acquire_lock_file_rw(
+                config.terminal(),
+                metadata,
+                cargo_args.lock_update_allowed(),
+                cargo_args.locked,
+            )?;
             new_lock_file
                 .write(file_lock.file(), "cargo-component")
                 .with_context(|| {

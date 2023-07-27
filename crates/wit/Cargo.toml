@@ -1,0 +1,35 @@
+[package]
+name = "wit"
+version = "0.1.0"
+edition = "2021"
+authors = ["Peter Huene <peter@huene.dev>"]
+description = "A tool for building and publishing WIT packages to a registry."
+license = "Apache-2.0 WITH LLVM-exception"
+documentation = "https://docs.rs/wit"
+categories = ["wasm"]
+keywords = ["webassembly", "wasm", "components", "component-model"]
+repository = "https://github.com/bytecodealliance/cargo-component/tree/main/crates/wit"
+
+[dependencies]
+cargo-component-core = { path = "../core" }
+anyhow = { workspace = true }
+semver = { workspace = true }
+url = { workspace = true }
+serde = { workspace = true }
+toml_edit = { workspace = true }
+warg-protocol = { workspace = true }
+warg-client = { workspace = true }
+warg-crypto = { workspace = true }
+log = { workspace = true }
+clap = { workspace = true }
+rpassword = { workspace = true }
+rand_core = { workspace = true }
+p256 = { workspace = true }
+indexmap = { workspace = true }
+wit-parser = { workspace = true }
+wit-component = { workspace = true }
+wasm-metadata = { workspace = true }
+futures = { workspace = true }
+bytes = { workspace = true }
+tokio = { workspace = true }
+pretty_env_logger = { workspace = true }

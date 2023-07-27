@@ -5,45 +5,16 @@ use crate::{
     Config, PackageComponentMetadata,
 };
 use anyhow::{bail, Context, Result};
-use cargo_component_core::registry::{
-    Dependency, DependencyResolution, DependencyResolver, RegistryPackage,
+use cargo_component_core::{
+    registry::{Dependency, DependencyResolution, DependencyResolver, RegistryPackage},
+    VersionedPackageId,
 };
 use cargo_metadata::Package;
 use clap::{ArgAction, Args};
 use semver::VersionReq;
-use std::{fs, path::PathBuf, str::FromStr};
+use std::{fs, path::PathBuf};
 use toml_edit::{value, Document, InlineTable, Value};
 use warg_protocol::registry::PackageId;
-
-/// Represents a versioned component package identifier.
-#[derive(Clone)]
-pub struct VersionedPackageId {
-    /// The package identifier.
-    pub id: PackageId,
-    /// The optional package version.
-    pub version: Option<VersionReq>,
-}
-
-impl FromStr for VersionedPackageId {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        match s.split_once('@') {
-            Some((id, version)) => Ok(Self {
-                id: id.parse()?,
-                version: Some(
-                    version
-                        .parse()
-                        .with_context(|| format!("invalid package version `{version}`"))?,
-                ),
-            }),
-            None => Ok(Self {
-                id: s.parse()?,
-                version: None,
-            }),
-        }
-    }
-}
 
 /// Add a dependency for a WebAssembly component
 #[derive(Args)]

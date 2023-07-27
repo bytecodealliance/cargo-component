@@ -1,18 +1,20 @@
 //! Module for the lock file implementation.
 
-use crate::config::{CargoArguments, Config};
 use anyhow::Result;
-use cargo_component_core::{lock::FileLock, terminal::Colors};
+use cargo_component_core::{
+    lock::FileLock,
+    terminal::{Colors, Terminal},
+};
 use cargo_metadata::Metadata;
 
 /// The name of the lock file.
 pub const LOCK_FILE_NAME: &str = "Cargo-component.lock";
 
 pub(crate) fn acquire_lock_file_ro(
-    config: &Config,
-    workspace: &Metadata,
+    terminal: &Terminal,
+    metadata: &Metadata,
 ) -> Result<Option<FileLock>> {
-    let path = workspace.workspace_root.join(LOCK_FILE_NAME);
+    let path = metadata.workspace_root.join(LOCK_FILE_NAME);
     if !path.exists() {
         return Ok(None);
     }
@@ -21,7 +23,7 @@ pub(crate) fn acquire_lock_file_ro(
     match FileLock::try_open_ro(&path)? {
         Some(lock) => Ok(Some(lock)),
         None => {
-            config.terminal().status_with_color(
+            terminal.status_with_color(
                 "Blocking",
                 format!("on access to lock file `{path}`"),
                 Colors::Cyan,
@@ -33,26 +35,27 @@ pub(crate) fn acquire_lock_file_ro(
 }
 
 pub(crate) fn acquire_lock_file_rw(
-    config: &Config,
-    args: &CargoArguments,
-    workspace: &Metadata,
+    terminal: &Terminal,
+    metadata: &Metadata,
+    lock_update_allowed: bool,
+    locked: bool,
 ) -> Result<FileLock> {
-    if !args.lock_update_allowed() {
-        let flag = if args.locked { "--locked" } else { "--frozen" };
+    if !lock_update_allowed {
+        let flag = if locked { "--locked" } else { "--frozen" };
         anyhow::bail!(
             "the lock file {path} needs to be updated but {flag} was passed to prevent this\n\
             If you want to try to generate the lock file without accessing the network, \
             remove the {flag} flag and use --offline instead.",
-            path = workspace.workspace_root.join(LOCK_FILE_NAME)
+            path = metadata.workspace_root.join(LOCK_FILE_NAME)
         );
     }
 
-    let path = workspace.workspace_root.join(LOCK_FILE_NAME);
+    let path = metadata.workspace_root.join(LOCK_FILE_NAME);
     log::info!("creating lock file `{path}`");
     match FileLock::try_open_rw(&path)? {
         Some(lock) => Ok(lock),
         None => {
-            config.terminal().status_with_color(
+            terminal.status_with_color(
                 "Blocking",
                 format!("on access to lock file `{path}`"),
                 Colors::Cyan,
