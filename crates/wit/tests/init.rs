@@ -2,7 +2,7 @@ use crate::support::*;
 use anyhow::Result;
 use assert_cmd::prelude::*;
 use predicates::str::contains;
-use std::fs;
+use std::{fs, path::Path};
 
 mod support;
 
@@ -23,7 +23,10 @@ fn it_creates_the_expected_files() -> Result<()> {
     wit("init foo")
         .current_dir(&root)
         .assert()
-        .stderr(contains("Created configuration file `foo/wit.toml`"))
+        .stderr(contains(format!(
+            "Created configuration file `{path}`",
+            path = Path::new("foo").join("wit.toml").display()
+        )))
         .success();
 
     let proj_dir = root.join("foo");
@@ -39,7 +42,10 @@ fn it_supports_registry_option() -> Result<()> {
     wit("init bar --registry https://example.com")
         .current_dir(&root)
         .assert()
-        .stderr(contains("Created configuration file `bar/wit.toml`"))
+        .stderr(contains(format!(
+            "Created configuration file `{path}`",
+            path = Path::new("bar").join("wit.toml").display()
+        )))
         .success();
 
     let proj_dir = root.join("bar");
