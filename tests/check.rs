@@ -7,24 +7,17 @@ use std::{fmt::Write, fs};
 mod support;
 
 #[test]
-fn help() {
-    for arg in ["help check", "check -h", "check --help"] {
-        cargo_component(arg)
-            .assert()
-            .stdout(contains(
-                "Check a local package and all of its dependencies for errors",
-            ))
-            .success();
-    }
-}
-
-#[test]
 fn it_checks_a_new_project() -> Result<()> {
     let project = Project::new("foo")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
+
     project
         .cargo_component("check")
         .assert()
-        .stderr(contains("Checking foo-bindings v0.1.0"))
+        .stderr(contains("Checking foo v0.1.0"))
         .success();
 
     Ok(())
@@ -33,6 +26,10 @@ fn it_checks_a_new_project() -> Result<()> {
 #[test]
 fn it_finds_errors() -> Result<()> {
     let project = Project::new("foo")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
 
     let mut src = fs::read_to_string(project.root().join("src/lib.rs"))?;
     write!(&mut src, "\n\nfn foo() -> String {{\n  \"foo\"\n}}\n")?;
@@ -42,10 +39,7 @@ fn it_finds_errors() -> Result<()> {
     project
         .cargo_component("check")
         .assert()
-        .stderr(
-            contains("Checking foo-bindings v0.1.0")
-                .and(contains("expected `String`, found `&str`")),
-        )
+        .stderr(contains("Checking foo v0.1.0").and(contains("expected `String`, found `&str`")))
         .failure();
 
     Ok(())
@@ -74,16 +68,28 @@ edition = "2021"
         .build();
 
     project
-        .cargo_component("new --lib foo")
+        .cargo_component("new --reactor foo")
         .assert()
-        .stderr(contains("Created component `foo` package"))
+        .stderr(contains("Updated manifest of package `foo`"))
         .success();
 
+    let member = ProjectBuilder::new(project.root().join("foo")).build();
+    member.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
+
     project
-        .cargo_component("new --lib bar")
+        .cargo_component("new --reactor bar")
         .assert()
-        .stderr(contains("Created component `bar` package"))
+        .stderr(contains("Updated manifest of package `bar`"))
         .success();
+
+    let member = ProjectBuilder::new(project.root().join("bar")).build();
+    member.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
 
     project
         .cargo_component("check")

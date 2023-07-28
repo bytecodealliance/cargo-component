@@ -1,18 +1,14 @@
 use crate::{
-    commands::{workspace, CompileOptions},
-    metadata::ComponentMetadata,
-    registry,
-    signing::get_signing_key,
-    Config, PublishOptions,
+    config::{CargoArguments, CargoPackageSpec},
+    is_wasm_target, load_metadata, publish, run_cargo_command, Config, PackageComponentMetadata,
+    PublishOptions,
 };
-use anyhow::{anyhow, bail, Context, Result};
-use cargo::{core::compiler::CompileMode, ops::Packages};
+use anyhow::{bail, Context, Result};
+use cargo_component_core::{keyring::get_signing_key, registry::find_url};
 use clap::{ArgAction, Args};
-use semver::Version;
-use std::path::PathBuf;
+use std::{path::PathBuf, str::FromStr};
 use url::Url;
 use warg_crypto::signing::PrivateKey;
-use warg_protocol::registry::PackageId;
 
 /// Publish a package to a registry.
 #[derive(Args)]
@@ -30,10 +26,6 @@ pub struct PublishCommand {
     )]
     pub verbose: u8,
 
-    /// Allow dirty working directories to be published
-    #[clap(long)]
-    pub allow_dirty: bool,
-
     /// Coloring: auto, always, never
     #[clap(long = "color", value_name = "WHEN")]
     pub color: Option<String>,
@@ -42,7 +34,7 @@ pub struct PublishCommand {
     #[clap(long = "target", value_name = "TRIPLE")]
     pub target: Option<String>,
 
-    /// Require Cargo.lock and cache are up to date
+    /// Require lock file and cache are up to date
     #[clap(long = "frozen")]
     pub frozen: bool,
 
@@ -50,13 +42,13 @@ pub struct PublishCommand {
     #[clap(long = "target-dir", value_name = "DIRECTORY")]
     pub target_dir: Option<PathBuf>,
 
-    /// Require Cargo.lock is up to date
+    /// Require lock file is up to date
     #[clap(long = "locked")]
     pub locked: bool,
 
     /// Cargo package to publish (see `cargo help pkgid`)
     #[clap(long = "package", short = 'p', value_name = "SPEC")]
-    pub cargo_package: Option<String>,
+    pub cargo_package: Option<CargoPackageSpec>,
 
     /// Path to Cargo.toml
     #[clap(long = "manifest-path", value_name = "PATH")]
@@ -74,10 +66,6 @@ pub struct PublishCommand {
     #[clap(long = "all-features")]
     pub all_features: bool,
 
-    /// Unstable (nightly-only) flags to Cargo, see 'cargo -Z help' for details
-    #[clap(long = "Z", value_name = "FLAG")]
-    pub unstable_flags: Vec<String>,
-
     /// Do not activate the `default` feature
     #[clap(long = "no-default-features")]
     pub no_default_features: bool,
@@ -86,11 +74,7 @@ pub struct PublishCommand {
     #[clap(long = "jobs", short = 'j', value_name = "N")]
     pub jobs: Option<i32>,
 
-    /// Do not abort the build as soon as there is an error (unstable)
-    #[clap(long = "keep-going")]
-    pub keep_going: bool,
-
-    ///  Perform all checks without uploading
+    ///  Perform all checks without publishing
     #[clap(long = "dry-run")]
     pub dry_run: bool,
 
@@ -102,114 +86,217 @@ pub struct PublishCommand {
     #[clap(long = "registry", value_name = "REGISTRY")]
     pub registry: Option<String>,
 
-    /// Force generation of all dependency bindings.
-    #[clap(long = "generate")]
-    pub generate: bool,
-
     /// Initialize a new package in the registry.
     #[clap(long = "init")]
     pub init: bool,
-
-    /// Override the id of the package being published.
-    #[clap(long = "id", value_name = "PACKAGE")]
-    pub id: Option<PackageId>,
-
-    /// Overwrite the version of the package being published.
-    #[clap(long = "version", value_name = "VERSION")]
-    pub version: Option<Version>,
-
-    /// If publishing a binary (i.e. WASI command), the name of the binary to publish.
-    #[clap(long = "bin", value_name = "BIN")]
-    pub bin: Option<String>,
 }
 
 impl PublishCommand {
     /// Executes the command.
-    pub async fn exec(mut self, config: &mut Config) -> Result<()> {
+    pub async fn exec(self, config: &Config, cargo_args: &CargoArguments) -> Result<()> {
         log::debug!("executing publish command");
 
-        config.cargo_mut().configure(
-            u32::from(self.verbose),
-            self.quiet,
-            self.color.as_deref(),
-            self.frozen,
-            self.locked,
-            self.offline,
-            &self.target_dir,
-            &self.unstable_flags,
-            &[],
-        )?;
+        if let Some(target) = &self.target {
+            if !is_wasm_target(target) {
+                bail!("target `{}` is not a WebAssembly target", target);
+            }
+        }
 
-        let ws = workspace(self.manifest_path.as_deref(), config)?;
-        let package = if let Some(ref inner) = self.cargo_package {
-            let pkg = Packages::from_flags(false, vec![], vec![inner.clone()])?;
-            pkg.get_packages(&ws)?[0]
-        } else {
-            ws.current()?
-        };
+        let metadata = load_metadata(cargo_args.manifest_path.as_deref())?;
+        let packages = [PackageComponentMetadata::new(
+            if let Some(spec) = &self.cargo_package {
+                metadata
+                    .packages
+                    .iter()
+                    .find(|p| {
+                        p.name == spec.name
+                            && match spec.version.as_ref() {
+                                Some(v) => &p.version == v,
+                                None => true,
+                            }
+                    })
+                    .with_context(|| {
+                        format!("package ID specification `{spec}` did not match any packages")
+                    })?
+            } else {
+                metadata
+                    .root_package()
+                    .context("no root package found in manifest")?
+            },
+        )?];
 
-        let metadata = match ComponentMetadata::from_package(package)? {
-            Some(metadata) => metadata,
-            None => bail!(
-                "manifest `{path}` is not a WebAssembly component package",
-                path = package.manifest_path().display(),
-            ),
-        };
-
-        let package_id: PackageId = self.id.take().or(metadata.section.package).ok_or_else(|| {
-            anyhow!(
-                "package id is not specified in manifest `{path}`; use the `--id` option to specify a package id",
-                path = package.manifest_path().display(),
+        let package = packages[0].package;
+        let component_metadata = packages[0].metadata.as_ref().with_context(|| {
+            format!(
+                "package `{name}` is missing component metadata in manifest `{path}`",
+                name = package.name,
+                path = package.manifest_path
             )
         })?;
 
-        let url = registry::find_url(
-            config,
+        let id = component_metadata.section.package.as_ref().with_context(|| {
+            format!(
+                "package `{name}` is missing a `package.metadata.component.package` setting in manifest `{path}`",
+                name = package.name,
+                path = package.manifest_path
+            )
+        })?;
+
+        let registry_url = find_url(
             self.registry.as_deref(),
-            &metadata.section.registries,
+            &component_metadata.section.registries,
+            config.warg().default_url.as_deref(),
         )?;
 
         let signing_key = if let Ok(key) = std::env::var("CARGO_COMPONENT_PUBLISH_KEY") {
             PrivateKey::decode(key).context("failed to parse signing key from `CARGO_COMPONENT_PUBLISH_KEY` environment variable")?
         } else {
-            let url: Url = url
+            let url: Url = registry_url
                 .parse()
-                .with_context(|| format!("failed to parse registry URL `{url}`"))?;
+                .with_context(|| format!("failed to parse registry URL `{registry_url}`"))?;
 
             get_signing_key(
                 url.host_str()
-                    .ok_or_else(|| anyhow!("registry URL `{url}` has no host"))?,
+                    .with_context(|| format!("registry URL `{registry_url}` has no host"))?,
                 &self.key_name,
             )?
         };
 
-        let options = PublishOptions {
-            force_generation: self.generate,
-            id: &package_id,
-            version: self.version.as_ref().unwrap_or(&metadata.version),
-            compile_options: CompileOptions {
-                workspace: false,
-                exclude: Vec::new(),
-                packages: self.cargo_package.into_iter().collect(),
-                targets: self.target.into_iter().collect(),
-                jobs: self.jobs,
-                message_format: None,
-                release: true,
-                features: self.features,
-                all_features: self.all_features,
-                no_default_features: self.no_default_features,
-                lib: self.bin.is_none(),
-                all_targets: false,
-                keep_going: self.keep_going,
-                bins: self.bin.into_iter().collect(),
-            }
-            .into_cargo_options(config, CompileMode::Build)?,
-            url,
-            init: self.init,
-            dry_run: self.dry_run,
-            signing_key,
+        let cargo_build_args = CargoArguments {
+            color: self
+                .color
+                .as_deref()
+                .map(FromStr::from_str)
+                .transpose()
+                .unwrap(),
+            verbose: self.verbose as usize,
+            quiet: self.quiet,
+            targets: self.target.clone().into_iter().collect(),
+            manifest_path: self.manifest_path.clone(),
+            frozen: self.frozen,
+            locked: self.locked,
+            release: true,
+            offline: self.offline,
+            workspace: false,
+            packages: self.cargo_package.clone().into_iter().collect(),
+            subcommand: Some("build".to_string()),
         };
 
-        crate::publish(config, ws, &options).await
+        let spawn_args = self.build_args()?;
+        let outputs =
+            run_cargo_command(config, &metadata, &packages, &cargo_build_args, &spawn_args).await?;
+        if outputs.len() != 1 {
+            bail!(
+                "expected one output from `cargo build`, got {len}",
+                len = outputs.len()
+            );
+        }
+
+        let options = PublishOptions {
+            registry_url,
+            init: self.init,
+            id,
+            version: &component_metadata.version,
+            path: &outputs[0],
+            signing_key: &signing_key,
+            dry_run: self.dry_run,
+        };
+
+        publish(config, &options).await
+    }
+
+    fn build_args(&self) -> Result<Vec<String>> {
+        let mut args = Vec::new();
+        args.push("build".to_string());
+        args.push("--release".to_string());
+
+        if self.quiet {
+            args.push("-q".to_string());
+        }
+
+        args.extend(
+            std::iter::repeat("-v")
+                .take(self.verbose as usize)
+                .map(ToString::to_string),
+        );
+
+        if let Some(color) = &self.color {
+            args.push("--color".to_string());
+            args.push(color.clone());
+        }
+
+        if let Some(target) = &self.target {
+            args.push("--target".to_string());
+            args.push(target.clone());
+        }
+
+        if self.frozen {
+            args.push("--frozen".to_string());
+        }
+
+        if let Some(target_dir) = &self.target_dir {
+            args.push("--target-dir".to_string());
+            args.push(
+                target_dir
+                    .as_os_str()
+                    .to_str()
+                    .with_context(|| {
+                        format!(
+                            "target directory `{dir}` is not valid UTF-8",
+                            dir = target_dir.display()
+                        )
+                    })?
+                    .to_string(),
+            );
+        }
+
+        if self.locked {
+            args.push("--locked".to_string());
+        }
+
+        if let Some(spec) = &self.cargo_package {
+            args.push("--package".to_string());
+            args.push(spec.to_string());
+        }
+
+        if let Some(manifest_path) = &self.manifest_path {
+            args.push("--manifest-path".to_string());
+            args.push(
+                manifest_path
+                    .as_os_str()
+                    .to_str()
+                    .with_context(|| {
+                        format!(
+                            "manifest path `{path}` is not valid UTF-8",
+                            path = manifest_path.display()
+                        )
+                    })?
+                    .to_string(),
+            );
+        }
+
+        if self.offline {
+            args.push("--offline".to_string());
+        }
+
+        if !self.features.is_empty() {
+            args.push("--features".to_string());
+            args.push(self.features.join(","));
+        }
+
+        if self.all_features {
+            args.push("--all-features".to_string());
+        }
+
+        if self.no_default_features {
+            args.push("--no-default-features".to_string());
+        }
+
+        if let Some(jobs) = self.jobs {
+            args.push("--jobs".to_string());
+            args.push(jobs.to_string());
+        }
+
+        Ok(args)
     }
 }

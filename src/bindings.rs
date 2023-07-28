@@ -3,28 +3,23 @@
 use crate::{
     last_modified_time,
     metadata::{ComponentMetadata, Target},
-    registry::{DecodedDependency, PackageDependencyResolution},
+    registry::PackageDependencyResolution,
 };
 use anyhow::{bail, Context, Result};
-use heck::ToSnakeCase;
+use cargo_component_core::registry::DecodedDependency;
 use indexmap::{IndexMap, IndexSet};
 use semver::Version;
 use std::{
     collections::{HashMap, HashSet},
-    fs,
     path::{Path, PathBuf},
     time::SystemTime,
 };
 use warg_protocol::registry::PackageId;
-use wit_bindgen_rust::Opts;
 use wit_component::DecodedWasm;
 use wit_parser::{
     Interface, Package, PackageName, Resolve, UnresolvedPackage, World, WorldId, WorldItem,
     WorldKey,
 };
-
-pub(crate) const BINDINGS_VERSION: &str = "0.1.0";
-pub(crate) const WIT_BINDGEN_VERSION: &str = "0.8.0";
 
 fn named_world_key<'a>(resolve: &'a Resolve, orig: &'a WorldKey, prefix: &str) -> WorldKey {
     let name = match orig {
@@ -38,90 +33,63 @@ fn named_world_key<'a>(resolve: &'a Resolve, orig: &'a WorldKey, prefix: &str) -
     WorldKey::Name(format!("{prefix}-{name}"))
 }
 
-/// A generator for bindings crates.
-pub struct BindingsGenerator<'a> {
-    resolution: &'a PackageDependencyResolution,
-    name: String,
-    manifest_path: PathBuf,
-    source_path: PathBuf,
+/// An encoder for bindings information.
+///
+/// This type is responsible for encoding the target world
+/// into a binary wasm file that the `generate!` macro
+/// will use for generating the bindings.
+pub struct BindingsEncoder<'a> {
+    resolution: &'a PackageDependencyResolution<'a>,
     resolve: Resolve,
     world: WorldId,
     source_files: Vec<PathBuf>,
 }
 
-impl<'a> BindingsGenerator<'a> {
-    /// Creates a new bindings generator for the given bindings directory and package
-    /// dependency resolution.
-    pub fn new(
-        bindings_dir: &'a Path,
-        resolution: &'a PackageDependencyResolution,
-    ) -> Result<Self> {
-        let name = format!(
-            "{name}-bindings",
-            name = resolution.metadata.name.to_snake_case()
-        );
-        let package_dir = bindings_dir.join(&resolution.metadata.name);
-        let manifest_path = package_dir.join("Cargo.toml");
-        let source_path = package_dir.join("src").join("lib.rs");
-
-        let (resolve, world, source_files) = Self::create_target_world(resolution)?;
+impl<'a> BindingsEncoder<'a> {
+    /// Creates a new bindings encoder for the given bindings directory
+    /// and package dependency resolution.
+    pub fn new(resolution: &'a PackageDependencyResolution<'a>) -> Result<Self> {
+        let (resolve, world, source_files) =
+            Self::create_target_world(resolution).with_context(|| {
+                format!(
+                    "failed to create a target world for package `{name}` ({path})",
+                    name = resolution.metadata.name,
+                    path = resolution.metadata.manifest_path.display()
+                )
+            })?;
 
         Ok(Self {
             resolution,
-            name,
-            manifest_path,
-            source_path,
             resolve,
             world,
             source_files,
         })
     }
 
-    /// Gets the cargo metadata for the package that the bindings are generated for.
+    /// Gets the cargo metadata for the package that the bindings are for.
     pub fn metadata(&self) -> &ComponentMetadata {
-        &self.resolution.metadata
+        self.resolution.metadata
     }
 
     /// Gets the reason for generating the bindings.
     ///
     /// If this returns `Ok(None)`, then the bindings are up-to-date and
     /// do not need to be regenerated.
-    ///
-    ///
-    /// If `force` is true, bindings generation will be forced even if the bindings are up-to-date.
-    pub fn reason(
-        &self,
-        last_modified_exe: SystemTime,
-        force: bool,
-    ) -> Result<Option<&'static str>> {
-        let last_modified_output = self
-            .source_path
-            .is_file()
-            .then(|| last_modified_time(&self.source_path))
-            .transpose()?
-            .unwrap_or(SystemTime::UNIX_EPOCH);
-
+    pub fn reason(&self, last_modified_output: SystemTime) -> Result<Option<&'static str>> {
         let metadata = self.metadata();
         let manifest_modified = metadata.modified_at > last_modified_output;
-        let exe_modified = last_modified_exe > last_modified_output;
         let target_modified = if let Some(Target::Local { path, .. }) = &metadata.section.target {
             last_modified_time(path)? > last_modified_output
         } else {
             false
         };
 
-        if force
-            || manifest_modified
-            || exe_modified
+        if manifest_modified
             || target_modified
             || self.dependencies_are_newer(last_modified_output)?
         {
-            Ok(Some(if force {
-                "generation was forced"
-            } else if manifest_modified {
+            Ok(Some(if manifest_modified {
                 "the manifest was modified"
-            } else if exe_modified {
-                "the cargo-component executable was modified"
             } else if target_modified {
                 "the target WIT file was modified"
             } else {
@@ -132,45 +100,21 @@ impl<'a> BindingsGenerator<'a> {
         }
     }
 
-    /// Gets the name of the bindings package.
-    pub fn package_name(&self) -> &str {
-        &self.name
-    }
-
-    /// Gets the directory of the bindings package.
-    pub fn package_dir(&self) -> &Path {
-        self.manifest_path.parent().unwrap()
-    }
-
-    /// Generates the bindings
-    pub fn generate(&self) -> Result<()> {
-        let package_dir = self.package_dir();
-
-        fs::create_dir_all(package_dir).with_context(|| {
-            format!(
-                "failed to create package bindings directory `{path}`",
-                path = package_dir.display()
-            )
-        })?;
-
-        self.create_manifest_file()?;
-        self.create_source_file()?;
-
-        Ok(())
-    }
-
-    /// Encodes the target world used by the generator to a binary format.
-    pub fn encode_target_world(mut self, version: &Version) -> Result<Vec<u8>> {
+    /// Encodes the target world to a binary format.
+    ///
+    /// If an option isn't specified, the option from the package resolution will be used.
+    pub fn encode(mut self, version: Option<&Version>) -> Result<Vec<u8>> {
         let world = &self.resolve.worlds[self.world];
-
         let pkg_id = world.package.context("world has no package")?;
         let pkg = &mut self.resolve.packages[pkg_id];
 
         self.resolve
             .package_names
             .remove(&pkg.name)
-            .context("package name in map")?;
-        pkg.name.version = Some(version.clone());
+            .with_context(|| format!("package name `{name}` is not in map", name = pkg.name))?;
+
+        pkg.name.version = Some(version.unwrap_or(&self.resolution.metadata.version).clone());
+
         if self
             .resolve
             .package_names
@@ -186,65 +130,6 @@ impl<'a> BindingsGenerator<'a> {
                 .package
                 .context("world has no package")?,
         )
-    }
-
-    fn create_manifest_file(&self) -> Result<()> {
-        fs::write(
-            &self.manifest_path,
-            format!(
-                r#"[package]
-name = "{name}"
-version = "{BINDINGS_VERSION}"
-edition = "2021"
-publish = false
-
-[dependencies]
-"wit-bindgen" = {{ version = "{WIT_BINDGEN_VERSION}", features = ["realloc"], default-features = false }}
-"#,
-                name = self.name
-            ),
-        )
-        .with_context(|| {
-            format!(
-                "failed to create bindings package manifest `{path}`",
-                path = self.manifest_path.display()
-            )
-        })
-    }
-
-    fn create_source_file(&self) -> Result<()> {
-        let source_dir = self.source_path.parent().unwrap();
-        fs::create_dir_all(source_dir).with_context(|| {
-            format!(
-                "failed to create source directory `{path}`",
-                path = source_dir.display()
-            )
-        })?;
-
-        let opts = Opts {
-            rustfmt: true,
-            macro_export: true,
-            macro_call_prefix: Some("bindings::".to_string()),
-            export_macro_name: Some("export".to_string()),
-            ..Default::default()
-        };
-
-        let mut files = Default::default();
-        let mut generator = opts.build();
-        generator.generate(&self.resolve, self.world, &mut files);
-
-        fs::write(
-            &self.source_path,
-            files.iter().map(|(_, bytes)| bytes).next().unwrap_or(&[]),
-        )
-        .with_context(|| {
-            format!(
-                "failed to create source file `{path}`",
-                path = self.source_path.display()
-            )
-        })?;
-
-        Ok(())
     }
 
     fn dependencies_are_newer(&self, last_modified_output: SystemTime) -> Result<bool> {
@@ -552,15 +437,19 @@ publish = false
     fn target_empty_world(resolution: &PackageDependencyResolution) -> (Resolve, WorldId) {
         let mut resolve = Resolve::default();
         let name = resolution.metadata.name.clone();
+        let pkg_name = PackageName {
+            namespace: "component".to_string(),
+            name: name.clone(),
+            version: None,
+        };
+
         let package = resolve.packages.alloc(Package {
-            name: PackageName {
-                namespace: "component".to_string(),
-                name: name.clone(),
-                version: None,
-            },
+            name: pkg_name.clone(),
             interfaces: Default::default(),
             worlds: Default::default(),
         });
+
+        resolve.package_names.insert(pkg_name, package);
 
         let world = resolve.worlds.alloc(World {
             name: name.clone(),
@@ -568,7 +457,10 @@ publish = false
             imports: Default::default(),
             exports: Default::default(),
             package: Some(package),
+            includes: Default::default(),
+            include_names: Default::default(),
         });
+
         resolve.packages[package].worlds.insert(name, world);
 
         (resolve, world)

@@ -1,118 +1,17 @@
 //! Module for component metadata representation in `Cargo.toml`.
 
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{bail, Context, Result};
+use cargo_component_core::registry::{Dependency, RegistryPackage};
+use cargo_metadata::Package;
 use semver::{Version, VersionReq};
 use serde::{
-    de::{self, value::MapAccessDeserializer, IntoDeserializer},
+    de::{self, value::MapAccessDeserializer},
     Deserialize,
 };
+use serde_json::from_value;
 use std::{borrow::Cow, collections::HashMap, path::PathBuf, str::FromStr, time::SystemTime};
 use url::Url;
 use warg_protocol::registry::PackageId;
-
-/// Represents a component registry package.
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct RegistryPackage {
-    /// The id of the package.
-    ///
-    /// If not specified, the id from the mapping will be used.
-    pub id: Option<PackageId>,
-
-    /// The version requirement of the package.
-    pub version: VersionReq,
-
-    /// The name of the component registry containing the package.
-    ///
-    /// If not specified, the default registry is used.
-    pub registry: Option<String>,
-}
-
-impl FromStr for RegistryPackage {
-    type Err = anyhow::Error;
-
-    fn from_str(s: &str) -> Result<Self> {
-        Ok(Self {
-            id: None,
-            version: s.parse()?,
-            registry: None,
-        })
-    }
-}
-
-/// Represents a component dependency.
-#[derive(Debug, Clone)]
-pub enum Dependency {
-    /// The dependency is a registry package.
-    Package(RegistryPackage),
-
-    /// The dependency is a path to a local file.
-    Local(PathBuf),
-}
-
-impl<'de> Deserialize<'de> for Dependency {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        struct Visitor;
-
-        impl<'de> de::Visitor<'de> for Visitor {
-            type Value = Dependency;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-                write!(formatter, "a string or a table")
-            }
-
-            fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                Ok(Self::Value::Package(s.parse().map_err(de::Error::custom)?))
-            }
-
-            fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
-            where
-                A: de::MapAccess<'de>,
-            {
-                #[derive(Default, Deserialize)]
-                #[serde(default, deny_unknown_fields)]
-                struct Entry {
-                    path: Option<PathBuf>,
-                    package: Option<PackageId>,
-                    version: Option<VersionReq>,
-                    registry: Option<String>,
-                }
-
-                let entry = Entry::deserialize(MapAccessDeserializer::new(map))?;
-
-                match (entry.path, entry.package, entry.version, entry.registry) {
-                    (Some(path), None, None, None) => Ok(Self::Value::Local(path)),
-                    (None, id, Some(version), registry) => {
-                        Ok(Self::Value::Package(RegistryPackage {
-                            id,
-                            version,
-                            registry,
-                        }))
-                    }
-                    (Some(_), None, Some(_), _) => Err(de::Error::custom(
-                        "cannot specify both `path` and `version` fields in a dependency entry",
-                    )),
-                    (Some(_), None, None, Some(_)) => Err(de::Error::custom(
-                        "cannot specify both `path` and `registry` fields in a dependency entry",
-                    )),
-                    (Some(_), Some(_), _, _) => Err(de::Error::custom(
-                        "cannot specify both `path` and `package` fields in a dependency entry",
-                    )),
-                    (None, None, _, _) => Err(de::Error::missing_field("package")),
-                    (None, Some(_), None, _) => Err(de::Error::missing_field("version")),
-                }
-            }
-        }
-
-        deserializer.deserialize_any(Visitor)
-    }
-}
 
 /// The target of a component.
 ///
@@ -158,6 +57,13 @@ impl Target {
                 Dependency::Package(package.clone()),
             )])),
             Self::Local { dependencies, .. } => Cow::Borrowed(dependencies),
+        }
+    }
+
+    /// Gets the target world, if any.
+    pub fn world(&self) -> Option<&str> {
+        match self {
+            Self::Package { world, .. } | Self::Local { world, .. } => world.as_deref(),
         }
     }
 }
@@ -319,31 +225,34 @@ impl ComponentMetadata {
     /// Creates a new component metadata for the given cargo package.
     ///
     /// Returns `Ok(None)` if the package does not have a `component` section.
-    pub fn from_package(package: &cargo::core::Package) -> Result<Option<Self>> {
-        let manifest_path = package.manifest_path();
-        let manifest_dir = manifest_path.parent().ok_or_else(|| {
-            anyhow!(
-                "manifest path `{path}` has no parent directory",
-                path = manifest_path.display()
-            )
-        })?;
-        let modified_at = crate::last_modified_time(manifest_path)?;
-
+    pub fn from_package(package: &Package) -> Result<Option<Self>> {
         log::debug!(
             "searching for component metadata in manifest `{path}`",
-            path = manifest_path.display()
+            path = package.manifest_path
         );
 
-        let mut section = match package.manifest().custom_metadata() {
-            Some(metadata) => match metadata.get("component") {
-                Some(component) => {
-                    let document = toml_edit::ser::to_document(&component)?;
-                    ComponentSection::deserialize(document.into_deserializer())?
-                }
-                None => return Ok(None),
-            },
-            None => return Ok(None),
+        let mut section: ComponentSection = match package.metadata.get("component").cloned() {
+            Some(component) => from_value(component)?,
+            None => {
+                log::debug!(
+                    "manifest `{path}` has no component metadata",
+                    path = package.manifest_path
+                );
+                return Ok(None);
+            }
         };
+
+        let manifest_dir = package
+            .manifest_path
+            .parent()
+            .map(|p| p.as_std_path())
+            .with_context(|| {
+                format!(
+                    "manifest path `{path}` has no parent directory",
+                    path = package.manifest_path
+                )
+            })?;
+        let modified_at = crate::last_modified_time(&package.manifest_path)?;
 
         // Make all paths stored in the metadata relative to the manifest directory.
         if let Some(Target::Local {
@@ -366,9 +275,9 @@ impl ComponentMetadata {
         }
 
         Ok(Some(Self {
-            name: package.name().to_string(),
-            version: package.version().clone(),
-            manifest_path: manifest_path.into(),
+            name: package.name.clone(),
+            version: package.version.clone(),
+            manifest_path: package.manifest_path.clone().into(),
             modified_at,
             section,
         }))

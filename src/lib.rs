@@ -2,33 +2,28 @@
 
 #![deny(missing_docs)]
 
-use crate::config::Config;
-use anyhow::{anyhow, bail, Context as _, Result};
-use bindings::{BindingsGenerator, BINDINGS_VERSION};
-use bytes::Bytes;
-use cargo::{
-    core::{compiler::Compilation, SourceId, Summary, Workspace},
-    ops::{
-        self, CompileOptions, DocOptions, ExportInfo, OutputMetadataOptions, Packages,
-        UpdateOptions,
-    },
-    util::Filesystem,
+use crate::target::install_wasm32_wasi;
+use anyhow::{anyhow, bail, Context, Result};
+use bindings::BindingsEncoder;
+use cargo_component_core::{
+    lock::{LockFile, LockFileResolver, LockedPackage, LockedPackageVersion},
+    registry::create_client,
+    terminal::Colors,
 };
+use cargo_metadata::{Metadata, MetadataCommand, Package};
+use config::{CargoArguments, CargoPackageSpec, Config};
 use futures::TryStreamExt;
-use metadata::Target;
-use registry::{
-    LockFile, LockFileResolver, LockedPackage, LockedPackageVersion, PackageDependencyResolution,
-    PackageResolutionMap,
-};
+use lock::{acquire_lock_file_ro, acquire_lock_file_rw};
+use metadata::ComponentMetadata;
+use registry::{PackageDependencyResolution, PackageResolutionMap};
 use semver::Version;
 use std::{
-    collections::BTreeMap,
     fs::{self, File},
     io::Read,
-    path::Path,
+    path::{Path, PathBuf},
+    process::Command,
     time::{Duration, SystemTime},
 };
-use termcolor::Color;
 use tokio::io::BufReader;
 use tokio_util::io::ReaderStream;
 use warg_client::storage::{ContentStorage, PublishEntry, PublishInfo};
@@ -36,14 +31,150 @@ use warg_crypto::signing::PrivateKey;
 use warg_protocol::registry::PackageId;
 use wit_component::ComponentEncoder;
 
-pub mod bindings;
+mod bindings;
 pub mod commands;
 pub mod config;
 mod generator;
-pub mod metadata;
-pub mod registry;
-mod signing;
+mod lock;
+mod metadata;
+mod registry;
 mod target;
+
+fn is_wasm_target(target: &str) -> bool {
+    target == "wasm32-wasi" || target == "wasm32-unknown-unknown"
+}
+
+/// Represents a cargo package paired with its component metadata.
+pub struct PackageComponentMetadata<'a> {
+    /// The associated package.
+    pub package: &'a Package,
+    /// The associated component metadata.
+    ///
+    /// This is `None` if the package is not a component.
+    pub metadata: Option<ComponentMetadata>,
+}
+
+impl<'a> PackageComponentMetadata<'a> {
+    /// Creates a new package metadata from the given package.
+    pub fn new(package: &'a Package) -> Result<Self> {
+        Ok(Self {
+            package,
+            metadata: ComponentMetadata::from_package(package)?,
+        })
+    }
+}
+
+/// Runs the cargo command as specified in the configuration.
+///
+/// Note: if the command returns a non-zero status, this
+/// function will exit the process.
+///
+/// Returns any relevant output components.
+pub async fn run_cargo_command(
+    config: &Config,
+    metadata: &Metadata,
+    packages: &[PackageComponentMetadata<'_>],
+    cargo_args: &CargoArguments,
+    spawn_args: &[String],
+) -> Result<Vec<PathBuf>> {
+    encode_targets(config, metadata, packages, cargo_args).await?;
+
+    let cargo = std::env::var("CARGO")
+        .map(PathBuf::from)
+        .ok()
+        .unwrap_or_else(|| PathBuf::from("cargo"));
+
+    let mut args = spawn_args.iter().peekable();
+    if let Some(arg) = args.peek() {
+        if *arg == "component" {
+            args.next().unwrap();
+        }
+    }
+
+    // Spawn the actual cargo command
+    log::debug!(
+        "spawning cargo `{cargo}` with arguments `{args:?}`",
+        cargo = cargo.display(),
+        args = args.clone().collect::<Vec<_>>(),
+    );
+
+    let mut cmd = Command::new(&cargo);
+    cmd.args(args);
+
+    let is_build = matches!(
+        cargo_args.subcommand.as_deref(),
+        Some("b") | Some("build") | Some("rustc")
+    );
+
+    // Handle the target for build commands
+    if is_build {
+        install_wasm32_wasi(config)?;
+
+        // Add an implicit wasm32-wasi target if there isn't a wasm target present
+        if !cargo_args.targets.iter().any(|t| is_wasm_target(t)) {
+            cmd.arg("--target").arg("wasm32-wasi");
+        }
+    }
+
+    match cmd.status() {
+        Ok(status) => {
+            if !status.success() {
+                std::process::exit(status.code().unwrap_or(1));
+            }
+        }
+        Err(e) => {
+            bail!("failed to spawn `{cargo}`: {e}", cargo = cargo.display());
+        }
+    }
+
+    let mut outputs = Vec::new();
+    if is_build {
+        log::debug!("searching for WebAssembly modules to componentize");
+        let targets = cargo_args
+            .targets
+            .iter()
+            .map(String::as_str)
+            .filter(|t| is_wasm_target(t))
+            .chain(cargo_args.targets.is_empty().then_some("wasm32-wasi"));
+
+        for target in targets {
+            let out_dir = metadata
+                .target_directory
+                .join(target)
+                .join(if cargo_args.release {
+                    "release"
+                } else {
+                    "debug"
+                });
+
+            for PackageComponentMetadata { package, .. } in packages {
+                let is_bin = package.targets.iter().any(|t| t.is_bin());
+
+                // First try for <name>.wasm
+                let path = out_dir.join(&package.name).with_extension("wasm");
+                if path.exists() {
+                    create_component(config, path.as_std_path(), is_bin)?;
+                    outputs.push(path.to_path_buf().into_std_path_buf());
+                    continue;
+                }
+
+                // Next, try replacing `-` with `_`
+                let path = out_dir
+                    .join(package.name.replace('-', "_"))
+                    .with_extension("wasm");
+                if path.exists() {
+                    create_component(config, path.as_std_path(), is_bin)?;
+                    outputs.push(path.to_path_buf().into_std_path_buf());
+                    continue;
+                }
+
+                log::debug!("no output found for package `{name}`", name = package.name);
+            }
+        }
+    }
+
+    Ok(outputs)
+}
 
 fn last_modified_time(path: impl AsRef<Path>) -> Result<SystemTime> {
     let path = path.as_ref();
@@ -63,133 +194,212 @@ fn last_modified_time(path: impl AsRef<Path>) -> Result<SystemTime> {
         })
 }
 
-fn bindings_dir(workspace: &Workspace) -> Filesystem {
-    workspace.target_dir().join("bindings")
-}
+/// Loads the workspace metadata based on the given manifest path.
+pub fn load_metadata(manifest_path: Option<&Path>) -> Result<Metadata> {
+    let mut command = MetadataCommand::new();
+    command.no_deps();
 
-async fn create_resolution_map(
-    config: &Config,
-    workspace: &Workspace<'_>,
-    lock_file: Option<&LockFile>,
-) -> Result<PackageResolutionMap> {
-    let mut map = PackageResolutionMap::default();
-    let resolver = lock_file.map(|l| LockFileResolver::new(workspace, l));
-
-    for package in workspace.members() {
-        match PackageDependencyResolution::new(config, package, resolver).await? {
-            Some(resolution) => {
-                let prev = map.insert(package.package_id(), resolution);
-                assert!(prev.is_none());
-            }
-            None => continue,
-        }
+    if let Some(path) = manifest_path {
+        log::debug!(
+            "loading metadata from manifest `{path}`",
+            path = path.display()
+        );
+        command.manifest_path(path);
+    } else {
+        log::debug!("loading metadata from current directory");
     }
-    Ok(map)
+
+    command.exec().context("failed to load cargo metadata")
 }
 
-async fn resolve_dependencies(
-    config: &Config,
-    workspace: &Workspace<'_>,
-) -> Result<PackageResolutionMap> {
-    let lock_file = LockFile::open(config, workspace)?.unwrap_or_default();
-    let map = create_resolution_map(config, workspace, Some(&lock_file)).await?;
-    let new_lock_file = LockFile::from_resolution_map(&map);
-    new_lock_file.update(config, workspace, &lock_file)?;
+/// Loads the component metadata for the given package specs.
+///
+/// If `workspace` is true, all workspace packages are loaded.
+pub fn load_component_metadata<'a>(
+    metadata: &'a Metadata,
+    specs: impl ExactSizeIterator<Item = &'a CargoPackageSpec>,
+    workspace: bool,
+) -> Result<Vec<PackageComponentMetadata<'a>>> {
+    let pkgs = if workspace {
+        metadata.workspace_packages()
+    } else if specs.len() > 0 {
+        let mut pkgs = Vec::with_capacity(specs.len());
+        for spec in specs {
+            let pkg = metadata
+                .packages
+                .iter()
+                .find(|p| {
+                    p.name == spec.name
+                        && match spec.version.as_ref() {
+                            Some(v) => &p.version == v,
+                            None => true,
+                        }
+                })
+                .with_context(|| {
+                    format!("package ID specification `{spec}` did not match any packages")
+                })?;
+            pkgs.push(pkg);
+        }
 
-    Ok(map)
+        pkgs
+    } else {
+        // TODO: this should be the default members, or default to all members
+        // However, `cargo-metadata` doesn't return the workspace default members yet
+        // See: https://github.com/oli-obk/cargo_metadata/issues/215
+        metadata.workspace_packages()
+    };
+
+    pkgs.into_iter()
+        .map(PackageComponentMetadata::new)
+        .collect::<Result<_>>()
 }
 
-async fn generate_workspace_bindings(
+async fn encode_targets(
     config: &Config,
-    workspace: &mut Workspace<'_>,
-    force_generation: bool,
-) -> Result<PackageResolutionMap> {
-    let map = resolve_dependencies(config, workspace).await?;
-    let bindings_dir = bindings_dir(workspace);
-    let _lock = bindings_dir.open_rw(".lock", config.cargo(), "bindings cache")?;
-    let last_modified_exe = last_modified_time(std::env::current_exe()?)?;
+    metadata: &Metadata,
+    packages: &[PackageComponentMetadata<'_>],
+    cargo_args: &CargoArguments,
+) -> Result<()> {
+    let bindings_dir = metadata.target_directory.join("bindings");
+    let file_lock = acquire_lock_file_ro(config, metadata)?;
+    let lock_file = file_lock
+        .as_ref()
+        .map(|f| {
+            LockFile::read(f.file()).with_context(|| {
+                format!(
+                    "failed to read lock file `{path}`",
+                    path = f.path().display()
+                )
+            })
+        })
+        .transpose()?;
 
-    for package in workspace.members_mut() {
-        let resolution = match map.get(&package.package_id()) {
+    let resolver = lock_file.as_ref().map(LockFileResolver::new);
+    let map =
+        create_resolution_map(config, packages, resolver, cargo_args.network_allowed()).await?;
+    for PackageComponentMetadata { package, .. } in packages {
+        let resolution = match map.get(&package.id) {
             Some(resolution) => resolution,
             None => continue,
         };
 
-        let dependency = generate_package_bindings(
-            config,
-            resolution,
-            bindings_dir.as_path_unlocked(),
-            last_modified_exe,
-            force_generation,
-        )
-        .await?;
+        encode_target_world(config, resolution, bindings_dir.as_std_path()).await?;
+    }
 
-        let manifest = package.manifest_mut();
-        let dependencies = manifest
-            .dependencies()
-            .iter()
-            .cloned()
-            .chain([dependency])
-            .collect();
+    // Update the lock file
+    let new_lock_file = map.to_lock_file();
+    if Some(&new_lock_file) != lock_file.as_ref() {
+        drop(file_lock);
+        let file_lock = acquire_lock_file_rw(config, cargo_args, metadata)?;
+        new_lock_file
+            .write(file_lock.file(), "cargo-component")
+            .with_context(|| {
+                format!(
+                    "failed to write lock file `{path}`",
+                    path = file_lock.path().display()
+                )
+            })?;
+    }
 
-        *manifest.summary_mut() = Summary::new(
-            config.cargo(),
-            manifest.package_id(),
-            dependencies,
-            manifest.original().features().unwrap_or(&BTreeMap::new()),
-            manifest.links(),
-        )?;
+    Ok(())
+}
+
+async fn create_resolution_map<'a>(
+    config: &Config,
+    packages: &'a [PackageComponentMetadata<'_>],
+    lock_file: Option<LockFileResolver<'_>>,
+    network_allowed: bool,
+) -> Result<PackageResolutionMap<'a>> {
+    let mut map = PackageResolutionMap::default();
+
+    for PackageComponentMetadata { package, metadata } in packages {
+        match metadata {
+            Some(metadata) => {
+                let resolution =
+                    PackageDependencyResolution::new(config, metadata, lock_file, network_allowed)
+                        .await?;
+                map.insert(package.id.clone(), resolution);
+            }
+            None => continue,
+        }
     }
 
     Ok(map)
 }
 
-async fn generate_package_bindings(
+async fn encode_target_world(
     config: &Config,
-    resolution: &PackageDependencyResolution,
+    resolution: &PackageDependencyResolution<'_>,
     bindings_dir: &Path,
-    last_modified_exe: SystemTime,
-    force: bool,
-) -> Result<cargo::core::Dependency> {
-    let generator = BindingsGenerator::new(bindings_dir, resolution)?;
+) -> Result<()> {
+    let output_dir = bindings_dir.join(&resolution.metadata.name);
+    let target_path = output_dir.join("target.wasm");
+    let world_path = output_dir.join("world");
 
-    match generator.reason(last_modified_exe, force)? {
+    let last_modified_output = target_path
+        .is_file()
+        .then(|| last_modified_time(&target_path))
+        .transpose()?
+        .unwrap_or(SystemTime::UNIX_EPOCH);
+
+    let encoder = BindingsEncoder::new(resolution)?;
+    match encoder.reason(last_modified_output)? {
         Some(reason) => {
             ::log::debug!(
-                "generating bindings package `{name}` at `{path}` because {reason}",
-                name = generator.package_name(),
-                path = generator.package_dir().display(),
+                "encoding target for package `{name}` at `{path}` because {reason}",
+                name = resolution.metadata.name,
+                path = target_path.display(),
             );
 
-            config.shell().status(
-                "Generating",
+            config.terminal().status(
+                "Encoding",
                 format!(
-                    "bindings for {name} ({path})",
+                    "target for {name} ({path})",
                     name = resolution.metadata.name,
-                    path = generator.package_dir().display()
+                    path = target_path.display()
                 ),
             )?;
 
-            generator.generate()?;
+            let encoded = encoder.encode(None)?;
+            fs::create_dir_all(&output_dir).with_context(|| {
+                format!(
+                    "failed to create output directory `{path}`",
+                    path = output_dir.display()
+                )
+            })?;
+
+            fs::write(&target_path, encoded).with_context(|| {
+                format!(
+                    "failed to write target file `{path}`",
+                    path = target_path.display()
+                )
+            })?;
+
+            let world = resolution
+                .metadata
+                .section
+                .target
+                .as_ref()
+                .and_then(|t| t.world())
+                .unwrap_or("");
+
+            fs::write(&world_path, world).with_context(|| {
+                format!(
+                    "failed to write world name `{path}`",
+                    path = world_path.display()
+                )
+            })?;
         }
         None => {
             ::log::debug!(
-                "bindings package `{name}` at `{path}` is up-to-date",
-                name = generator.package_name(),
-                path = generator.package_dir().display()
+                "existing target encoding for package `{name}` at `{path}` is up-to-date",
+                name = resolution.metadata.name,
+                path = target_path.display(),
             );
         }
     }
 
-    let mut dep = cargo::core::Dependency::parse(
-        generator.package_name(),
-        Some(BINDINGS_VERSION),
-        SourceId::for_path(generator.package_dir())?,
-    )?;
-
-    // Set the explicit name in toml to the crate name expected in user source
-    dep.set_explicit_name_in_toml("bindings");
-    Ok(dep)
+    Ok(())
 }
 
 fn is_wasm_module(path: impl AsRef<Path>) -> Result<bool> {
@@ -235,18 +445,19 @@ fn create_component(config: &Config, path: &Path, binary: bool) -> Result<()> {
     }
 
     ::log::debug!(
-        "componentizing WebAssembly module `{path}`",
-        path = path.display()
+        "componentizing WebAssembly module `{path}` as a {kind} component",
+        path = path.display(),
+        kind = if binary { "command" } else { "reactor" },
     );
 
     let module = fs::read(path).with_context(|| {
-        anyhow!(
+        format!(
             "failed to read output module `{path}`",
             path = path.display()
         )
     })?;
 
-    config.shell().status(
+    config.terminal().status(
         "Creating",
         format!("component {path}", path = path.display()),
     )?;
@@ -279,250 +490,56 @@ fn create_component(config: &Config, path: &Path, binary: bool) -> Result<()> {
     );
 
     let component = producers.add_to_wasm(&encoder.encode()?).with_context(|| {
-        anyhow!(
+        format!(
             "failed to add metadata to output component `{path}`",
             path = path.display()
         )
     })?;
 
     fs::write(path, component).with_context(|| {
-        anyhow!(
+        format!(
             "failed to write output component `{path}`",
             path = path.display()
         )
     })
 }
 
-/// Compile a component for the given workspace and compile options.
-///
-/// It is expected that the current package contains a `package.metadata.component` section.
-pub async fn compile<'a>(
-    config: &Config,
-    mut workspace: Workspace<'a>,
-    options: &CompileOptions,
-    force_generation: bool,
-) -> Result<Compilation<'a>> {
-    let map = generate_workspace_bindings(config, &mut workspace, force_generation).await?;
-    let compilation = ops::compile(&workspace, options)?;
-
-    for (binary, output) in compilation
-        .binaries
-        .iter()
-        .map(|o| (true, o))
-        .chain(compilation.cdylibs.iter().map(|o| (false, o)))
-        .filter(|(_, o)| map.keys().any(|k| k == &o.unit.pkg.package_id()))
-    {
-        create_component(config, &output.path, binary)?;
-    }
-
-    Ok(compilation)
-}
-
-/// Represents options for a publish WIT operation.
-pub struct PublishWitOptions<'a> {
-    /// The name of the cargo package to publish for.
-    pub cargo_package: Option<&'a str>,
-    /// The id of the registry package to publish.
-    pub id: &'a PackageId,
-    /// The version of the registry package to publish.
-    pub version: &'a Version,
-    /// The url of the registry to publish to.
-    pub url: &'a str,
-    /// The private signing key to use for the publish.
-    pub signing_key: PrivateKey,
-    /// Whether or not to initialize the package before publishing.
-    pub init: bool,
-    /// Whether or not to perform a dry run.
-    ///
-    /// A dry run skips communicating with the registry.
-    pub dry_run: bool,
-}
-
-/// Publish the target WIT for a project to a component registry.
-pub async fn publish_wit(
-    config: &Config,
-    workspace: Workspace<'_>,
-    options: &PublishWitOptions<'_>,
-) -> Result<()> {
-    let package = if let Some(ref inner) = options.cargo_package {
-        let pkg = Packages::from_flags(false, vec![], vec![inner.to_string()])?;
-        pkg.get_packages(&workspace)?[0]
-    } else {
-        workspace.current()?
-    };
-
-    let map = resolve_dependencies(config, &workspace).await?;
-    let resolution = match map.get(&package.package_id()) {
-        Some(resolution) => resolution,
-        None => bail!(
-            "manifest `{path}` is not a WebAssembly component package",
-            path = package.manifest_path().display(),
-        ),
-    };
-
-    let bytes = match &resolution.metadata.section.target {
-        Some(Target::Local { .. }) => {
-            // NOTE: we don't need to lock the bindings directory as we're not actually going to read or write any files.
-            let bindings_dir = bindings_dir(&workspace);
-            let generator = BindingsGenerator::new(bindings_dir.as_path_unlocked(), resolution)?;
-            generator
-                .encode_target_world(options.version)
-                .with_context(|| {
-                    anyhow!(
-                        "failed to encode target WIT for package `{package}`",
-                        package = package.name()
-                    )
-                })?
-        }
-        _ => {
-            bail!("a WIT package may only be published from a project using a local target");
-        }
-    };
-
-    let mut producers = wasm_metadata::Producers::empty();
-    producers.add(
-        "processed-by",
-        env!("CARGO_PKG_NAME"),
-        option_env!("CARGO_VERSION_INFO").unwrap_or(env!("CARGO_PKG_VERSION")),
-    );
-
-    let bytes = producers
-        .add_to_wasm(&bytes)
-        .context("failed to add producers metadata to output WIT package")?;
-
-    if options.dry_run {
-        config
-            .shell()
-            .warn("not publishing WIT package to the registry due to the --dry-run option")?;
-        return Ok(());
-    }
-
-    let client = registry::create_client(config, options.url)?;
-
-    let content = client
-        .content()
-        .store_content(
-            Box::pin(futures::stream::once(async { Ok(Bytes::from(bytes)) })),
-            None,
-        )
-        .await?;
-
-    config
-        .shell()
-        .status("Publishing", format!("target WIT package ({content})"))?;
-
-    let mut info = PublishInfo {
-        id: options.id.clone(),
-        head: None,
-        entries: Default::default(),
-    };
-
-    if options.init {
-        info.entries.push(PublishEntry::Init);
-    }
-
-    info.entries.push(PublishEntry::Release {
-        version: options.version.clone(),
-        content,
-    });
-
-    let record_id = client.publish_with_info(&options.signing_key, info).await?;
-    client
-        .wait_for_publish(options.id, &record_id, Duration::from_secs(1))
-        .await?;
-
-    config.shell().status(
-        "Published",
-        format!(
-            "package `{id}` v{version}",
-            id = options.id,
-            version = options.version
-        ),
-    )?;
-
-    Ok(())
-}
-
 /// Represents options for a publish operation.
 pub struct PublishOptions<'a> {
-    /// Force generation of bindings for the build.
-    pub force_generation: bool,
-    /// The compile options to use for the build.
-    pub compile_options: CompileOptions,
-    /// The id of the component to publish.
-    pub id: &'a PackageId,
-    /// The version of the component to publish.
-    pub version: &'a Version,
-    /// The url of the registry to publish to.
-    pub url: &'a str,
-    /// The private signing key to use for the publish.
-    pub signing_key: PrivateKey,
-    /// Whether or not to initialize the package before publishing.
+    /// The registry URL to publish to.
+    pub registry_url: &'a str,
+    /// Whether to initialize the package or not.
     pub init: bool,
-    /// Whether or not to perform a dry run.
-    ///
-    /// A dry run skips communicating with the registry.
+    /// The id of the package being published.
+    pub id: &'a PackageId,
+    /// The version of the package being published.
+    pub version: &'a Version,
+    /// The path to the package being published.
+    pub path: &'a Path,
+    /// The signing key to use for the publish operation.
+    pub signing_key: &'a PrivateKey,
+    /// Whether to perform a dry run or not.
     pub dry_run: bool,
 }
 
 /// Publish a component for the given workspace and publish options.
-pub async fn publish(
-    config: &Config,
-    workspace: Workspace<'_>,
-    options: &PublishOptions<'_>,
-) -> Result<()> {
-    let compilation = compile(
-        config,
-        workspace,
-        &options.compile_options,
-        options.force_generation,
-    )
-    .await?;
-
-    let outputs: Vec<_> = compilation
-        .binaries
-        .iter()
-        .map(|o| (true, o))
-        .chain(compilation.cdylibs.iter().map(|o| (false, o)))
-        .collect();
-
-    let output = match outputs.len() {
-        0 => bail!("no compilation outputs to publish"),
-        1 => &outputs[0].1,
-        2 => {
-            // One output must be a lib and the other a bin
-            if outputs[0].0 == outputs[1].0 {
-                bail!("cannot publish multiple compilation outputs");
-            }
-
-            // Publish the bin in this case
-            if outputs[0].0 {
-                assert!(!outputs[1].0);
-                &outputs[0].1
-            } else {
-                assert!(outputs[1].0);
-                &outputs[1].1
-            }
-        }
-        _ => bail!("cannot publish multiple compilation outputs"),
-    };
-
+pub async fn publish(config: &Config, options: &PublishOptions<'_>) -> Result<()> {
     if options.dry_run {
         config
-            .shell()
+            .terminal()
             .warn("not publishing component to the registry due to the --dry-run option")?;
         return Ok(());
     }
 
-    let client = registry::create_client(config, options.url)?;
+    let client = create_client(config.warg(), options.registry_url, config.terminal())?;
 
     let content = client
         .content()
         .store_content(
             Box::pin(
                 ReaderStream::new(BufReader::new(
-                    tokio::fs::File::open(&output.path).await.with_context(|| {
-                        format!("failed to open `{path}`", path = output.path.display())
+                    tokio::fs::File::open(options.path).await.with_context(|| {
+                        format!("failed to open `{path}`", path = options.path.display())
                     })?,
                 ))
                 .map_err(|e| anyhow!(e)),
@@ -531,9 +548,12 @@ pub async fn publish(
         )
         .await?;
 
-    config.shell().status(
+    config.terminal().status(
         "Publishing",
-        format!("component {path} ({content})", path = output.path.display()),
+        format!(
+            "component {path} ({content})",
+            path = options.path.display()
+        ),
     )?;
 
     let mut info = PublishInfo {
@@ -551,12 +571,12 @@ pub async fn publish(
         content,
     });
 
-    let record_id = client.publish_with_info(&options.signing_key, info).await?;
+    let record_id = client.publish_with_info(options.signing_key, info).await?;
     client
         .wait_for_publish(options.id, &record_id, Duration::from_secs(1))
         .await?;
 
-    config.shell().status(
+    config.terminal().status(
         "Published",
         format!(
             "package `{id}` v{version}",
@@ -568,59 +588,34 @@ pub async fn publish(
     Ok(())
 }
 
-/// Generate API documentation for the given workspace and compile options.
+/// Update the dependencies in the lock file.
 ///
-/// It is expected that the current package contains a `package.metadata.component` section.
-pub async fn doc(
-    config: &Config,
-    mut workspace: Workspace<'_>,
-    options: &DocOptions,
-    force_generation: bool,
-) -> Result<()> {
-    generate_workspace_bindings(config, &mut workspace, force_generation).await?;
-    ops::doc(&workspace, options)?;
-    Ok(())
-}
-
-/// Retrieves workspace metadata for the given workspace and metadata options.
-///
-/// The returned metadata contains information about generated dependencies.
-pub async fn metadata(
-    config: &Config,
-    mut workspace: Workspace<'_>,
-    options: &OutputMetadataOptions,
-) -> Result<ExportInfo> {
-    generate_workspace_bindings(config, &mut workspace, false).await?;
-    ops::output_metadata(&workspace, options)
-}
-
-/// Check a component for errors with the given workspace and compile options.
-pub async fn check(
-    config: &Config,
-    mut workspace: Workspace<'_>,
-    options: &CompileOptions,
-    force_generation: bool,
-) -> Result<()> {
-    generate_workspace_bindings(config, &mut workspace, force_generation).await?;
-    ops::compile(&workspace, options)?;
-    Ok(())
-}
-
-/// Update the dependencies in the local lock files.
-///
-/// This updates both `Cargo.lock` and `Cargo-component.lock`.
+/// This updates only `Cargo-component.lock`.
 pub async fn update_lockfile(
     config: &Config,
-    workspace: &Workspace<'_>,
-    options: &UpdateOptions<'_>,
+    metadata: &Metadata,
+    packages: &[PackageComponentMetadata<'_>],
+    cargo_args: &CargoArguments,
+    dry_run: bool,
 ) -> Result<()> {
-    // First update `Cargo.lock`
-    ops::update_lockfile(workspace, options)?;
+    // Read the current lock file and generate a new one
+    let map = create_resolution_map(config, packages, None, cargo_args.network_allowed()).await?;
 
-    // Next read the current lock file and generate a new one
-    let map = create_resolution_map(config, workspace, None).await?;
-    let orig_lock_file = LockFile::open(config, workspace)?.unwrap_or_default();
-    let new_lock_file = LockFile::from_resolution_map(&map);
+    let file_lock = acquire_lock_file_ro(config, metadata)?;
+    let orig_lock_file = file_lock
+        .as_ref()
+        .map(|f| {
+            LockFile::read(f.file()).with_context(|| {
+                format!(
+                    "failed to read lock file `{path}`",
+                    path = f.path().display()
+                )
+            })
+        })
+        .transpose()?
+        .unwrap_or_default();
+
+    let new_lock_file = map.to_lock_file();
 
     // Unlike `cargo`, the lock file doesn't have transitive dependencies
     // So we expect the entries (and the version requirements) to be the same
@@ -640,7 +635,7 @@ pub async fn update_lockfile(
 
             let new_ver = &new_pkg.versions[new_ver_index];
             if old_ver.version != new_ver.version {
-                config.shell().status_with_color(
+                config.terminal().status_with_color(
                     "Updating",
                     format!(
                         "component registry package `{id}` v{old} -> v{new}",
@@ -648,19 +643,31 @@ pub async fn update_lockfile(
                         old = old_ver.version,
                         new = new_ver.version
                     ),
-                    Color::Green,
+                    Colors::Green,
                 )?;
             }
         }
     }
 
-    if options.dry_run {
-        options
-            .config
-            .shell()
+    if dry_run {
+        config
+            .terminal()
             .warn("not updating component lock file due to --dry-run option")?;
     } else {
-        new_lock_file.update(config, workspace, &orig_lock_file)?;
+        // Update the lock file
+        let new_lock_file = map.to_lock_file();
+        if new_lock_file != orig_lock_file {
+            drop(file_lock);
+            let file_lock = acquire_lock_file_rw(config, cargo_args, metadata)?;
+            new_lock_file
+                .write(file_lock.file(), "cargo-component")
+                .with_context(|| {
+                    format!(
+                        "failed to write lock file `{path}`",
+                        path = file_lock.path().display()
+                    )
+                })?;
+        }
     }
 
     Ok(())

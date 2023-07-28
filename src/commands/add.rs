@@ -1,16 +1,49 @@
-use super::workspace;
 use crate::{
-    metadata::{ComponentMetadata, Dependency, RegistryPackage},
-    registry::{DependencyResolution, DependencyResolver},
-    Config,
+    config::{CargoArguments, CargoPackageSpec},
+    load_component_metadata, load_metadata,
+    metadata::ComponentMetadata,
+    Config, PackageComponentMetadata,
 };
 use anyhow::{bail, Context, Result};
-use cargo::{core::package::Package, ops::Packages};
+use cargo_component_core::registry::{
+    Dependency, DependencyResolution, DependencyResolver, RegistryPackage,
+};
+use cargo_metadata::Package;
 use clap::{ArgAction, Args};
 use semver::VersionReq;
-use std::{fs, path::PathBuf};
+use std::{fs, path::PathBuf, str::FromStr};
 use toml_edit::{value, Document, InlineTable, Value};
 use warg_protocol::registry::PackageId;
+
+/// Represents a versioned component package identifier.
+#[derive(Clone)]
+pub struct VersionedPackageId {
+    /// The package identifier.
+    pub id: PackageId,
+    /// The optional package version.
+    pub version: Option<VersionReq>,
+}
+
+impl FromStr for VersionedPackageId {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+        match s.split_once('@') {
+            Some((id, version)) => Ok(Self {
+                id: id.parse()?,
+                version: Some(
+                    version
+                        .parse()
+                        .with_context(|| format!("invalid package version `{version}`"))?,
+                ),
+            }),
+            None => Ok(Self {
+                id: s.parse()?,
+                version: None,
+            }),
+        }
+    }
+}
 
 /// Add a dependency for a WebAssembly component
 #[derive(Args)]
@@ -42,15 +75,11 @@ pub struct AddCommand {
 
     /// Cargo package to add the dependency to (see `cargo help pkgid`)
     #[clap(long = "package", short = 'p', value_name = "SPEC")]
-    pub cargo_package: Option<String>,
+    pub spec: Option<CargoPackageSpec>,
 
     /// The name of the registry to use.
     #[clap(long = "registry", short = 'r', value_name = "REGISTRY")]
     pub registry: Option<String>,
-
-    /// The version requirement of the dependency being added.
-    #[clap(long = "version", value_name = "VERSION")]
-    pub version: Option<VersionReq>,
 
     /// The id of the dependency to use; defaults to the package id.
     #[clap(long, value_name = "ID")]
@@ -58,52 +87,49 @@ pub struct AddCommand {
 
     /// The id of the package to add a dependency to.
     #[clap(value_name = "PACKAGE")]
-    pub package: PackageId,
+    pub package: VersionedPackageId,
 }
 
 impl AddCommand {
     /// Executes the command
-    pub async fn exec(self, config: &mut Config) -> Result<()> {
-        config.cargo_mut().configure(
-            u32::from(self.verbose),
-            self.quiet,
-            self.color.as_deref(),
-            false,
-            false,
-            false,
-            &None,
-            &[],
-            &[],
-        )?;
+    pub async fn exec(self, config: &Config, cargo_args: &CargoArguments) -> Result<()> {
+        let metadata = load_metadata(cargo_args.manifest_path.as_deref())?;
 
-        let ws = workspace(self.manifest_path.as_deref(), config)?;
-        let package = if let Some(ref inner) = self.cargo_package {
-            let pkg = Packages::from_flags(false, vec![], vec![inner.clone()])?;
-            pkg.get_packages(&ws)?[0]
-        } else {
-            ws.current()?
-        };
+        let PackageComponentMetadata { package, metadata }: PackageComponentMetadata<'_> =
+            match &self.spec {
+                Some(spec) => {
+                    let pkgs = load_component_metadata(&metadata, std::iter::once(spec), false)?;
+                    assert!(pkgs.len() == 1, "one package should be present");
+                    pkgs.into_iter().next().unwrap()
+                }
+                None => PackageComponentMetadata::new(
+                    metadata
+                        .root_package()
+                        .context("no root package found in metadata")?,
+                )?,
+            };
 
-        let metadata = match ComponentMetadata::from_package(package)? {
-            Some(metadata) => metadata,
-            None => bail!(
+        let metadata = metadata.with_context(|| {
+            format!(
                 "manifest `{path}` is not a WebAssembly component package",
-                path = package.manifest_path().display(),
-            ),
-        };
+                path = package.manifest_path
+            )
+        })?;
 
         let id = match &self.id {
             Some(id) => id,
-            None => &self.package,
+            None => &self.package.id,
         };
 
         self.validate(&metadata, id)?;
 
-        let version = self.resolve_version(config, &metadata, id).await?;
+        let version = self
+            .resolve_version(config, &metadata, id, cargo_args.network_allowed())
+            .await?;
         let version = version.trim_start_matches('^');
         self.add(package, version)?;
 
-        config.shell().status(
+        config.terminal().status(
             "Added",
             format!("dependency `{id}` with version `{version}`"),
         )?;
@@ -116,22 +142,34 @@ impl AddCommand {
         config: &Config,
         metadata: &ComponentMetadata,
         id: &PackageId,
+        network_allowed: bool,
     ) -> Result<String> {
-        let mut resolver = DependencyResolver::new(config, &metadata.section.registries, None);
+        let mut resolver = DependencyResolver::new(
+            config.warg(),
+            &metadata.section.registries,
+            None,
+            config.terminal(),
+            network_allowed,
+        )?;
         let dependency = Dependency::Package(RegistryPackage {
-            id: Some(self.package.clone()),
-            version: self.version.as_ref().unwrap_or(&VersionReq::STAR).clone(),
+            id: Some(self.package.id.clone()),
+            version: self
+                .package
+                .version
+                .as_ref()
+                .unwrap_or(&VersionReq::STAR)
+                .clone(),
             registry: self.registry.clone(),
         });
 
-        resolver.add_dependency(id, &dependency, false).await?;
+        resolver.add_dependency(id, &dependency).await?;
 
-        let (target, dependencies) = resolver.resolve().await?;
-        assert!(target.is_empty());
+        let dependencies = resolver.resolve().await?;
         assert_eq!(dependencies.len(), 1);
 
         match dependencies.values().next().expect("expected a resolution") {
             DependencyResolution::Registry(resolution) => Ok(self
+                .package
                 .version
                 .as_ref()
                 .map(ToString::to_string)
@@ -141,18 +179,17 @@ impl AddCommand {
     }
 
     fn add(&self, pkg: &Package, version: &str) -> Result<()> {
-        let manifest_path = pkg.manifest_path();
-        let manifest = fs::read_to_string(manifest_path).with_context(|| {
+        let manifest = fs::read_to_string(&pkg.manifest_path).with_context(|| {
             format!(
                 "failed to read manifest file `{path}`",
-                path = manifest_path.display()
+                path = pkg.manifest_path
             )
         })?;
 
         let mut document: Document = manifest.parse().with_context(|| {
             format!(
                 "failed to parse manifest file `{path}`",
-                path = manifest_path.display()
+                path = pkg.manifest_path
             )
         })?;
 
@@ -161,29 +198,29 @@ impl AddCommand {
             .with_context(|| {
                 format!(
                     "failed to find component metadata in manifest file `{path}`",
-                    path = manifest_path.display()
+                    path = pkg.manifest_path
                 )
             })?;
 
         match self.id.as_ref() {
             Some(id) => {
                 dependencies[id.as_ref()] = value(InlineTable::from_iter([
-                    ("package", Value::from(self.package.to_string())),
+                    ("package", Value::from(self.package.id.to_string())),
                     ("version", Value::from(version)),
                 ]));
             }
             _ => {
-                dependencies[self.package.as_ref()] = value(version);
+                dependencies[self.package.id.as_ref()] = value(version);
             }
         }
 
         if self.dry_run {
             println!("{document}");
         } else {
-            fs::write(manifest_path, document.to_string()).with_context(|| {
+            fs::write(&pkg.manifest_path, document.to_string()).with_context(|| {
                 format!(
                     "failed to write manifest file `{path}`",
-                    path = manifest_path.display()
+                    path = pkg.manifest_path
                 )
             })?;
         }

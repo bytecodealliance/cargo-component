@@ -5,7 +5,9 @@ use std::{
     process::{Command, Stdio},
 };
 
-pub fn install_wasm32_wasi() -> Result<()> {
+use crate::config::Config;
+
+pub fn install_wasm32_wasi(config: &Config) -> Result<()> {
     let sysroot = get_sysroot()?;
     if sysroot.join("lib/rustlib/wasm32-wasi").exists() {
         return Ok(());
@@ -14,11 +16,15 @@ pub fn install_wasm32_wasi() -> Result<()> {
     if env::var_os("RUSTUP_TOOLCHAIN").is_none() {
         bail!(
             "failed to find the `wasm32-wasi` target \
-               and `rustup` is not available. If you're using rustup \
-               make sure that it's correctly installed; if not, make sure to \
-               install the `wasm32-wasi` target before using this command"
+             and `rustup` is not available. If you're using rustup \
+             make sure that it's correctly installed; if not, make sure to \
+             install the `wasm32-wasi` target before using this command"
         );
     }
+
+    config
+        .terminal()
+        .status("Installing", "wasm32-wasi target")?;
 
     let output = Command::new("rustup")
         .arg("target")

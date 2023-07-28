@@ -1,28 +1,20 @@
 use crate::support::*;
 use anyhow::{Context, Result};
 use assert_cmd::prelude::*;
-use cargo_component::registry::LOCK_FILE_NAME;
 use predicates::{prelude::PredicateBooleanExt, str::contains};
 use std::fs;
-use toml_edit::{value, Document, Item, Table};
+use toml_edit::{value, Item, Table};
 
 mod support;
 
 #[test]
-fn help() {
-    for arg in ["help build", "build -h", "build --help"] {
-        cargo_component(arg)
-            .assert()
-            .stdout(contains(
-                "Compile a WebAssembly component and all of its dependencies",
-            ))
-            .success();
-    }
-}
-
-#[test]
 fn it_builds_debug() -> Result<()> {
     let project = Project::new("foo")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
+
     project
         .cargo_component("build")
         .assert()
@@ -31,7 +23,7 @@ fn it_builds_debug() -> Result<()> {
 
     validate_component(&project.debug_wasm("foo"))?;
 
-    let path = project.root().join(LOCK_FILE_NAME);
+    let path = project.root().join("Cargo-component.lock");
     let contents = fs::read_to_string(&path)
         .with_context(|| format!("failed to read lock file `{path}`", path = path.display()))?;
 
@@ -49,6 +41,11 @@ fn it_builds_debug() -> Result<()> {
 #[test]
 fn it_builds_a_bin_project() -> Result<()> {
     let project = Project::new_bin("foo")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
+
     project
         .cargo_component("build --release")
         .assert()
@@ -83,16 +80,28 @@ edition = "2021"
         .build();
 
     project
-        .cargo_component("new --lib foo")
+        .cargo_component("new --reactor foo")
         .assert()
-        .stderr(contains("Created component `foo` package"))
+        .stderr(contains("Updated manifest of package `foo`"))
         .success();
 
+    let member = ProjectBuilder::new(project.root().join("foo")).build();
+    member.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
+
     project
-        .cargo_component("new --lib bar")
+        .cargo_component("new --reactor bar")
         .assert()
-        .stderr(contains("Created component `bar` package"))
+        .stderr(contains("Updated manifest of package `bar`"))
         .success();
+
+    let member = ProjectBuilder::new(project.root().join("bar")).build();
+    member.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
 
     project
         .cargo_component("build")
@@ -109,6 +118,11 @@ edition = "2021"
 #[test]
 fn it_supports_wit_keywords() -> Result<()> {
     let project = Project::new("interface")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
+
     project
         .cargo_component("build --release")
         .assert()
@@ -123,6 +137,11 @@ fn it_supports_wit_keywords() -> Result<()> {
 #[test]
 fn it_adds_a_producers_field() -> Result<()> {
     let project = Project::new("foo")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
+
     project
         .cargo_component("build --release")
         .assert()
@@ -152,6 +171,11 @@ fn it_adds_a_producers_field() -> Result<()> {
 #[test]
 fn it_builds_wasm32_unknown_unknown() -> Result<()> {
     let project = Project::new("foo")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
+
     project
         .cargo_component("build --target wasm32-unknown-unknown")
         .assert()
@@ -170,14 +194,13 @@ fn it_builds_wasm32_unknown_unknown() -> Result<()> {
 }
 
 #[test]
-fn it_regenerates_bindings_if_wit_changed() -> Result<()> {
+fn it_regenerates_target_if_wit_changed() -> Result<()> {
     let project = Project::new("foo")?;
-
-    let manifest_path = project.root().join("Cargo.toml");
-    let manifest = fs::read_to_string(&manifest_path)?;
-    let mut doc: Document = manifest.parse()?;
-    doc["package"]["metadata"]["component"]["target"]["world"] = value("example");
-    fs::write(manifest_path, doc.to_string())?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        doc["package"]["metadata"]["component"]["target"]["world"] = value("example");
+        Ok(doc)
+    })?;
 
     project
         .cargo_component("build")
@@ -190,7 +213,7 @@ fn it_regenerates_bindings_if_wit_changed() -> Result<()> {
     project
         .cargo_component("build")
         .assert()
-        .stderr(contains("Generating bindings").not())
+        .stderr(contains("Encoding target").not())
         .success();
 
     fs::write(project.root().join("wit/other.wit"), "world foo {}")?;
@@ -198,7 +221,7 @@ fn it_regenerates_bindings_if_wit_changed() -> Result<()> {
     project
         .cargo_component("build")
         .assert()
-        .stderr(contains("Generating bindings"))
+        .stderr(contains("Encoding target"))
         .success();
 
     Ok(())
@@ -207,19 +230,17 @@ fn it_regenerates_bindings_if_wit_changed() -> Result<()> {
 #[test]
 fn it_builds_with_local_wit_deps() -> Result<()> {
     let project = Project::new("foo")?;
-
-    let manifest_path = project.root().join("Cargo.toml");
-    let manifest = fs::read_to_string(&manifest_path)?;
-    let mut doc: Document = manifest.parse()?;
-    doc["package"]["metadata"]["component"]["target"]["path"] = value("wit");
-
-    let mut dependencies = Table::new();
-    dependencies["foo:bar"]["path"] = value("wit/deps/foo-bar");
-    dependencies["bar:baz"]["path"] = value("wit/deps/bar-baz/qux.wit");
-    dependencies["baz:qux"]["path"] = value("wit/deps/foo-bar/deps/baz-qux/qux.wit");
-
-    doc["package"]["metadata"]["component"]["target"]["dependencies"] = Item::Table(dependencies);
-    fs::write(manifest_path, doc.to_string())?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        doc["package"]["metadata"]["component"]["target"]["path"] = value("wit");
+        let mut dependencies = Table::new();
+        dependencies["foo:bar"]["path"] = value("wit/deps/foo-bar");
+        dependencies["bar:baz"]["path"] = value("wit/deps/bar-baz/qux.wit");
+        dependencies["baz:qux"]["path"] = value("wit/deps/foo-bar/deps/baz-qux/qux.wit");
+        doc["package"]["metadata"]["component"]["target"]["dependencies"] =
+            Item::Table(dependencies);
+        Ok(doc)
+    })?;
 
     // Create the foo-bar wit package
     fs::create_dir_all(project.root().join("wit/deps/foo-bar/deps/baz-qux"))?;
@@ -265,7 +286,9 @@ world example {
 
     fs::write(
         project.root().join("src/lib.rs"),
-        "use bindings::exports::{foo::bar::baz::{Baz, Ty}, bar::baz::qux::Qux};
+        "cargo_component_bindings::generate!();
+use bindings::exports::{foo::bar::baz::{Baz, Ty}, bar::baz::qux::Qux};
+
 struct Component;
 
 impl Baz for Component {
@@ -279,8 +302,44 @@ impl Qux for Component {
         todo!()
     }
 }
+",
+    )?;
 
-bindings::export!(Component);",
+    project
+        .cargo_component("build")
+        .assert()
+        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .success();
+
+    validate_component(&project.debug_wasm("foo"))?;
+
+    Ok(())
+}
+
+#[test]
+fn it_builds_with_a_specified_implementor() -> Result<()> {
+    let project = Project::new("foo")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
+
+    fs::write(
+        project.root().join("src/lib.rs"),
+        r#"cargo_component_bindings::generate!({
+    implementor: CustomImplementor
+});
+
+use bindings::Example;
+
+struct CustomImplementor;
+
+impl Example for CustomImplementor {
+    fn hello_world() -> String {
+        todo!()
+    }
+}
+"#,
     )?;
 
     project
@@ -297,6 +356,10 @@ bindings::export!(Component);",
 #[test]
 fn empty_world_with_dep_valid() -> Result<()> {
     let project = Project::new("dep")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
 
     fs::write(
         project.root().join("wit/world.wit"),
@@ -312,6 +375,7 @@ fn empty_world_with_dep_valid() -> Result<()> {
     fs::write(
         project.root().join("src/lib.rs"),
         "
+            cargo_component_bindings::generate!();
             use bindings::TheWorld;
             struct Component;
 
@@ -320,8 +384,6 @@ fn empty_world_with_dep_valid() -> Result<()> {
                     todo!()
                 }
             }
-
-            bindings::export!(Component);
         ",
     )?;
 
@@ -331,24 +393,26 @@ fn empty_world_with_dep_valid() -> Result<()> {
     validate_component(&dep)?;
 
     let project = Project::with_root(project.root().parent().unwrap(), "main", "")?;
-    let manifest_path = project.root().join("Cargo.toml");
-    let manifest = fs::read_to_string(&manifest_path)?;
-    let mut doc: Document = manifest.parse()?;
-    let table = doc["package"]["metadata"]["component"]
-        .as_table_mut()
-        .unwrap();
-    table.remove("package");
-    table.remove("target");
-    let mut dependencies = Table::new();
-    dependencies["foo:bar"]["path"] = value(dep.display().to_string());
-    doc["package"]["metadata"]["component"]["dependencies"] = Item::Table(dependencies);
-    fs::write(manifest_path, doc.to_string())?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        let table = doc["package"]["metadata"]["component"]
+            .as_table_mut()
+            .unwrap();
+        table.remove("package");
+        table.remove("target");
+        let mut dependencies = Table::new();
+        dependencies["foo:bar"]["path"] = value(dep.display().to_string());
+        doc["package"]["metadata"]["component"]["dependencies"] = Item::Table(dependencies);
+        Ok(doc)
+    })?;
 
     fs::remove_dir_all(project.root().join("wit"))?;
 
     fs::write(
         project.root().join("src/lib.rs"),
         "
+            cargo_component_bindings::generate!();
+
             #[no_mangle]
             pub extern \"C\" fn foo() {
                 bindings::bar::hello();

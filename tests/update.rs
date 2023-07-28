@@ -12,7 +12,7 @@ fn help() {
         cargo_component(arg)
             .assert()
             .stdout(contains(
-                "Update dependencies as recorded in the local lock files",
+                "Update dependencies as recorded in the component lock file",
             ))
             .success();
     }
@@ -38,6 +38,10 @@ world foo {
     .await?;
 
     let project = Project::with_root(&root, "component", "--target foo:bar@1.0.0")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
 
     project
         .cargo_component("build")
@@ -75,6 +79,10 @@ world foo {
     .await?;
 
     let project = Project::with_root(&root, "component", "--target foo:bar@1.0.0")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
 
     project
         .cargo_component("build")
@@ -131,6 +139,10 @@ world foo {
     .await?;
 
     let project = Project::with_root(&root, "component", "--target foo:bar@1.0.0")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
 
     project
         .cargo_component("build")
@@ -159,14 +171,14 @@ world foo {
         .success()
         .stderr(contains("`foo:bar` v1.0.0 -> v1.1.0"));
 
-    let source = r#"use bindings::{baz, Foo};
+    let source = r#"cargo_component_bindings::generate!();
+use bindings::{baz, Foo};
 struct Component;
 impl Foo for Component {
     fn bar() -> String {
         baz()
     }
 }
-bindings::export!(Component);
 "#;
 
     fs::write(project.root().join("src/lib.rs"), source)?;

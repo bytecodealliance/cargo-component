@@ -182,6 +182,10 @@ impl UseTrie {
             }
         }
     }
+
+    fn is_empty(&self) -> bool {
+        self.root.children.is_empty() && self.root.tys.is_empty()
+    }
 }
 
 impl fmt::Display for UseTrie {
@@ -221,7 +225,6 @@ impl<'a> SourceGenerator<'a> {
         let mut impls = Vec::new();
         let world = &resolve.worlds[world];
 
-        let mut export_count = 0;
         let mut function_exports = Vec::new();
         for (key, item) in &world.exports {
             match item {
@@ -243,7 +246,6 @@ impl<'a> SourceGenerator<'a> {
                             imp.push('\n');
                         }
                         Self::print_unimplemented_func(&resolve, func, &mut imp, &mut trie)?;
-                        export_count += 1;
                     }
 
                     imp.push_str("}\n");
@@ -268,7 +270,6 @@ impl<'a> SourceGenerator<'a> {
                     imp.push('\n');
                 }
                 Self::print_unimplemented_func(&resolve, func, &mut imp, &mut trie)?;
-                export_count += 1;
             }
 
             imp.push_str("}\n");
@@ -276,11 +277,14 @@ impl<'a> SourceGenerator<'a> {
         }
 
         let mut source = String::new();
-        write!(&mut source, "{trie}")?;
-
-        if !source.is_empty() {
-            source.push('\n');
-        }
+        writeln!(&mut source, "// Required for component bindings generation")?;
+        writeln!(&mut source, "cargo_component_bindings::generate!();")?;
+        writeln!(&mut source)?;
+        write!(
+            &mut source,
+            "{trie}{nl}",
+            nl = if trie.is_empty() { "" } else { "\n" }
+        )?;
 
         source.push_str("struct Component;\n");
 
@@ -290,10 +294,6 @@ impl<'a> SourceGenerator<'a> {
             }
 
             source.push_str(imp);
-        }
-
-        if export_count > 0 {
-            source.push_str("\nbindings::export!(Component);\n");
         }
 
         if self.format {
@@ -491,6 +491,9 @@ impl<'a> SourceGenerator<'a> {
                 source.push('>');
             }
             TypeDefKind::Type(ty) => Self::print_type(resolve, ty, source, trie)?,
+            TypeDefKind::Resource | TypeDefKind::Handle(_) => {
+                todo!("implement resources support")
+            }
             TypeDefKind::Unknown => unreachable!(),
         }
 

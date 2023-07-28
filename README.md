@@ -25,7 +25,7 @@ using Rust as the component's implementation language.
 `cargo component` is considered to be experimental and is _not_ currently
 stable in terms of the code it supports building.
 
-Until the component model stabilizes, upgrading to a newer `cargo component` 
+Until the component model stabilizes, upgrading to a newer `cargo component`
 may cause build errors for existing component projects.
 
 ## Requirements
@@ -87,7 +87,7 @@ This enables WebAssembly runtimes to know specifically how they must
 facilitate the exchange of data between the discrete linear memories
 of components, eliminating the need for developers to do so by hand.
 
-Additionally, components can describe their dependencies in a way 
+Additionally, components can describe their dependencies in a way
 that modules simply cannot today; they can even control how their
 dependencies are _instantiated_, enabling a component to
 _virtualize_ functionality needed by a dependency. And because
@@ -105,7 +105,7 @@ That means being able to reference WebAssembly components via
 same way as Rust crate dependencies:
 
 * add a dependency on a WebAssembly component to `Cargo.toml`
-* reference it like you would an external crate (via `<name>::...`) in
+* reference it like you would an external crate (via `bindings::<name>::...`) in
   your source code
 * build using `cargo component build` and out pops your component!
 
@@ -121,16 +121,10 @@ including Rust.
 `wit-bindgen` even provides procedural macros to generate the
 bindings "inline" with the component's source code.
 
-Unlike `wit-bindgen`, `cargo component` doesn't use procedural macros
-or a `build.rs` file to generate bindings. Instead, it generates them
-into external crates that are automatically provided to the Rust
-compiler when building your component's project.
-
-This approach does come with some downsides, however. Commands like
-`cargo metadata` and `cargo check` used by many tools (e.g.
-`rust-analyzer`) simply don't work because they aren't aware of the
-generated bindings. That is why replacement commands such as
-`cargo component metadata` and `cargo component check` exist.
+Like `wit-bindgen`, `cargo component` uses a procedural macro to generate
+bindings. However, bindings are generated based on the resolved dependencies
+from `Cargo.toml` rather than parsing a local definition of the component's
+interface.
 
 The hope is that one day (in the not too distant future...) that
 WebAssembly components might become an important part of the Rust
@@ -159,19 +153,19 @@ and tooling developers can use to test their implementations.
 
 Currently `cargo component` targets `wasm32-wasi` by default.
 
-As this target is for a _preview1_ release of WASI, the WebAssembly module 
-produced by the Rust compiler must be adapted to the _preview2_ version of WASI 
+As this target is for a _preview1_ release of WASI, the WebAssembly module
+produced by the Rust compiler must be adapted to the _preview2_ version of WASI
 supported by the component model.
 
 The adaptation is automatically performed when `wasm32-wasi` is targeted.
 
-To prevent this, override the target to `wasm32-unknown-unknown` using the 
+To prevent this, override the target to `wasm32-unknown-unknown` using the
 `--target` option when building. This, however, will disable WASI support.
 
-Use the _preview2_ version of [`wasi-common`][2] in your host to run components 
+Use the _preview2_ version of [`wasi-common`][2] in your host to run components
 produced by `cargo component`.
 
-When the Rust compiler supports a [_preview2_ version of the WASI target][1], 
+When the Rust compiler supports a [_preview2_ version of the WASI target][1],
 support in `cargo component` for adapting a _preview1_ module will be removed.
 
 [1]: https://github.com/rust-lang/compiler-team/issues/594
@@ -179,7 +173,12 @@ support in `cargo component` for adapting a _preview1_ module will be removed.
 
 ## Getting Started
 
-Use `cargo component new --lib <name>` to create a new reactor component.
+Use `cargo component new --reactor <name>` to create a new reactor component.
+
+A reactor component doesn't have a `run` (i.e. `main` in Rust) function
+exported and is meant to be used as a library rather than a command that runs
+and exits. Without the `--reactor` flag, `cargo component` defaults to creating
+a command component.
 
 This will create a `wit/world.wit` file describing the world that the
 component will target:
@@ -190,7 +189,7 @@ package my-org:my-component
 /// An example world for the component to target.
 world example {
     export hello-world: func() -> string
-}                
+}
 ```
 
 The component will export a `hello-world` function returning a string.
@@ -198,87 +197,81 @@ The component will export a `hello-world` function returning a string.
 The implementation of the component will be in `src/lib.rs`:
 
 ```rust
+cargo_component_bindings::generate!();
+
+use bindings::Example;
+
 struct Component;
 
-impl bindings::Example for Component {
+impl Example for Component {
     /// Say hello!
     fn hello_world() -> String {
         "Hello, World!".to_string()
     }
 }
-
-bindings::export!(Component);
 ```
 
-Here `bindings` is the bindings crate that `cargo component` generated for you.
+The `generate!` macro is responsible for generating the bindings to allow the
+Rust code to export what is expected of the component.
 
-The `export!` macro informs the bindings that the `Component` type exports
-all interfaces listed in `Cargo.toml`.
+It generates a Rust module named `bindings` containing the types and traits the
+correspond to the world definition.
 
 ## Usage
 
 The `cargo component` subcommand has some analogous commands to cargo itself:
 
 * `cargo component new` — creates a new WebAssembly component Rust project.
-* `cargo component add` — adds a component interface dependency to a cargo 
+* `cargo component add` — adds a component interface dependency to a cargo
   manifest file.
-* `cargo component build` — builds a WebAssembly component from a Rust project
-  using the `wasm32-wasi` target by default.
-* `cargo component doc` — generates API documentation for a WebAssembly 
-  component from a Rust project.
-* `cargo component metadata` — prints package metadata as `cargo metadata` 
-  would, except it also includes the metadata of generated bindings.
-* `cargo component check` — checks the local package and all of its dependencies
-  (including generated bindings) for errors.
-* `cargo component clippy` — same as `cargo clippy` but also checks generated 
-  bindings.
-* `cargo component update` — same as `cargo update` but also updates the 
+* `cargo component update` — same as `cargo update` but also updates the
   dependencies in the component lock file.
 * `cargo component publish` - publishes a WebAssembly component to a [warg](https://warg.io/)
   component registry.
-* `cargo component key` - manages signing keys for publishing WebAssembly 
+* `cargo component key` - manages signing keys for publishing WebAssembly
   components.
-* `cargo component wit` - manages the target WIT package of the component.
 
-More commands will be added over time.
+Unrecognized commands are passed through to `cargo` itself, but only after the
+bindings information for component packages has been updated.
+
+Some examples of commands that are passed directly to `cargo` are: `build`,
+`check`, `doc`, `clippy` and extension commands such as `expand` from
+`cargo-expand`.
+
+Certain command line options, like `--target` and `--release`, are detected by
+`cargo component` to determine what output files of a `build` command should be
+componentized.
 
 ## Using `rust-analyzer`
 
 [rust-analyzer](https://github.com/rust-analyzer/rust-analyzer) is an extremely
-useful tool for analyzing Rust code and is used in many different editors to 
+useful tool for analyzing Rust code and is used in many different editors to
 provide code completion and other features.
 
-rust-analyzer depends on `cargo metadata` and `cargo check` to discover 
+rust-analyzer depends on `cargo metadata` and `cargo check` to discover
 workspace information and to check for errors.
 
-Because `cargo component` generates code for dependencies that `cargo` itself is
-unaware of, rust-analyzer will not detect or parse the generated bindings; 
-additionally, diagnostics will highlight any use of the generated bindings as 
-errors.
-
-To solve this problem, rust-analyzer must be configured to use the 
-`cargo-component` executable as the `cargo` command. By doing so, the `cargo 
-component metadata` and `cargo component check` subcommands will inform 
-rust-analyzer of the generated bindings as if they were normal crate 
-dependencies.
+To ensure that rust-analyzer is able to discover the latest bindings
+information, rust-analyzer must be configured to use `cargo component check` as
+the check command.
 
 To configure rust-analyzer to use the `cargo-component` executable, set the
 `rust-analyzer.server.extraEnv` setting to the following:
 
 ```json
-"rust-analyzer.server.extraEnv": { "CARGO": "cargo-component" }
+"rust-analyzer.check.overrideCommand": ["cargo", "component", "check", "--message-format=json"]
 ```
 
-By default, `cargo component new` will configure Visual Studio Code to use 
-`cargo component` by creating a `.vscode/settings.json` file for you. To 
+By default, `cargo component new` will configure Visual Studio Code to use
+`cargo component check` by creating a `.vscode/settings.json` file for you. To
 prevent this, pass `--editor none` to `cargo component new`.
 
-Please check the documentation for rust-analyzer regarding how to set settings 
+Please check the documentation for rust-analyzer regarding how to set settings
 for other IDEs.
 
 ## Contributing to `cargo component`
 
-`cargo component` is a [Bytecode Alliance](https://bytecodealliance.org/) 
+`cargo component` is a [Bytecode Alliance](https://bytecodealliance.org/)
 project, and follows
 the Bytecode Alliance's [Code of Conduct](CODE_OF_CONDUCT.md) and
 [Organizational Code of Conduct](ORG_CODE_OF_CONDUCT.md).
@@ -303,7 +296,7 @@ You'll be adding tests primarily to the `tests/` directory.
 
 ### Submitting Changes
 
-Changes to `cargo component` are managed through pull requests (PRs). Everyone 
+Changes to `cargo component` are managed through pull requests (PRs). Everyone
 is welcome to submit a pull request! We'll try to get to reviewing it or
 responding to it in at most a few days.
 
@@ -317,7 +310,7 @@ command. This is checked on CI.
 The CI for the `cargo component` repository is relatively significant. It tests
 changes on Windows, macOS, and Linux.
 
-It also performs a "dry run" of the release process to ensure that release 
+It also performs a "dry run" of the release process to ensure that release
 binaries can be built and are ready to be published (_coming soon_).
 
 ### Publishing (_coming soon_)

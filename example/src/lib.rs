@@ -1,3 +1,5 @@
+cargo_component_bindings::generate!();
+
 use bindings::{
     example::component::{backend as origin, cache},
     exports::example::component::backend::Backend,
@@ -16,5 +18,3 @@ impl Backend for Component {
         data
     }
 }
-
-bindings::export!(Component);

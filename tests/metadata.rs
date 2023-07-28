@@ -6,23 +6,17 @@ use predicates::{prelude::PredicateBooleanExt, str::contains};
 mod support;
 
 #[test]
-fn help() {
-    for arg in ["help metadata", "metadata -h", "metadata --help"] {
-        cargo_component(arg)
-            .assert()
-            .stdout(contains("Output the resolved dependencies of a package"))
-            .success();
-    }
-}
-
-#[test]
 fn it_prints_metadata() -> Result<()> {
     let project = Project::new("foo")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
 
     project
         .cargo_component("metadata --format-version 1")
         .assert()
-        .stdout(contains("foo-bindings 0.1.0"))
+        .stdout(contains("foo 0.1.0"))
         .success();
 
     Ok(())
@@ -66,24 +60,33 @@ edition = "2021"
         .build();
 
     project
-        .cargo_component("new --lib foo")
+        .cargo_component("new --reactor foo")
         .assert()
-        .stderr(contains("Created component `foo` package"))
+        .stderr(contains("Updated manifest of package `foo`"))
         .success();
 
+    let member = ProjectBuilder::new(project.root().join("foo")).build();
+    member.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
+
     project
-        .cargo_component("new --lib bar")
+        .cargo_component("new --reactor bar")
         .assert()
-        .stderr(contains("Created component `bar` package"))
+        .stderr(contains("Updated manifest of package `bar`"))
         .success();
+
+    let member = ProjectBuilder::new(project.root().join("bar")).build();
+    member.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
 
     project
         .cargo_component("metadata --format-version 1")
         .assert()
-        .stdout(
-            contains("foo-bindings 0.1.0")
-                .and(contains("bar-bindings 0.1.0").and(contains("baz 0.1.0"))),
-        )
+        .stdout(contains("foo 0.1.0").and(contains("bar 0.1.0").and(contains("baz 0.1.0"))))
         .success();
 
     Ok(())

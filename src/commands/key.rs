@@ -1,13 +1,13 @@
-use crate::{
-    signing::{delete_signing_key, get_signing_key_entry, set_signing_key},
-    Config,
-};
+use crate::config::{CargoArguments, Config};
 use anyhow::{bail, Context, Result};
+use cargo_component_core::{
+    keyring::{self, delete_signing_key, get_signing_key_entry, set_signing_key},
+    terminal::Colors,
+};
 use clap::{ArgAction, Args, Subcommand};
 use p256::ecdsa::SigningKey;
 use rand_core::OsRng;
-use std::io::{self, Write};
-use termcolor::{Color, ColorSpec};
+use std::io::{self};
 use warg_crypto::signing::PrivateKey;
 
 /// Manage signing keys for publishing components to a registry.
@@ -36,20 +36,8 @@ pub struct KeyCommand {
 
 impl KeyCommand {
     /// Executes the command.
-    pub async fn exec(self, config: &mut Config) -> Result<()> {
+    pub async fn exec(self, config: &Config, _cargo_args: &CargoArguments) -> Result<()> {
         log::debug!("executing key command");
-
-        config.cargo_mut().configure(
-            u32::from(self.verbose),
-            self.quiet,
-            self.color.as_deref(),
-            true,
-            true,
-            true,
-            &None,
-            &[],
-            &[],
-        )?;
 
         match self.command {
             KeySubcommand::New(cmd) => cmd.exec(config).await,
@@ -83,7 +71,7 @@ pub struct KeyNewCommand {
 
 impl KeyNewCommand {
     /// Executes the command.
-    pub async fn exec(self, config: &mut Config) -> Result<()> {
+    pub async fn exec(self, config: &Config) -> Result<()> {
         let entry = get_signing_key_entry(&self.host, &self.key_name)?;
 
         match entry.get_password() {
@@ -109,11 +97,14 @@ impl KeyNewCommand {
         let key = SigningKey::random(&mut OsRng).into();
         set_signing_key(&self.host, &self.key_name, &key)?;
 
-        config.shell().note(format!(
-            "created signing key `{name}` for registry `{host}`",
-            name = self.key_name,
-            host = self.host,
-        ))?;
+        config.terminal().status(
+            "Created",
+            format!(
+                "signing key `{name}` for registry `{host}`",
+                name = self.key_name,
+                host = self.host,
+            ),
+        )?;
 
         Ok(())
     }
@@ -132,7 +123,7 @@ pub struct KeySetCommand {
 
 impl KeySetCommand {
     /// Executes the command.
-    pub async fn exec(self, config: &mut Config) -> Result<()> {
+    pub async fn exec(self, config: &Config) -> Result<()> {
         let key = PrivateKey::decode(
             rpassword::prompt_password("input signing key (expected format is `<alg>:<base64>`): ")
                 .context("failed to read signing key")?,
@@ -141,11 +132,14 @@ impl KeySetCommand {
 
         set_signing_key(&self.host, &self.key_name, &key)?;
 
-        config.shell().note(format!(
-            "signing key `{name}` for registry `{host}` was set successfully",
-            name = self.key_name,
-            host = self.host,
-        ))?;
+        config.terminal().status(
+            "Set",
+            format!(
+                "signing key `{name}` for registry `{host}`",
+                name = self.key_name,
+                host = self.host,
+            ),
+        )?;
 
         Ok(())
     }
@@ -164,28 +158,23 @@ pub struct KeyDeleteCommand {
 
 impl KeyDeleteCommand {
     /// Executes the command.
-    pub async fn exec(self, config: &mut Config) -> Result<()> {
-        let mut yellow = ColorSpec::new();
-        yellow.set_fg(Some(Color::Yellow));
-        yellow.set_intense(true);
-
-        config.shell().write_stdout(
+    pub async fn exec(self, config: &Config) -> Result<()> {
+        config.terminal().write_stdout(
             "⚠️  WARNING: this operation cannot be undone and the key will be permanently deleted ⚠️",
-            &yellow,
+            Some(Colors::Yellow),
         )?;
 
-        config.shell().write_stdout(format!("\nare you sure you want to delete signing key `{name}` for registry `{host}`? [type `yes` to confirm] ", name = self.key_name, host = self.host),
-            &ColorSpec::new(),
+        config.terminal().write_stdout(
+            format!("\nare you sure you want to delete signing key `{name}` for registry `{host}`? [type `yes` to confirm] ", name = self.key_name, host = self.host),
+            None,
         )?;
-
-        io::stdout().flush().ok();
 
         let mut line = String::new();
         io::stdin().read_line(&mut line).ok();
         line.make_ascii_lowercase();
 
         if line.trim() != "yes" {
-            config.shell().note(format!(
+            config.terminal().note(format!(
                 "skipping deletion of signing key for registry `{host}`",
                 host = self.host,
             ))?;
@@ -194,11 +183,14 @@ impl KeyDeleteCommand {
 
         delete_signing_key(&self.host, &self.key_name)?;
 
-        config.shell().note(format!(
-            "signing key `{name}` for registry `{host}` was deleted successfully",
-            name = self.key_name,
-            host = self.host,
-        ))?;
+        config.terminal().status(
+            "Deleted",
+            format!(
+                "signing key `{name}` for registry `{host}`",
+                name = self.key_name,
+                host = self.host,
+            ),
+        )?;
 
         Ok(())
     }

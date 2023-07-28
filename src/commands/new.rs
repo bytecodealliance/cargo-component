@@ -1,12 +1,12 @@
 use crate::{
-    bindings::WIT_BINDGEN_VERSION,
+    config::{CargoArguments, Config},
     generator::SourceGenerator,
     metadata,
-    registry::{DependencyResolution, DependencyResolver, RegistryResolution},
-    Config,
 };
 use anyhow::{bail, Context, Result};
-use cargo::ops::{self, NewOptions, VersionControl};
+use cargo_component_core::registry::{
+    Dependency, DependencyResolution, DependencyResolver, RegistryResolution,
+};
 use clap::{ArgAction, Args};
 use heck::ToKebabCase;
 use semver::VersionReq;
@@ -15,9 +15,13 @@ use std::{
     collections::HashMap,
     fs,
     path::{Path, PathBuf},
+    process::Command,
 };
-use toml_edit::{table, value, Document, InlineTable, Item, Table, Value};
+use toml_edit::{table, value, Document, Item, Table, Value};
 use url::Url;
+
+const BINDINGS_CRATE_NAME: &str = "cargo-component-bindings";
+const BINDINGS_CRATE_VERSION: &str = "0.1.0";
 
 fn escape_wit(s: &str) -> Cow<str> {
     match s {
@@ -45,7 +49,7 @@ pub struct NewCommand {
     #[clap(long = "vcs", value_name = "VCS", value_parser = ["git", "hg", "pijul", "fossil", "none"])]
     pub vcs: Option<String>,
 
-    /// Use verbose output (-vv very verbose/build.rs output)
+    /// Use verbose output (-vv very verbose output)
     #[clap(
         long = "verbose",
         short = 'v',
@@ -53,13 +57,13 @@ pub struct NewCommand {
     )]
     pub verbose: u8,
 
-    /// Use a binary (command) template [default]
-    #[clap(long = "bin", conflicts_with("lib"))]
-    pub bin: bool,
+    /// Create a command component [default]
+    #[clap(long = "command", conflicts_with("reactor"))]
+    pub command: bool,
 
-    /// Use a library (reactor) template
-    #[clap(long = "lib")]
-    pub lib: bool,
+    /// Create a reactor component
+    #[clap(long = "reactor")]
+    pub reactor: bool,
 
     /// Coloring: auto, always, never
     #[clap(long = "color", value_name = "WHEN")]
@@ -68,10 +72,6 @@ pub struct NewCommand {
     /// Edition to set for the generated crate
     #[clap(long = "edition", value_name = "YEAR", value_parser = ["2015", "2018", "2021"])]
     pub edition: Option<String>,
-
-    /// Require Cargo.lock and cache are up to date
-    #[clap(long = "frozen")]
-    pub frozen: bool,
 
     /// The component package namespace to use.
     #[clap(
@@ -85,20 +85,17 @@ pub struct NewCommand {
     #[clap(long = "name", value_name = "NAME")]
     pub name: Option<String>,
 
-    /// Require Cargo.lock is up to date
-    #[clap(long = "locked")]
-    pub locked: bool,
-
-    /// Run without accessing the network
-    #[clap(long = "offline")]
-    pub offline: bool,
-
     /// Code editor to use for rust-analyzer integration, defaults to `vscode`
     #[clap(long = "editor", value_name = "EDITOR", value_parser = ["vscode", "none"])]
     pub editor: Option<String>,
 
     /// Use the specified target world from a WIT package.
-    #[clap(long = "target", short = 't', value_name = "TARGET", requires = "lib")]
+    #[clap(
+        long = "target",
+        short = 't',
+        value_name = "TARGET",
+        requires = "reactor"
+    )]
     pub target: Option<String>,
 
     /// Use the specified default registry when generating the package.
@@ -159,24 +156,14 @@ impl<'a> PackageName<'a> {
 
 impl NewCommand {
     /// Executes the command.
-    pub async fn exec(self, config: &mut Config) -> Result<()> {
+    pub async fn exec(self, config: &Config, cargo_args: &CargoArguments) -> Result<()> {
         log::debug!("executing new command");
 
         let name = PackageName::new(&self.namespace, self.name.as_deref(), &self.path)?;
 
-        config.cargo_mut().configure(
-            u32::from(self.verbose),
-            self.quiet,
-            self.color.as_deref(),
-            self.frozen,
-            self.locked,
-            self.offline,
-            &None,
-            &[],
-            &[],
-        )?;
-
-        let out_dir = config.cargo().cwd().join(&self.path);
+        let out_dir = std::env::current_dir()
+            .with_context(|| "couldn't get the current directory of the process")?
+            .join(&self.path);
         let registries = self.registries()?;
 
         let target: Option<metadata::Target> = match self.target.as_deref() {
@@ -185,18 +172,24 @@ impl NewCommand {
             None => None,
         };
 
-        let target = self.resolve_target(config, &registries, target).await?;
+        let target = self
+            .resolve_target(config, &registries, target, cargo_args.network_allowed())
+            .await?;
         let source = self.generate_source(&target)?;
 
-        let opts = self.new_options(config)?;
-        ops::new(&opts, config.cargo())?;
+        let mut command = self.new_command();
+        match command.status() {
+            Ok(status) => {
+                if !status.success() {
+                    std::process::exit(status.code().unwrap_or(1));
+                }
+            }
+            Err(e) => {
+                bail!("failed to execute `cargo new` command: {e}")
+            }
+        }
 
-        config.shell().status(
-            "Created",
-            format!("component `{name}` package", name = name.display),
-        )?;
-
-        self.update_manifest(&name, &out_dir, &registries, &target)?;
+        self.update_manifest(config, &name, &out_dir, &registries, &target)?;
         self.create_source_file(config, &out_dir, source.as_ref(), &target)?;
         self.create_targets_file(&name, &out_dir)?;
         self.create_editor_settings_file(&out_dir)?;
@@ -204,29 +197,43 @@ impl NewCommand {
         Ok(())
     }
 
-    fn new_options(&self, config: &Config) -> Result<NewOptions> {
-        let vcs = self.vcs.as_deref().map(|vcs| match vcs {
-            "git" => VersionControl::Git,
-            "hg" => VersionControl::Hg,
-            "pijul" => VersionControl::Pijul,
-            "fossil" => VersionControl::Fossil,
-            "none" => VersionControl::NoVcs,
-            _ => unreachable!(),
-        });
+    fn new_command(&self) -> Command {
+        let mut command = std::process::Command::new("cargo");
+        command.arg("new");
 
-        NewOptions::new(
-            vcs,
-            self.bin,
-            self.lib,
-            config.cargo().cwd().join(&self.path),
-            self.name.clone(),
-            self.edition.clone(),
-            None,
-        )
+        if let Some(name) = &self.name {
+            command.arg("--name").arg(name);
+        }
+
+        if let Some(edition) = &self.edition {
+            command.arg("--edition").arg(edition);
+        }
+
+        if let Some(vcs) = &self.vcs {
+            command.arg("--vcs").arg(vcs);
+        }
+
+        if self.quiet {
+            command.arg("-q");
+        }
+
+        command.args(std::iter::repeat("-v").take(self.verbose as usize));
+
+        if let Some(color) = &self.color {
+            command.arg("--color").arg(color);
+        }
+
+        if !self.is_command() {
+            command.arg("--lib");
+        }
+
+        command.arg(&self.path);
+        command
     }
 
     fn update_manifest(
         &self,
+        config: &Config,
         name: &PackageName,
         out_dir: &Path,
         registries: &HashMap<String, Url>,
@@ -247,7 +254,7 @@ impl NewCommand {
             )
         })?;
 
-        if !self.is_bin() {
+        if !self.is_command() {
             doc["lib"] = table();
             doc["lib"]["crate-type"] = value(Value::from_iter(["cdylib"].into_iter()));
         }
@@ -261,7 +268,7 @@ impl NewCommand {
             name = name.name
         ));
 
-        if !self.is_bin() {
+        if !self.is_command() {
             component["target"] = match target.as_ref() {
                 Some((resolution, world)) => match world {
                     Some(world) => value(format!(
@@ -299,54 +306,63 @@ impl NewCommand {
         metadata["component"] = Item::Table(component);
 
         doc["package"]["metadata"] = Item::Table(metadata);
-        doc["dependencies"]["wit-bindgen"] = value(InlineTable::from_iter(
-            [
-                ("version", Value::from(WIT_BINDGEN_VERSION)),
-                ("default_features", Value::from(false)),
-            ]
-            .into_iter(),
-        ));
+        doc["dependencies"][BINDINGS_CRATE_NAME] = value(BINDINGS_CRATE_VERSION);
 
         fs::write(&manifest_path, doc.to_string()).with_context(|| {
             format!(
                 "failed to write manifest file `{path}`",
                 path = manifest_path.display()
             )
-        })
+        })?;
+
+        config.terminal().status(
+            "Updated",
+            format!("manifest of package `{name}`", name = name.display),
+        )?;
+
+        Ok(())
     }
 
-    fn is_bin(&self) -> bool {
-        self.bin || !self.lib
+    fn is_command(&self) -> bool {
+        self.command || !self.reactor
     }
 
     fn generate_source(
         &self,
         target: &Option<(RegistryResolution, Option<String>)>,
     ) -> Result<Cow<str>> {
-        if self.is_bin() {
-            // Return empty source here to avoid creating a new source file
-            // As a result, whatever source that was generated by `cargo new` will be kept
-            return Ok("".into());
-        }
-
         match target {
             Some((resolution, world)) => {
                 let generator =
                     SourceGenerator::new(&resolution.id, &resolution.path, !self.no_rustfmt);
                 generator.generate(world.as_deref()).map(Into::into)
             }
-            None => Ok(r#"struct Component;
+            None => {
+                if self.is_command() {
+                    Ok(r#"cargo_component_bindings::generate!();
 
-impl bindings::Example for Component {
+fn main() {
+    println!("Hello, world!");
+}
+"#
+                    .into())
+                } else {
+                    Ok(r#"cargo_component_bindings::generate!();
+
+use bindings::Example;
+
+struct Component;
+
+impl Example for Component {
     /// Say hello!
     fn hello_world() -> String {
         "Hello, World!".to_string()
     }
 }
-
-bindings::export!(Component);
 "#
-            .into()),
+                    .into())
+                }
+            }
         }
     }
 
@@ -357,16 +373,26 @@ bindings::export!(Component);
         source: &str,
         target: &Option<(RegistryResolution, Option<String>)>,
     ) -> Result<()> {
-        if source.is_empty() {
-            return Ok(());
-        }
+        let path = if self.is_command() {
+            "src/main.rs"
+        } else {
+            "src/lib.rs"
+        };
+
+        let source_path = out_dir.join(path);
+        fs::write(&source_path, source).with_context(|| {
+            format!(
+                "failed to write source file `{path}`",
+                path = source_path.display()
+            )
+        })?;
 
         match target {
             Some((resolution, _)) => {
-                config.shell().status(
-                    "Generating",
+                config.terminal().status(
+                    "Generated",
                     format!(
-                        "source file for target `{id}` v{version}",
+                        "source file `{path}` for target `{id}` v{version}",
                         id = resolution.id,
                         version = resolution.version
                     ),
@@ -374,22 +400,16 @@ bindings::export!(Component);
             }
             None => {
                 config
-                    .shell()
-                    .status("Generating", "\"hello world\" example source file")?;
+                    .terminal()
+                    .status("Generated", format!("source file `{path}`"))?;
             }
         }
 
-        let source_path = out_dir.join("src/lib.rs");
-        fs::write(&source_path, source).with_context(|| {
-            format!(
-                "failed to write source file `{path}`",
-                path = source_path.display()
-            )
-        })
+        Ok(())
     }
 
     fn create_targets_file(&self, name: &PackageName, out_dir: &Path) -> Result<()> {
-        if self.is_bin() || self.target.is_some() {
+        if self.is_command() || self.target.is_some() {
             return Ok(());
         }
 
@@ -436,7 +456,7 @@ world example {{
                 fs::write(
                     &settings_path,
                     r#"{
-    "rust-analyzer.server.extraEnv": { "CARGO": "cargo-component" }
+    "rust-analyzer.check.overrideCommand": ["cargo", "component", "check", "--message-format=json"]
 }
 "#,
                 )
@@ -457,19 +477,25 @@ world example {{
         config: &Config,
         registries: &HashMap<String, Url>,
         target: Option<metadata::Target>,
+        network_allowed: bool,
     ) -> Result<Option<(RegistryResolution, Option<String>)>> {
         match target {
             Some(metadata::Target::Package { id, package, world }) => {
-                let mut resolver = DependencyResolver::new(config, registries, None);
-                let dependency = metadata::Dependency::Package(package);
+                let mut resolver = DependencyResolver::new(
+                    config.warg(),
+                    registries,
+                    None,
+                    config.terminal(),
+                    network_allowed,
+                )?;
+                let dependency = Dependency::Package(package);
 
-                resolver.add_dependency(&id, &dependency, true).await?;
+                resolver.add_dependency(&id, &dependency).await?;
 
-                let (target, dependencies) = resolver.resolve().await?;
-                assert_eq!(target.len(), 1);
-                assert!(dependencies.is_empty());
+                let dependencies = resolver.resolve().await?;
+                assert_eq!(dependencies.len(), 1);
 
-                match target
+                match dependencies
                     .into_values()
                     .next()
                     .expect("expected a target resolution")
