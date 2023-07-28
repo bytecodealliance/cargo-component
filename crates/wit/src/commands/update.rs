@@ -5,6 +5,7 @@ use clap::Args;
 
 /// Update dependencies as recorded in the lock file.
 #[derive(Args)]
+#[clap(disable_version_flag = true)]
 pub struct UpdateCommand {
     /// The common command options.
     #[clap(flatten)]

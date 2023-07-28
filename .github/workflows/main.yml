@@ -21,7 +21,7 @@ jobs:
     - name: Build cargo-component
       run: cargo build
     - name: Test cargo-component
-      run: cargo test
+      run: cargo test --all
 
   example:
     name: Build example component

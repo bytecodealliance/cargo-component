@@ -11,16 +11,9 @@ use std::{
 };
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
-use toml_edit::{value, Document, InlineTable};
-use warg_client::{
-    storage::{ContentStorage, PublishEntry, PublishInfo},
-    FileSystemClient,
-};
 use warg_crypto::signing::PrivateKey;
-use warg_protocol::registry::PackageId;
 use warg_server::{policy::content::WasmContentPolicy, Config, Server};
 use wasmparser::{Chunk, Encoding, Parser, Payload, Validator, WasmFeatures};
-use wit_parser::{Resolve, UnresolvedPackage};
 
 pub fn test_operator_key() -> &'static str {
     "ecdsa-p256:I+UlDo0HxyBBFeelhPPWmD+LnklOpqZDkrFP5VduASk="
@@ -28,13 +21,6 @@ pub fn test_operator_key() -> &'static str {
 
 pub fn test_signing_key() -> &'static str {
     "ecdsa-p256:2CV1EpLaSYEn4In4OAEDAj5O4Hzu8AFAxgHXuG310Ew="
-}
-
-pub fn redirect_bindings_crate(doc: &mut Document) {
-    const PATH_TO_BINDINGS_CRATE: &str = "../../../../../crates/bindings";
-
-    doc["dependencies"]["cargo-component-bindings"] =
-        value(InlineTable::from_iter([("path", PATH_TO_BINDINGS_CRATE)]));
 }
 
 pub fn root() -> Result<PathBuf> {
@@ -48,7 +34,7 @@ pub fn root() -> Result<PathBuf> {
     path.pop(); // remove `deps`
     path.pop(); // remove `debug` or `release`
     path.push("tests");
-    path.push("cargo-component");
+    path.push("wit");
     fs::create_dir_all(&path)?;
     Ok(path.join(format!("t{id}")))
 }
@@ -60,15 +46,14 @@ pub fn create_root() -> Result<PathBuf> {
     Ok(root)
 }
 
-pub fn cargo_component(args: &str) -> Command {
+pub fn wit(args: &str) -> Command {
     let mut exe = std::env::current_exe().unwrap();
     exe.pop(); // remove test exe name
     exe.pop(); // remove `deps`
-    exe.push("cargo-component");
+    exe.push("wit");
     exe.set_extension(std::env::consts::EXE_EXTENSION);
 
     let mut cmd = Command::new(&exe);
-    cmd.arg("component");
     for arg in args.split_whitespace() {
         cmd.arg(arg);
     }
@@ -78,90 +63,6 @@ pub fn cargo_component(args: &str) -> Command {
 
 pub fn project() -> Result<ProjectBuilder> {
     Ok(ProjectBuilder::new(create_root()?))
-}
-
-pub async fn publish(
-    config: &warg_client::Config,
-    id: &PackageId,
-    version: &str,
-    content: Vec<u8>,
-    init: bool,
-) -> Result<()> {
-    let client = FileSystemClient::new_with_config(None, config)?;
-
-    let digest = client
-        .content()
-        .store_content(
-            Box::pin(futures::stream::once(async move { Ok(content.into()) })),
-            None,
-        )
-        .await
-        .context("failed to store component for publishing")?;
-
-    let mut entries = Vec::with_capacity(2);
-    if init {
-        entries.push(PublishEntry::Init);
-    }
-    entries.push(PublishEntry::Release {
-        version: version.parse().unwrap(),
-        content: digest,
-    });
-
-    let record_id = client
-        .publish_with_info(
-            &PrivateKey::decode(test_signing_key().to_string()).unwrap(),
-            PublishInfo {
-                id: id.clone(),
-                head: None,
-                entries,
-            },
-        )
-        .await
-        .context("failed to publish component")?;
-
-    client
-        .wait_for_publish(id, &record_id, Duration::from_secs(1))
-        .await?;
-
-    Ok(())
-}
-
-pub async fn publish_component(
-    config: &warg_client::Config,
-    id: &str,
-    version: &str,
-    wat: &str,
-    init: bool,
-) -> Result<()> {
-    publish(
-        config,
-        &id.parse()?,
-        version,
-        wat::parse_str(wat).context("failed to parse component for publishing")?,
-        init,
-    )
-    .await
-}
-
-pub async fn publish_wit(
-    config: &warg_client::Config,
-    id: &str,
-    version: &str,
-    wit: &str,
-    init: bool,
-) -> Result<()> {
-    let mut resolve = Resolve::new();
-    let pkg = resolve
-        .push(
-            UnresolvedPackage::parse(Path::new("foo.wit"), wit)
-                .context("failed to parse wit for publishing")?,
-        )
-        .context("failed to resolve wit for publishing")?;
-
-    let bytes =
-        wit_component::encode(&resolve, pkg).context("failed to encode wit for publishing")?;
-
-    publish(config, &id.parse()?, version, bytes, init).await
 }
 
 pub struct ServerInstance {
@@ -248,20 +149,7 @@ impl Project {
     pub fn new(name: &str) -> Result<Self> {
         let root = create_root()?;
 
-        cargo_component(&format!("new --reactor {name}"))
-            .current_dir(&root)
-            .assert()
-            .try_success()?;
-
-        Ok(Self {
-            root: root.join(name),
-        })
-    }
-
-    pub fn new_bin(name: &str) -> Result<Self> {
-        let root = create_root()?;
-
-        cargo_component(&format!("new {name}"))
+        wit(&format!("init {name}"))
             .current_dir(&root)
             .assert()
             .try_success()?;
@@ -272,7 +160,7 @@ impl Project {
     }
 
     pub fn with_root(root: &Path, name: &str, args: &str) -> Result<Self> {
-        cargo_component(&format!("new --reactor {name} {args}"))
+        wit(&format!("init {name} {args}"))
             .current_dir(root)
             .assert()
             .try_success()?;
@@ -289,37 +177,12 @@ impl Project {
         Ok(self)
     }
 
-    pub fn update_manifest(&self, f: impl FnOnce(Document) -> Result<Document>) -> Result<()> {
-        let manifest_path = self.root.join("Cargo.toml");
-        let manifest = fs::read_to_string(&manifest_path)?;
-        fs::write(manifest_path, f(manifest.parse()?)?.to_string())?;
-        Ok(())
-    }
-
     pub fn root(&self) -> &Path {
         &self.root
     }
 
-    pub fn build_dir(&self) -> PathBuf {
-        self.root().join("target")
-    }
-
-    pub fn debug_wasm(&self, name: &str) -> PathBuf {
-        self.build_dir()
-            .join("wasm32-wasi")
-            .join("debug")
-            .join(format!("{name}.wasm"))
-    }
-
-    pub fn release_wasm(&self, name: &str) -> PathBuf {
-        self.build_dir()
-            .join("wasm32-wasi")
-            .join("release")
-            .join(format!("{name}.wasm"))
-    }
-
-    pub fn cargo_component(&self, cmd: &str) -> Command {
-        let mut cmd = cargo_component(cmd);
+    pub fn wit(&self, cmd: &str) -> Command {
+        let mut cmd = wit(cmd);
         cmd.current_dir(&self.root);
         cmd
     }

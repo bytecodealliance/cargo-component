@@ -9,6 +9,7 @@ use std::{fs, path::PathBuf};
 
 /// Build a binary WIT package.
 #[derive(Args)]
+#[clap(disable_version_flag = true)]
 pub struct BuildCommand {
     /// The common command options.
     #[clap(flatten)]

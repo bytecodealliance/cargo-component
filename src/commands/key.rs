@@ -13,6 +13,7 @@ use warg_crypto::signing::PrivateKey;
 
 /// Manage signing keys for publishing components to a registry.
 #[derive(Args)]
+#[clap(disable_version_flag = true)]
 pub struct KeyCommand {
     /// Do not print cargo log messages
     #[clap(long = "quiet", short = 'q')]
@@ -61,6 +62,7 @@ pub enum KeySubcommand {
 
 /// Creates a new signing key for a registry in the local keyring.
 #[derive(Args)]
+#[clap(disable_version_flag = true)]
 pub struct KeyNewCommand {
     /// The key name to use for the signing key.
     #[clap(long, short, value_name = "NAME", default_value = "default")]
@@ -113,6 +115,7 @@ impl KeyNewCommand {
 
 /// Sets the signing key for a registry in the local keyring.
 #[derive(Args)]
+#[clap(disable_version_flag = true)]
 pub struct KeySetCommand {
     /// The key name to use for the signing key.
     #[clap(long, short, value_name = "NAME", default_value = "default")]
@@ -148,6 +151,7 @@ impl KeySetCommand {
 
 /// Deletes the signing key for a registry from the local keyring.
 #[derive(Args)]
+#[clap(disable_version_flag = true)]
 pub struct KeyDeleteCommand {
     /// The key name to use for the signing key.
     #[clap(long, short, value_name = "NAME", default_value = "default")]

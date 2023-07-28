@@ -33,6 +33,7 @@ async fn resolve_dependencies(
     config_path: &Path,
     warg_config: &warg_client::Config,
     terminal: &Terminal,
+    update_lock_file: bool,
 ) -> Result<DependencyResolutionMap> {
     let file_lock = acquire_lock_file_ro(terminal, config_path)?;
     let lock_file = file_lock
@@ -62,18 +63,20 @@ async fn resolve_dependencies(
     let map = resolver.resolve().await?;
 
     // Update the lock file
-    let new_lock_file = to_lock_file(&map);
-    if Some(&new_lock_file) != lock_file.as_ref() {
-        drop(file_lock);
-        let file_lock = acquire_lock_file_rw(terminal, config_path)?;
-        new_lock_file
-            .write(file_lock.file(), "wit")
-            .with_context(|| {
-                format!(
-                    "failed to write lock file `{path}`",
-                    path = file_lock.path().display()
-                )
-            })?;
+    if update_lock_file {
+        let new_lock_file = to_lock_file(&map);
+        if Some(&new_lock_file) != lock_file.as_ref() {
+            drop(file_lock);
+            let file_lock = acquire_lock_file_rw(terminal, config_path)?;
+            new_lock_file
+                .write(file_lock.file(), "wit")
+                .with_context(|| {
+                    format!(
+                        "failed to write lock file `{path}`",
+                        path = file_lock.path().display()
+                    )
+                })?;
+        }
     }
 
     Ok(map)
@@ -277,7 +280,8 @@ async fn build_wit_package(
     warg_config: &warg_client::Config,
     terminal: &Terminal,
 ) -> Result<(PackageId, Vec<u8>)> {
-    let dependencies = resolve_dependencies(config, config_path, warg_config, terminal).await?;
+    let dependencies =
+        resolve_dependencies(config, config_path, warg_config, terminal, true).await?;
 
     let dir = config_path.parent().unwrap_or_else(|| Path::new("."));
 
@@ -431,9 +435,9 @@ pub async fn update_lockfile(
             let new_ver = &new_pkg.versions[new_ver_index];
             if old_ver.version != new_ver.version {
                 terminal.status_with_color(
-                    "Updating",
+                    if dry_run { "Would update" } else { "Updating" },
                     format!(
-                        "component registry package `{id}` v{old} -> v{new}",
+                        "dependency `{id}` v{old} -> v{new}",
                         id = old_pkg.id,
                         old = old_ver.version,
                         new = new_ver.version

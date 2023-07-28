@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 /// Update dependencies as recorded in the component lock file
 #[derive(Args)]
+#[clap(disable_version_flag = true)]
 pub struct UpdateCommand {
     /// Do not print cargo log messages
     #[clap(long = "quiet", short = 'q')]

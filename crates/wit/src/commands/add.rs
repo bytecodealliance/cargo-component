@@ -1,9 +1,12 @@
 use super::CommonOptions;
-use crate::config::{Config, CONFIG_FILE_NAME};
+use crate::{
+    config::{Config, CONFIG_FILE_NAME},
+    resolve_dependencies,
+};
 use anyhow::{bail, Context, Result};
 use cargo_component_core::{
     registry::{Dependency, DependencyResolution, DependencyResolver, RegistryPackage},
-    terminal::{Color, Terminal},
+    terminal::Terminal,
     VersionedPackageId,
 };
 use clap::Args;
@@ -52,10 +55,6 @@ pub struct AddCommand {
     #[clap(flatten)]
     pub common: CommonOptions,
 
-    /// Coloring: auto, always, never
-    #[clap(long = "color", value_name = "WHEN")]
-    pub color: Option<Color>,
-
     /// Don't actually write the configuration file.
     #[clap(long = "dry-run")]
     pub dry_run: bool,
@@ -81,12 +80,12 @@ impl AddCommand {
         let (mut config, config_path) = Config::from_default_file()?
             .with_context(|| format!("failed to find configuration file `{CONFIG_FILE_NAME}`"))?;
 
-        let warg_config = warg_client::Config::from_default_file()?.unwrap_or_default();
-
         let id = self.id.as_ref().unwrap_or(&self.package.id);
         if config.dependencies.contains_key(id) {
             bail!("cannot add dependency `{id}` as it conflicts with an existing dependency");
         }
+
+        let warg_config = warg_client::Config::from_default_file()?.unwrap_or_default();
 
         let terminal = self.common.new_terminal();
         let version = resolve_version(
@@ -98,18 +97,27 @@ impl AddCommand {
         )
         .await?;
 
-        let package = match &self.id {
-            Some(id) => RegistryPackage {
-                id: Some(id.clone()),
-                version: version.parse()?,
-                registry: self.registry,
-            },
-            None => version.parse()?,
+        let package = RegistryPackage {
+            id: self.id.is_some().then(|| self.package.id.clone()),
+            version: version.parse().expect("expected a valid version"),
+            registry: self.registry,
         };
+
+        let id = self.id.as_ref().unwrap_or(&self.package.id);
 
         config
             .dependencies
             .insert(id.clone(), Dependency::Package(package));
+
+        // Resolve all dependencies to ensure that the lockfile is up to date.
+        resolve_dependencies(
+            &config,
+            &config_path,
+            &warg_config,
+            &terminal,
+            !self.dry_run,
+        )
+        .await?;
 
         if !self.dry_run {
             config.write(config_path)?;

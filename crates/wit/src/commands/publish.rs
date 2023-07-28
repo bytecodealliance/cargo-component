@@ -12,6 +12,7 @@ use warg_protocol::registry::PackageId;
 
 /// Publish a WIT package to a registry.
 #[derive(Args)]
+#[clap(disable_version_flag = true)]
 pub struct PublishCommand {
     /// The common command options.
     #[clap(flatten)]

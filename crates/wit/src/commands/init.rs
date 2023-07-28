@@ -8,6 +8,7 @@ use url::Url;
 
 /// Initialize a new WIT package.
 #[derive(Args)]
+#[clap(disable_version_flag = true)]
 pub struct InitCommand {
     /// The common command options.
     #[clap(flatten)]

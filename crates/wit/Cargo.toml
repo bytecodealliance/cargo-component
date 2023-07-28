@@ -33,3 +33,10 @@ futures = { workspace = true }
 bytes = { workspace = true }
 tokio = { workspace = true }
 pretty_env_logger = { workspace = true }
+
+[dev-dependencies]
+assert_cmd = "2.0.12"
+predicates = "3.0.3"
+warg-server = { git = "https://github.com/bytecodealliance/registry" }
+tokio-util = { workspace = true }
+wasmparser = "0.110.0"
