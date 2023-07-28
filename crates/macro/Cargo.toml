@@ -19,4 +19,6 @@ quote = { workspace = true }
 syn = { workspace = true }
 wit-bindgen-core = { workspace = true }
 wit-bindgen-rust = { workspace = true }
+wit-bindgen-rust-lib = { workspace = true }
 wit-component = { workspace = true }
+heck = { workspace = true }
