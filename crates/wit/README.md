@@ -1,6 +1,6 @@
 # The `wit` tool
 
-A tool for creating and publishing WIT packages to a [WebAssembly component 
+A tool for creating and publishing WIT packages to a [WebAssembly component
 registry](https://warg.io/).
 
 WIT packages are used in the [WebAssembly Component Model](https://github.com/WebAssembly/component-model/)
@@ -8,7 +8,7 @@ for defining interfaces and types used in WebAssembly components.
 
 ## Requirements
 
-* The `wit` tool is written in Rust, so you'll want the [latest stable Rust 
+* The `wit` tool is written in Rust, so you'll want the [latest stable Rust
   installed](https://www.rust-lang.org/tools/install).
 
 ## Installation
@@ -39,7 +39,7 @@ By default, the WIT package will not have any dependencies specified.
 
 The registries section contains a mapping of registry names to URLs.
 
-A registry named `default` will be the registry to use when a dependency does 
+A registry named `default` will be the registry to use when a dependency does
 not explicitly specify a registry.
 
 ## Adding a dependency
@@ -55,12 +55,10 @@ Where `PACKAGE` is the package to add the dependency for, e.g. `wasi:cli`.
 The command will contact the registry to determine the latest version of the
 package, and add it as a dependency in the `wit.toml` file.
 
-The version requirement to use may be specified with the `--version` option.
-
-For example:
+The version requirement to use may be specified with a delimited `@`:
 
 ```
-wit add --version 2.0.0 wasi:cli
+wit add wasi:cli@2.0.0
 ```
 
 ## Building the WIT package
@@ -71,7 +69,7 @@ To build the WIT package to a binary WebAssembly file, use the `build` command:
 wit build
 ```
 
-This command will output a `.wasm` file based on the package name parsed from 
+This command will output a `.wasm` file based on the package name parsed from
 the `.wit` files in the directory containing `wit.toml`.
 
 Use the `--output` option to specify the output file name:
@@ -88,8 +86,8 @@ To update the dependencies of a WIT package, use the `update` command:
 wit update
 ```
 
-This command will contact the registry for the latest versions of the 
-dependencies specified in `wit.toml` and update the versions in the lock file, 
+This command will contact the registry for the latest versions of the
+dependencies specified in `wit.toml` and update the versions in the lock file,
 `wit.lock`.
 
 ## Publishing the WIT package to a registry
@@ -100,17 +98,17 @@ To publish the WIT package to a registry, use the `publish` command:
 wit publish
 ```
 
-For new packages, the `--init` option must be used to initialize a new package 
+For new packages, the `--init` option must be used to initialize a new package
 log for the package being published:
 
 ```
 wit publish --init
 ```
 
-The command will publish the package to the default registry using the default 
+The command will publish the package to the default registry using the default
 signing key.
 
-To specify a different registry or signing key, use the `--registry` and 
+To specify a different registry or signing key, use the `--registry` and
 `--key-name` options, respectively:
 
 ```
@@ -119,7 +117,7 @@ wit publish --registry https://registry.example.com --key-name my-signing-key
 
 ## Managing signing keys
 
-WebAssembly component registries accept packages based on the keys used to sign 
+WebAssembly component registries accept packages based on the keys used to sign
 the records being published.
 
 The `wit` tool uses the OS-provided key ring to manage signing keys.
@@ -127,28 +125,28 @@ The `wit` tool uses the OS-provided key ring to manage signing keys.
 To create a new signing key for a registry, use the `key new` command:
 
 ```
-wit key new registry.example.com
+wit key new https://registry.example.com
 ```
 
 To explicitly set a signing key, use the `key set` command:
 
 ```
-wit key set registry.example.com
+wit key set https://registry.example.com
 ```
 
-This command will securely prompt you for the signing key to set in the OS key 
+This command will securely prompt you for the signing key to set in the OS key
 ring.
 
-To delete an existing signing key (note: use extreme caution when deleting 
+To delete an existing signing key (note: use extreme caution when deleting
 signing keys), use the `key delete` command:
 
 ```
-wit key delete registry.example.com
+wit key delete https://registry.example.com
 ```
 
 ## Contributing to `wit`
 
-`wit` is a (future) [Bytecode Alliance](https://bytecodealliance.org/) 
+`wit` is a (future) [Bytecode Alliance](https://bytecodealliance.org/)
 project, and follows the Bytecode Alliance's [Code of Conduct](CODE_OF_CONDUCT.md)
 and [Organizational Code of Conduct](ORG_CODE_OF_CONDUCT.md).
 
@@ -172,7 +170,7 @@ You'll be adding tests primarily to the `tests/` directory.
 
 ### Submitting Changes
 
-Changes to `wit` are managed through pull requests (PRs). Everyone 
+Changes to `wit` are managed through pull requests (PRs). Everyone
 is welcome to submit a pull request! We'll try to get to reviewing it or
 responding to it in at most a few days.
 
@@ -186,7 +184,7 @@ command. This is checked on CI.
 The CI for the `wit` repository is relatively significant. It tests
 changes on Windows, macOS, and Linux.
 
-It also performs a "dry run" of the release process to ensure that release 
+It also performs a "dry run" of the release process to ensure that release
 binaries can be built and are ready to be published (_coming soon_).
 
 ### Publishing (_coming soon_)
