@@ -1,7 +1,7 @@
 use crate::config::{CargoArguments, Config};
 use anyhow::{bail, Context, Result};
 use cargo_component_core::{
-    keyring::{self, delete_signing_key, get_signing_key_entry, set_signing_key},
+    keyring::{self, delete_signing_key, get_signing_key, get_signing_key_entry, set_signing_key},
     terminal::Colors,
 };
 use clap::{ArgAction, Args, Subcommand};
@@ -42,6 +42,7 @@ impl KeyCommand {
         log::debug!("executing key command");
 
         match self.command {
+            KeySubcommand::Id(cmd) => cmd.exec().await,
             KeySubcommand::New(cmd) => cmd.exec(config).await,
             KeySubcommand::Set(cmd) => cmd.exec(config).await,
             KeySubcommand::Delete(cmd) => cmd.exec(config).await,
@@ -52,12 +53,37 @@ impl KeyCommand {
 /// The subcommand to execute.
 #[derive(Subcommand)]
 pub enum KeySubcommand {
+    /// Print the Key ID of the signing key for a registry in the local keyring.
+    Id(KeyIdCommand),
     /// Creates a new signing key for a registry in the local keyring.
     New(KeyNewCommand),
     /// Sets the signing key for a registry in the local keyring.
     Set(KeySetCommand),
     /// Deletes the signing key for a registry from the local keyring.
     Delete(KeyDeleteCommand),
+}
+
+/// Print the Key ID of the signing key for a registry in the local keyring.
+#[derive(Args)]
+pub struct KeyIdCommand {
+    /// The key name of the signing key.
+    #[clap(long, short, value_name = "NAME", default_value = "default")]
+    pub key_name: String,
+    /// The URL of the registry to print the Key ID for.
+    #[clap(value_name = "URL")]
+    pub url: RegistryUrl,
+}
+
+impl KeyIdCommand {
+    /// Executes the command.
+    pub async fn exec(self) -> Result<()> {
+        let key = get_signing_key(&self.url, &self.key_name)?;
+        println!(
+            "{fingerprint}",
+            fingerprint = key.public_key().fingerprint()
+        );
+        Ok(())
+    }
 }
 
 /// Creates a new signing key for a registry in the local keyring.
@@ -103,8 +129,9 @@ impl KeyNewCommand {
         config.terminal().status(
             "Created",
             format!(
-                "signing key `{name}` for registry `{url}`",
+                "signing key `{name}` ({fingerprint}) for registry `{url}`",
                 name = self.key_name,
+                fingerprint = key.public_key().fingerprint(),
                 url = self.url,
             ),
         )?;
@@ -139,8 +166,9 @@ impl KeySetCommand {
         config.terminal().status(
             "Set",
             format!(
-                "signing key `{name}` for registry `{url}`",
+                "signing key `{name}` ({fingerprint}) for registry `{url}`",
                 name = self.key_name,
+                fingerprint = key.public_key().fingerprint(),
                 url = self.url,
             ),
         )?;

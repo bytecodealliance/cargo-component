@@ -19,13 +19,13 @@ pub fn get_signing_key(registry_url: &RegistryUrl, key_name: &str) -> Result<Pri
     match entry.get_password() {
         Ok(secret) => PrivateKey::decode(secret).context("failed to parse signing key"),
         Err(keyring::Error::NoEntry) => {
-            bail!("no signing key found with name `{key_name}` of registry `{registry_url}`");
+            bail!("no signing key found with name `{key_name}` for registry `{registry_url}`");
         }
         Err(keyring::Error::Ambiguous(_)) => {
-            bail!("more than one signing key found with name `{key_name}` of registry `{registry_url}`");
+            bail!("more than one signing key found with name `{key_name}` for registry `{registry_url}`");
         }
         Err(e) => {
-            bail!("failed to get signing key with name `{key_name}` of registry `{registry_url}`: {e}");
+            bail!("failed to get signing key with name `{key_name}` for registry `{registry_url}`: {e}");
         }
     }
 }
@@ -36,13 +36,13 @@ pub fn set_signing_key(registry_url: &RegistryUrl, key_name: &str, key: &Private
     match entry.set_password(&key.encode()) {
         Ok(()) => Ok(()),
         Err(keyring::Error::NoEntry) => {
-            bail!("no signing key found with name `{key_name}` of registry `{registry_url}`");
+            bail!("no signing key found with name `{key_name}` for registry `{registry_url}`");
         }
         Err(keyring::Error::Ambiguous(_)) => {
-            bail!("more than one signing key found with name `{key_name}` of registry `{registry_url}`");
+            bail!("more than one signing key found with name `{key_name}` for registry `{registry_url}`");
         }
         Err(e) => {
-            bail!("failed to set signing key with name `{key_name}` of registry `{registry_url}`: {e}");
+            bail!("failed to set signing key with name `{key_name}` for registry `{registry_url}`: {e}");
         }
     }
 }
@@ -53,13 +53,13 @@ pub fn delete_signing_key(registry_url: &RegistryUrl, key_name: &str) -> Result<
     match entry.delete_password() {
         Ok(()) => Ok(()),
         Err(keyring::Error::NoEntry) => {
-            bail!("no signing key found with name `{key_name}` of registry `{registry_url}`");
+            bail!("no signing key found with name `{key_name}` for registry `{registry_url}`");
         }
         Err(keyring::Error::Ambiguous(_)) => {
-            bail!("more than one signing key found with name `{key_name}` of registry `{registry_url}`");
+            bail!("more than one signing key found with name `{key_name}` for registry `{registry_url}`");
         }
         Err(e) => {
-            bail!("failed to set signing key with name `{key_name}` of registry `{registry_url}`: {e}");
+            bail!("failed to set signing key with name `{key_name}` for registry `{registry_url}`: {e}");
         }
     }
 }

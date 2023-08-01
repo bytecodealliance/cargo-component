@@ -128,6 +128,13 @@ To create a new signing key for a registry, use the `key new` command:
 wit key new https://registry.example.com
 ```
 
+To print a Key ID (a fingerprint of the public key) for a signing key, use the
+`key id` command:
+
+```
+wit key id https://registry.example.com
+```
+
 To explicitly set a signing key, use the `key set` command:
 
 ```
