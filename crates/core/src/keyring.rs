@@ -12,7 +12,7 @@ pub fn get_signing_key_entry(registry_url: &RegistryUrl, key_name: &str) -> Resu
     Entry::new(&label, key_name).context("failed to get keyring entry")
 }
 
-/// Gets the signing key for the given registry registry_label and key name.
+/// Gets the signing key for the given registry url and key name.
 pub fn get_signing_key(registry_url: &RegistryUrl, key_name: &str) -> Result<PrivateKey> {
     let entry = get_signing_key_entry(registry_url, key_name)?;
 

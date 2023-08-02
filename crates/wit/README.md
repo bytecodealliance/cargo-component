@@ -4,7 +4,7 @@ A tool for creating and publishing WIT packages to a [WebAssembly component
 registry](https://warg.io/).
 
 WIT packages are used in the [WebAssembly Component Model](https://github.com/WebAssembly/component-model/)
-for defining interfaces and types used in WebAssembly components.
+for defining interfaces, types, and worlds used in WebAssembly components.
 
 ## Requirements
 
@@ -37,10 +37,28 @@ version = "0.1.0"
 
 By default, the WIT package will not have any dependencies specified.
 
-The registries section contains a mapping of registry names to URLs.
+The registries section contains a mapping of registry names to URLs. The
+intention behind explicitly supporting multiple registries is that no one
+registry will be the central repository for WebAssembly components; in the
+future, a federation of registries will be used for publishing and discovering
+WebAssembly components.
 
 A registry named `default` will be the registry to use when a dependency does
-not explicitly specify a registry.
+not explicitly specify a registry to use.
+
+An example of setting the default registry:
+
+```toml
+[registries]
+default = "https://preview-registry.bytecodealliance.org"
+```
+
+The default registry may also be set by passing the `--registry` option to the
+`init` command:
+
+```
+wit init --registry https://preview-registry.bytecodealliance.org
+```
 
 ## Adding a dependency
 
@@ -162,7 +180,7 @@ and [Organizational Code of Conduct](ORG_CODE_OF_CONDUCT.md).
 You'll clone the code via `git`:
 
 ```
-git clone https://github.com/peterhuene/wit
+git clone https://github.com/bytecodealliance/cargo-component
 ```
 
 ### Testing Changes
@@ -170,7 +188,7 @@ git clone https://github.com/peterhuene/wit
 We'd like tests ideally to be written for all changes. Test can be run via:
 
 ```
-cargo test
+cargo test -p wit
 ```
 
 You'll be adding tests primarily to the `tests/` directory.
