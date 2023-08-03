@@ -19,7 +19,7 @@ fn help() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_update_without_changes_is_a_noop() -> Result<()> {
+async fn update_without_changes_is_a_noop() -> Result<()> {
     let root = create_root()?;
     let (_server, config) = spawn_server(&root).await?;
     config.write_to_file(&root.join("warg-config.json"))?;
@@ -60,7 +60,7 @@ world foo {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_update_without_compatible_changes_is_a_noop() -> Result<()> {
+async fn update_without_compatible_changes_is_a_noop() -> Result<()> {
     let root = create_root()?;
     let (_server, config) = spawn_server(&root).await?;
     config.write_to_file(&root.join("warg-config.json"))?;
@@ -120,7 +120,7 @@ world foo {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
-async fn test_update_with_compatible_changes() -> Result<()> {
+async fn update_with_compatible_changes() -> Result<()> {
     let root = create_root()?;
     let (_server, config) = spawn_server(&root).await?;
     config.write_to_file(&root.join("warg-config.json"))?;

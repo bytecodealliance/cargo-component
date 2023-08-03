@@ -49,7 +49,7 @@ wat = "1.0.69"
 warg-server = { git = "https://github.com/bytecodealliance/registry" }
 
 [workspace]
-members = ["crates/bindings", "crates/macro", "crates/core"]
+members = ["crates/bindings", "crates/macro", "crates/core", "crates/wit"]
 exclude = ["target/tests"]
 
 [workspace.dependencies]

@@ -1,35 +1,23 @@
-use crate::config::{CargoArguments, Config};
+use super::CommonOptions;
 use anyhow::{bail, Context, Result};
 use cargo_component_core::{
     keyring::{self, delete_signing_key, get_signing_key, get_signing_key_entry, set_signing_key},
-    terminal::Colors,
+    terminal::{Colors, Terminal},
 };
-use clap::{ArgAction, Args, Subcommand};
+use clap::{Args, Subcommand};
 use p256::ecdsa::SigningKey;
 use rand_core::OsRng;
 use std::io::{self, Write};
 use warg_client::RegistryUrl;
 use warg_crypto::signing::PrivateKey;
 
-/// Manage signing keys for publishing components to a registry.
+/// Manage signing keys for publishing packages to a registry.
 #[derive(Args)]
 #[clap(disable_version_flag = true)]
 pub struct KeyCommand {
-    /// Do not print cargo log messages
-    #[clap(long = "quiet", short = 'q')]
-    pub quiet: bool,
-
-    /// Use verbose output (-vv very verbose/build.rs output)
-    #[clap(
-        long = "verbose",
-        short = 'v',
-        action = ArgAction::Count
-    )]
-    pub verbose: u8,
-
-    /// Coloring: auto, always, never
-    #[clap(long = "color", value_name = "WHEN")]
-    pub color: Option<String>,
+    /// The common command options.
+    #[clap(flatten)]
+    pub common: CommonOptions,
 
     /// The subcommand to execute.
     #[clap(subcommand)]
@@ -38,14 +26,14 @@ pub struct KeyCommand {
 
 impl KeyCommand {
     /// Executes the command.
-    pub async fn exec(self, config: &Config, _cargo_args: &CargoArguments) -> Result<()> {
-        log::debug!("executing key command");
+    pub async fn exec(self) -> Result<()> {
+        let terminal = self.common.new_terminal();
 
         match self.command {
             KeySubcommand::Id(cmd) => cmd.exec().await,
-            KeySubcommand::New(cmd) => cmd.exec(config).await,
-            KeySubcommand::Set(cmd) => cmd.exec(config).await,
-            KeySubcommand::Delete(cmd) => cmd.exec(config).await,
+            KeySubcommand::New(cmd) => cmd.exec(&terminal).await,
+            KeySubcommand::Set(cmd) => cmd.exec(&terminal).await,
+            KeySubcommand::Delete(cmd) => cmd.exec(&terminal).await,
         }
     }
 }
@@ -100,7 +88,7 @@ pub struct KeyNewCommand {
 
 impl KeyNewCommand {
     /// Executes the command.
-    pub async fn exec(self, config: &Config) -> Result<()> {
+    pub async fn exec(self, terminal: &Terminal) -> Result<()> {
         let entry = get_signing_key_entry(&self.url, &self.key_name)?;
 
         match entry.get_password() {
@@ -126,7 +114,7 @@ impl KeyNewCommand {
         let key = SigningKey::random(&mut OsRng).into();
         set_signing_key(&self.url, &self.key_name, &key)?;
 
-        config.terminal().status(
+        terminal.status(
             "Created",
             format!(
                 "signing key `{name}` ({fingerprint}) for registry `{url}`",
@@ -154,7 +142,7 @@ pub struct KeySetCommand {
 
 impl KeySetCommand {
     /// Executes the command.
-    pub async fn exec(self, config: &Config) -> Result<()> {
+    pub async fn exec(self, terminal: &Terminal) -> Result<()> {
         let key = PrivateKey::decode(
             rpassword::prompt_password("input signing key (expected format is `<alg>:<base64>`): ")
                 .context("failed to read signing key")?,
@@ -163,7 +151,7 @@ impl KeySetCommand {
 
         set_signing_key(&self.url, &self.key_name, &key)?;
 
-        config.terminal().status(
+        terminal.status(
             "Set",
             format!(
                 "signing key `{name}` ({fingerprint}) for registry `{url}`",
@@ -191,13 +179,13 @@ pub struct KeyDeleteCommand {
 
 impl KeyDeleteCommand {
     /// Executes the command.
-    pub async fn exec(self, config: &Config) -> Result<()> {
-        config.terminal().write_stdout(
+    pub async fn exec(self, terminal: &Terminal) -> Result<()> {
+        terminal.write_stdout(
             "⚠️  WARNING: this operation cannot be undone and the key will be permanently deleted ⚠️",
             Some(Colors::Yellow),
         )?;
 
-        config.terminal().write_stdout(
+        terminal.write_stdout(
             format!(
                 "\nare you sure you want to delete signing key `{name}` for registry `{url}`? [type `yes` to confirm] ",
                 name = self.key_name,
@@ -213,7 +201,7 @@ impl KeyDeleteCommand {
         line.make_ascii_lowercase();
 
         if line.trim() != "yes" {
-            config.terminal().note(format!(
+            terminal.note(format!(
                 "skipping deletion of signing key for registry `{url}`",
                 url = self.url,
             ))?;
@@ -222,7 +210,7 @@ impl KeyDeleteCommand {
 
         delete_signing_key(&self.url, &self.key_name)?;
 
-        config.terminal().status(
+        terminal.status(
             "Deleted",
             format!(
                 "signing key `{name}` for registry `{url}`",
