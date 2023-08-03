@@ -38,7 +38,7 @@ may cause build errors for existing component projects.
 To install the `cargo component` subcommand, run the following command:
 
 ```
-cargo install --git https://github.com/bytecodealliance/cargo-component --locked
+cargo install --git https://github.com/bytecodealliance/cargo-component cargo-component --locked
 ```
 
 The [currently published crate](https://crates.io/crates/cargo-component)

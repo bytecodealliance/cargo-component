@@ -14,7 +14,7 @@ for defining interfaces, types, and worlds used in WebAssembly components.
 ## Installation
 
 ```
-cargo install --bin wit --locked --git https://github.com/bytecodealliance/cargo-component
+cargo install --bin wit --locked --git https://github.com/bytecodealliance/cargo-component wit
 ```
 
 ## Initializing a WIT package
