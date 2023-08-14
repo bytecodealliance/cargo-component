@@ -59,15 +59,15 @@ warg-protocol = { git = "https://github.com/bytecodealliance/registry" }
 warg-crypto = { git = "https://github.com/bytecodealliance/registry" }
 warg-client = { git = "https://github.com/bytecodealliance/registry" }
 anyhow = "1.0.72"
-clap = { version = "4.3.19", features = ["derive"] }
+clap = { version = "4.3.21", features = ["derive"] }
 toml_edit = { version = "0.19.14", features = ["serde"] }
 pretty_env_logger = "0.5.0"
-log = "0.4.19"
-tokio = { version = "1.29.1", default-features = false, features = ["macros", "rt-multi-thread"] }
+log = "0.4.20"
+tokio = { version = "1.31.0", default-features = false, features = ["macros", "rt-multi-thread"] }
 tokio-util = "0.7.8"
 heck = "0.4.1"
 semver = "1.0.18"
-serde = { version = "1.0.180", features = ["derive"] }
+serde = { version = "1.0.183", features = ["derive"] }
 serde_json = "1.0.104"
 indexmap = "2.0.0"
 url = { version = "2.4.0", features = ["serde"] }

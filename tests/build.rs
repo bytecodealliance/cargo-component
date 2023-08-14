@@ -525,10 +525,11 @@ fn it_builds_with_resources_with_custom_implementor() -> Result<()> {
             });
 
             use std::cell::Cell;
+            use bindings::exports::baz::KeyedInteger;
 
             pub struct MyKeyedInteger(Cell<u32>);
 
-            impl bindings::exports::baz::MyKeyedInteger for MyKeyedInteger {
+            impl KeyedInteger for MyKeyedInteger {
                 fn new(x: u32) -> Self {
                     Self(Cell::new(x))
                 }
