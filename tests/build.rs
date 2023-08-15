@@ -425,3 +425,199 @@ fn empty_world_with_dep_valid() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn it_builds_with_resources() -> Result<()> {
+    let project = Project::new("foo")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
+
+    fs::write(
+        project.root().join("wit/world.wit"),
+        "
+            package foo:bar
+
+            world bar {
+                export baz: interface {
+                    resource keyed-integer {
+                        constructor(x: u32)
+                        get: func() -> u32
+                        set: func(x: u32)
+                        key: static func() -> string
+                    }
+                }
+            }
+        ",
+    )?;
+
+    fs::write(
+        project.root().join("src/lib.rs"),
+        r#"
+            cargo_component_bindings::generate!();
+
+            use std::cell::Cell;
+
+            pub struct KeyedInteger(Cell<u32>);
+
+            impl bindings::exports::baz::KeyedInteger for KeyedInteger {
+                fn new(x: u32) -> Self {
+                    Self(Cell::new(x))
+                }
+
+                fn get(&self) -> u32 {
+                    self.0.get()
+                }
+
+                fn set(&self, x: u32) {
+                    self.0.set(x);
+                }
+
+                fn key() -> String {
+                    "my-key".to_string()
+                }
+            }
+        "#,
+    )?;
+
+    project.cargo_component("build").assert().success();
+
+    let dep = project.debug_wasm("foo");
+    validate_component(&dep)?;
+
+    Ok(())
+}
+
+#[test]
+fn it_builds_with_resources_with_custom_implementor() -> Result<()> {
+    let project = Project::new("foo")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
+
+    fs::write(
+        project.root().join("wit/world.wit"),
+        "
+            package foo:bar
+
+            world bar {
+                export baz: interface {
+                    resource keyed-integer {
+                        constructor(x: u32)
+                        get: func() -> u32
+                        set: func(x: u32)
+                        key: static func() -> string
+                    }
+                }
+            }
+        ",
+    )?;
+
+    fs::write(
+        project.root().join("src/lib.rs"),
+        r#"
+            cargo_component_bindings::generate!({
+                resources: {
+                    "baz/keyed-integer": MyKeyedInteger
+                }
+            });
+
+            use std::cell::Cell;
+            use bindings::exports::baz::KeyedInteger;
+
+            pub struct MyKeyedInteger(Cell<u32>);
+
+            impl KeyedInteger for MyKeyedInteger {
+                fn new(x: u32) -> Self {
+                    Self(Cell::new(x))
+                }
+
+                fn get(&self) -> u32 {
+                    self.0.get()
+                }
+
+                fn set(&self, x: u32) {
+                    self.0.set(x);
+                }
+
+                fn key() -> String {
+                    "my-key".to_string()
+                }
+            }
+        "#,
+    )?;
+
+    project.cargo_component("build").assert().success();
+
+    let dep = project.debug_wasm("foo");
+    validate_component(&dep)?;
+
+    Ok(())
+}
+
+#[test]
+fn it_builds_resources_with_specified_ownership_model() -> Result<()> {
+    let project = Project::new("foo")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
+
+    fs::write(
+        project.root().join("wit/world.wit"),
+        "
+            package foo:bar
+
+            world bar {
+                export baz: interface {
+                    resource keyed-integer {
+                        constructor(x: u32)
+                        get: func() -> u32
+                        set: func(x: u32)
+                        key: static func() -> string
+                    }
+                }
+            }
+        ",
+    )?;
+
+    fs::write(
+        project.root().join("src/lib.rs"),
+        r#"
+            cargo_component_bindings::generate!({
+                ownership: "borrowing-duplicate-if-necessary"
+            });
+
+            use std::cell::Cell;
+
+            pub struct KeyedInteger(Cell<u32>);
+
+            impl bindings::exports::baz::KeyedInteger for KeyedInteger {
+                fn new(x: u32) -> Self {
+                    Self(Cell::new(x))
+                }
+
+                fn get(&self) -> u32 {
+                    self.0.get()
+                }
+
+                fn set(&self, x: u32) {
+                    self.0.set(x);
+                }
+
+                fn key() -> String {
+                    "my-key".to_string()
+                }
+            }
+        "#,
+    )?;
+
+    project.cargo_component("build").assert().success();
+
+    let dep = project.debug_wasm("foo");
+    validate_component(&dep)?;
+
+    Ok(())
+}

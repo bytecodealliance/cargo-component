@@ -1,6 +1,6 @@
 use std::{path::Path, process::Command};
 
-const WASI_ADAPTER_VERSION: &str = "7b9189b";
+const WASI_ADAPTER_VERSION: &str = "2750b73";
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
