@@ -93,7 +93,7 @@ fn implementor_path_str(path: &syn::Path) -> String {
 ///
 /// ```ignore
 /// cargo_component_bindings::generate!({
-///      ownership: borrowing-duplicate-if-necessary
+///      ownership: "borrowing-duplicate-if-necessary"
 /// })
 #[proc_macro]
 pub fn generate(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -212,11 +212,11 @@ impl Parse for Opt {
         } else if l.peek(kw::ownership) {
             let span = input.parse::<kw::ownership>()?.span;
             input.parse::<Token![:]>()?;
-            let ownership = input.parse::<syn::Ident>()?;
+            let ownership = input.parse::<syn::LitStr>()?;
             Ok(Opt::Ownership(
                 span,
                 ownership
-                    .to_string()
+                    .value()
                     .parse()
                     .map_err(|e| Error::new(ownership.span(), e))?,
             ))
