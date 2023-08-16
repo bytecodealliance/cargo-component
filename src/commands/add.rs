@@ -52,6 +52,10 @@ pub struct AddCommand {
     /// Add the dependency to the list of target dependencies
     #[clap(long = "target")]
     pub target: bool,
+
+    /// Add a package dependency to this directory.
+    #[clap(long = "path", value_name = "PATH")]
+    pub path: Option<PathBuf>,
 }
 
 impl AddCommand {
@@ -114,16 +118,19 @@ impl AddCommand {
             config.terminal(),
             network_allowed,
         )?;
-        let dependency = Dependency::Package(RegistryPackage {
-            id: Some(self.package.id.clone()),
-            version: self
-                .package
-                .version
-                .as_ref()
-                .unwrap_or(&VersionReq::STAR)
-                .clone(),
-            registry: self.registry.clone(),
-        });
+        let dependency = match self.path.as_ref() {
+            Some(path) => Dependency::Local(path.clone()),
+            None => Dependency::Package(RegistryPackage {
+                id: Some(self.package.id.clone()),
+                version: self
+                    .package
+                    .version
+                    .as_ref()
+                    .unwrap_or(&VersionReq::STAR)
+                    .clone(),
+                registry: self.registry.clone(),
+            }),
+        };
 
         resolver.add_dependency(id, &dependency).await?;
 
@@ -137,7 +144,10 @@ impl AddCommand {
                 .as_ref()
                 .map(ToString::to_string)
                 .unwrap_or_else(|| resolution.version.to_string())),
-            _ => unreachable!(),
+
+            // There's no version information present for local dependencies, so we return "*"
+            // here.
+            DependencyResolution::Local(_) => Ok(String::from("*")),
         }
     }
 
@@ -172,16 +182,21 @@ impl AddCommand {
                 })?
         };
 
-        match self.id.as_ref() {
-            Some(id) => {
-                dependencies[id.as_ref()] = value(InlineTable::from_iter([
-                    ("package", Value::from(self.package.id.to_string())),
-                    ("version", Value::from(version)),
-                ]));
-            }
-            _ => {
-                dependencies[self.package.id.as_ref()] = value(version);
-            }
+        let mut config = InlineTable::new();
+
+        if self.id.is_some() {
+            config.insert("package", Value::from(self.package.id.to_string()));
+        }
+
+        if let Some(path) = self.path.as_ref() {
+            config.insert("path", Value::from(path.to_str().unwrap()));
+        }
+
+        if config.is_empty() {
+            dependencies[self.package.id.as_ref()] = value(version);
+        } else {
+            config.insert("version", Value::from(version));
+            dependencies[self.package.id.as_ref()] = value(config);
         }
 
         if self.dry_run {
