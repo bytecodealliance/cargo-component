@@ -508,6 +508,7 @@ name = "cargo-component-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "clap",
  "futures",
  "indexmap 2.0.0",
  "keyring",

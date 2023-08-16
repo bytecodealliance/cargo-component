@@ -1,16 +1,15 @@
 use crate::{
-    config::{CargoArguments, CargoPackageSpec},
-    load_component_metadata, load_metadata,
-    metadata::ComponentMetadata,
+    config::CargoPackageSpec, load_component_metadata, load_metadata, metadata::ComponentMetadata,
     Config, PackageComponentMetadata,
 };
 use anyhow::{bail, Context, Result};
 use cargo_component_core::{
+    command::CommonOptions,
     registry::{Dependency, DependencyResolution, DependencyResolver, RegistryPackage},
     VersionedPackageId,
 };
 use cargo_metadata::Package;
-use clap::{ArgAction, Args};
+use clap::Args;
 use semver::VersionReq;
 use std::{fs, path::PathBuf};
 use toml_edit::{value, Document, InlineTable, Value};
@@ -20,21 +19,9 @@ use warg_protocol::registry::PackageId;
 #[derive(Args)]
 #[clap(disable_version_flag = true)]
 pub struct AddCommand {
-    /// Do not print cargo log messages
-    #[clap(long = "quiet", short = 'q')]
-    pub quiet: bool,
-
-    /// Use verbose output (-vv very verbose/build.rs output)
-    #[clap(
-        long = "verbose",
-        short = 'v',
-        action = ArgAction::Count
-    )]
-    pub verbose: u8,
-
-    /// Coloring: auto, always, never
-    #[clap(long = "color", value_name = "WHEN")]
-    pub color: Option<String>,
+    /// The common command options.
+    #[clap(flatten)]
+    pub common: CommonOptions,
 
     /// Path to the manifest to add a dependency to
     #[clap(long = "manifest-path", value_name = "PATH")]
@@ -63,8 +50,9 @@ pub struct AddCommand {
 
 impl AddCommand {
     /// Executes the command
-    pub async fn exec(self, config: &Config, cargo_args: &CargoArguments) -> Result<()> {
-        let metadata = load_metadata(cargo_args.manifest_path.as_deref())?;
+    pub async fn exec(self) -> Result<()> {
+        let config = Config::new(self.common.new_terminal())?;
+        let metadata = load_metadata(self.manifest_path.as_deref())?;
 
         let PackageComponentMetadata { package, metadata }: PackageComponentMetadata<'_> =
             match &self.spec {
@@ -94,9 +82,7 @@ impl AddCommand {
 
         self.validate(&metadata, id)?;
 
-        let version = self
-            .resolve_version(config, &metadata, id, cargo_args.network_allowed())
-            .await?;
+        let version = self.resolve_version(&config, &metadata, id, true).await?;
         let version = version.trim_start_matches('^');
         self.add(package, version)?;
 

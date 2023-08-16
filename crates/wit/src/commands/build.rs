@@ -1,9 +1,9 @@
-use super::CommonOptions;
 use crate::{
     build_wit_package,
     config::{Config, CONFIG_FILE_NAME},
 };
 use anyhow::{Context, Result};
+use cargo_component_core::command::CommonOptions;
 use clap::Args;
 use std::{fs, path::PathBuf};
 

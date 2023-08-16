@@ -1,10 +1,11 @@
-use crate::config::{CargoArguments, Config};
+use crate::config::Config;
 use anyhow::{bail, Context, Result};
 use cargo_component_core::{
+    command::CommonOptions,
     keyring::{self, delete_signing_key, get_signing_key, get_signing_key_entry, set_signing_key},
     terminal::Colors,
 };
-use clap::{ArgAction, Args, Subcommand};
+use clap::{Args, Subcommand};
 use p256::ecdsa::SigningKey;
 use rand_core::OsRng;
 use std::io::{self, Write};
@@ -15,21 +16,9 @@ use warg_crypto::signing::PrivateKey;
 #[derive(Args)]
 #[clap(disable_version_flag = true)]
 pub struct KeyCommand {
-    /// Do not print cargo log messages
-    #[clap(long = "quiet", short = 'q')]
-    pub quiet: bool,
-
-    /// Use verbose output (-vv very verbose/build.rs output)
-    #[clap(
-        long = "verbose",
-        short = 'v',
-        action = ArgAction::Count
-    )]
-    pub verbose: u8,
-
-    /// Coloring: auto, always, never
-    #[clap(long = "color", value_name = "WHEN")]
-    pub color: Option<String>,
+    /// The common command options.
+    #[clap(flatten)]
+    pub common: CommonOptions,
 
     /// The subcommand to execute.
     #[clap(subcommand)]
@@ -38,14 +27,16 @@ pub struct KeyCommand {
 
 impl KeyCommand {
     /// Executes the command.
-    pub async fn exec(self, config: &Config, _cargo_args: &CargoArguments) -> Result<()> {
+    pub async fn exec(self) -> Result<()> {
         log::debug!("executing key command");
+
+        let config = Config::new(self.common.new_terminal())?;
 
         match self.command {
             KeySubcommand::Id(cmd) => cmd.exec().await,
-            KeySubcommand::New(cmd) => cmd.exec(config).await,
-            KeySubcommand::Set(cmd) => cmd.exec(config).await,
-            KeySubcommand::Delete(cmd) => cmd.exec(config).await,
+            KeySubcommand::New(cmd) => cmd.exec(&config).await,
+            KeySubcommand::Set(cmd) => cmd.exec(&config).await,
+            KeySubcommand::Delete(cmd) => cmd.exec(&config).await,
         }
     }
 }

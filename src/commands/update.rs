@@ -1,31 +1,20 @@
-use crate::{config::CargoArguments, load_component_metadata, load_metadata, Config};
+use crate::{load_component_metadata, load_metadata, Config};
 use anyhow::Result;
-use clap::{ArgAction, Args};
+use cargo_component_core::command::CommonOptions;
+use clap::Args;
 use std::path::PathBuf;
 
 /// Update dependencies as recorded in the component lock file
 #[derive(Args)]
 #[clap(disable_version_flag = true)]
 pub struct UpdateCommand {
-    /// Do not print cargo log messages
-    #[clap(long = "quiet", short = 'q')]
-    pub quiet: bool,
-
-    /// Use verbose output (-vv very verbose/build.rs output)
-    #[clap(
-        long = "verbose",
-        short = 'v',
-        action = ArgAction::Count
-    )]
-    pub verbose: u8,
+    /// The common command options.
+    #[clap(flatten)]
+    pub common: CommonOptions,
 
     /// Don't actually write the lockfile
     #[clap(long = "dry-run")]
     pub dry_run: bool,
-
-    /// Coloring: auto, always, never
-    #[clap(long = "color", value_name = "WHEN")]
-    pub color: Option<String>,
 
     /// Require lock file and cache are up to date
     #[clap(long = "frozen")]
@@ -46,10 +35,23 @@ pub struct UpdateCommand {
 
 impl UpdateCommand {
     /// Executes the command.
-    pub async fn exec(self, config: &Config, cargo_args: &CargoArguments) -> Result<()> {
+    pub async fn exec(self) -> Result<()> {
         log::debug!("executing update command");
-        let metadata = load_metadata(cargo_args.manifest_path.as_deref())?;
+        let config = Config::new(self.common.new_terminal())?;
+        let metadata = load_metadata(self.manifest_path.as_deref())?;
         let packages = load_component_metadata(&metadata, [].iter(), true)?;
-        crate::update_lockfile(config, &metadata, &packages, cargo_args, self.dry_run).await
+
+        let network_allowed = !self.frozen && !self.offline;
+        let lock_update_allowed = !self.frozen && !self.locked;
+        crate::update_lockfile(
+            &config,
+            &metadata,
+            &packages,
+            network_allowed,
+            lock_update_allowed,
+            self.locked,
+            self.dry_run,
+        )
+        .await
     }
 }

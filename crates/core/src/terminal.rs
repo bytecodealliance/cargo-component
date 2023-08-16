@@ -39,6 +39,16 @@ impl FromStr for Color {
     }
 }
 
+impl fmt::Display for Color {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Auto => write!(f, "auto"),
+            Self::Never => write!(f, "never"),
+            Self::Always => write!(f, "always"),
+        }
+    }
+}
+
 /// The requested verbosity of output.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Verbosity {

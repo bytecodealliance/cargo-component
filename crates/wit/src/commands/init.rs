@@ -1,7 +1,6 @@
-use super::CommonOptions;
 use crate::config::{ConfigBuilder, CONFIG_FILE_NAME};
 use anyhow::{bail, Result};
-use cargo_component_core::registry::DEFAULT_REGISTRY_NAME;
+use cargo_component_core::{command::CommonOptions, registry::DEFAULT_REGISTRY_NAME};
 use clap::Args;
 use std::path::PathBuf;
 use url::Url;
