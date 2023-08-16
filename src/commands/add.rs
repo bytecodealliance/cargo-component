@@ -49,7 +49,7 @@ pub struct AddCommand {
     #[clap(value_name = "PACKAGE")]
     pub package: VersionedPackageId,
 
-    /// Add dependencies to the target component
+    /// Add the dependency to the list of target dependencies
     #[clap(long = "target")]
     pub target: bool,
 }
