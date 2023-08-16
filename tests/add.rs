@@ -72,6 +72,38 @@ async fn validate_the_version_exists() -> Result<()> {
     Ok(())
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn adds_dependencies_to_target_component() -> Result<()> {
+    let root = create_root()?;
+    let (_server, config) = spawn_server(&root).await?;
+    config.write_to_file(&root.join("warg-config.json"))?;
+
+    publish_component(&config, "foo:bar", "1.1.0", "(component)", true).await?;
+
+    let project = Project::with_root(&root, "foo_target", "")?;
+
+    let manifest = fs::read_to_string(project.root().join("Cargo.toml"))?;
+    assert!(!contains("package.metadata.component.target.dependencies").eval(&manifest));
+
+    project
+        .cargo_component("add foo:bar --target")
+        .assert()
+        .stderr(contains("Added dependency `foo:bar` with version `1.1.0`"));
+
+    let manifest = fs::read_to_string(project.root().join("Cargo.toml"))?;
+    println!("manifest = {manifest}");
+    assert!(contains(r#""foo:bar" = "1.1.0""#).eval(&manifest));
+    assert!(contains("package.metadata.component.target.dependencies").eval(&manifest));
+
+    project
+        .cargo_component("add foo:bar --target")
+        .assert()
+        .stderr(contains(
+            "cannot add dependency `foo:bar` as it conflicts with an existing dependency",
+        ));
+    Ok(())
+}
+
 #[test]
 fn checks_for_duplicate_dependencies() -> Result<()> {
     let project = Project::new("foo")?;
