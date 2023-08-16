@@ -104,10 +104,10 @@ async fn adds_dependencies_to_target_component() -> Result<()> {
     project
         .cargo_component("add --target --path foo/baz foo:baz")
         .assert()
-        .stderr(contains("Added dependency `foo:baz` with version `*`"));
+        .stderr(contains("Added dependency `foo:baz` from path `foo/baz`"));
 
     let manifest = fs::read_to_string(project.root().join("Cargo.toml"))?;
-    assert!(contains(r#""foo:baz" = { path = "foo/baz", version = "*" }"#).eval(&manifest));
+    assert!(contains(r#""foo:baz" = { path = "foo/baz" }"#).eval(&manifest));
 
     Ok(())
 }

@@ -13,7 +13,10 @@ use cargo_component_core::{
 use cargo_metadata::Package;
 use clap::Args;
 use semver::VersionReq;
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 use toml_edit::{value, Document, InlineTable, Item, Table, Value};
 use warg_protocol::registry::PackageId;
 
@@ -92,14 +95,26 @@ impl AddCommand {
 
         self.validate(&metadata, id)?;
 
-        let version = self.resolve_version(&config, &metadata, id, true).await?;
-        let version = version.trim_start_matches('^');
-        self.add(package, version)?;
+        if let Some(path) = self.path.as_ref() {
+            self.add_from_path(package, path)?;
 
-        config.terminal().status(
-            "Added",
-            format!("dependency `{id}` with version `{version}`"),
-        )?;
+            config.terminal().status(
+                "Added",
+                format!(
+                    "dependency `{id}` from path `{path}`",
+                    path = path.to_str().unwrap()
+                ),
+            )?;
+        } else {
+            let version = self.resolve_version(&config, &metadata, id, true).await?;
+            let version = version.trim_start_matches('^');
+            self.add(package, version)?;
+
+            config.terminal().status(
+                "Added",
+                format!("dependency `{id}` with version `{version}`"),
+            )?;
+        }
 
         Ok(())
     }
@@ -118,19 +133,16 @@ impl AddCommand {
             config.terminal(),
             network_allowed,
         )?;
-        let dependency = match self.path.as_ref() {
-            Some(path) => Dependency::Local(path.clone()),
-            None => Dependency::Package(RegistryPackage {
-                id: Some(self.package.id.clone()),
-                version: self
-                    .package
-                    .version
-                    .as_ref()
-                    .unwrap_or(&VersionReq::STAR)
-                    .clone(),
-                registry: self.registry.clone(),
-            }),
-        };
+        let dependency = Dependency::Package(RegistryPackage {
+            id: Some(self.package.id.clone()),
+            version: self
+                .package
+                .version
+                .as_ref()
+                .unwrap_or(&VersionReq::STAR)
+                .clone(),
+            registry: self.registry.clone(),
+        });
 
         resolver.add_dependency(id, &dependency).await?;
 
@@ -144,14 +156,14 @@ impl AddCommand {
                 .as_ref()
                 .map(ToString::to_string)
                 .unwrap_or_else(|| resolution.version.to_string())),
-
-            // There's no version information present for local dependencies, so we return "*"
-            // here.
-            DependencyResolution::Local(_) => Ok(String::from("*")),
+            _ => unreachable!(),
         }
     }
 
-    fn add(&self, pkg: &Package, version: &str) -> Result<()> {
+    fn with_dependencies<F>(&self, pkg: &Package, body: F) -> Result<()>
+    where
+        F: FnOnce(&mut Table) -> Result<()>,
+    {
         let manifest = fs::read_to_string(&pkg.manifest_path).with_context(|| {
             format!(
                 "failed to read manifest file `{path}`",
@@ -182,24 +194,7 @@ impl AddCommand {
                 })?
         };
 
-        let mut config = InlineTable::new();
-        let mut key = self.package.id.as_ref();
-
-        if let Some(id) = self.id.as_ref() {
-            key = id.as_ref();
-            config.insert("package", Value::from(self.package.id.to_string()));
-        }
-
-        if let Some(path) = self.path.as_ref() {
-            config.insert("path", Value::from(path.to_str().unwrap()));
-        }
-
-        if config.is_empty() {
-            dependencies[key] = value(version);
-        } else {
-            config.insert("version", Value::from(version));
-            dependencies[key] = value(config);
-        }
+        body(dependencies)?;
 
         if self.dry_run {
             println!("{document}");
@@ -213,6 +208,39 @@ impl AddCommand {
         }
 
         Ok(())
+    }
+
+    fn add(&self, pkg: &Package, version: &str) -> Result<()> {
+        self.with_dependencies(pkg, |dependencies| {
+            match self.id.as_ref() {
+                Some(id) => {
+                    dependencies[id.as_ref()] = value(InlineTable::from_iter([
+                        ("package", Value::from(self.package.id.to_string())),
+                        ("version", Value::from(version)),
+                    ]));
+                }
+                _ => {
+                    dependencies[self.package.id.as_ref()] = value(version);
+                }
+            }
+            Ok(())
+        })
+    }
+
+    fn add_from_path(&self, pkg: &Package, path: &Path) -> Result<()> {
+        self.with_dependencies(pkg, |dependencies| {
+            let key = match self.id.as_ref() {
+                Some(id) => id.as_ref(),
+                None => self.package.id.as_ref(),
+            };
+
+            dependencies[key] = value(InlineTable::from_iter([(
+                "path",
+                Value::from(path.to_str().unwrap()),
+            )]));
+
+            Ok(())
+        })
     }
 
     fn validate(&self, metadata: &ComponentMetadata, id: &PackageId) -> Result<()> {
