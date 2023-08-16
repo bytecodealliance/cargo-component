@@ -1,5 +1,7 @@
 use crate::{
-    config::CargoPackageSpec, load_component_metadata, load_metadata, metadata::ComponentMetadata,
+    config::CargoPackageSpec,
+    load_component_metadata, load_metadata,
+    metadata::{ComponentMetadata, Target},
     Config, PackageComponentMetadata,
 };
 use anyhow::{bail, Context, Result};
@@ -12,7 +14,7 @@ use cargo_metadata::Package;
 use clap::Args;
 use semver::VersionReq;
 use std::{fs, path::PathBuf};
-use toml_edit::{value, Document, InlineTable, Value};
+use toml_edit::{value, Document, InlineTable, Item, Table, Value};
 use warg_protocol::registry::PackageId;
 
 /// Add a dependency for a WebAssembly component
@@ -46,6 +48,10 @@ pub struct AddCommand {
     /// The id of the package to add a dependency to.
     #[clap(value_name = "PACKAGE")]
     pub package: VersionedPackageId,
+
+    /// Add the dependency to the list of target dependencies
+    #[clap(long = "target")]
+    pub target: bool,
 }
 
 impl AddCommand {
@@ -150,14 +156,21 @@ impl AddCommand {
             )
         })?;
 
-        let dependencies = &mut document["package"]["metadata"]["component"]["dependencies"]
-            .as_table_mut()
-            .with_context(|| {
-                format!(
-                    "failed to find component metadata in manifest file `{path}`",
-                    path = pkg.manifest_path
-                )
-            })?;
+        let dependencies = if self.target {
+            document["package"]["metadata"]["component"]["target"]["dependencies"]
+                .or_insert(Item::Table(Table::new()))
+                .as_table_mut()
+                .unwrap()
+        } else {
+            document["package"]["metadata"]["component"]["dependencies"]
+                .as_table_mut()
+                .with_context(|| {
+                    format!(
+                        "failed to find component metadata in manifest file `{path}`",
+                        path = pkg.manifest_path
+                    )
+                })?
+        };
 
         match self.id.as_ref() {
             Some(id) => {
@@ -186,8 +199,22 @@ impl AddCommand {
     }
 
     fn validate(&self, metadata: &ComponentMetadata, id: &PackageId) -> Result<()> {
-        if metadata.section.dependencies.contains_key(id) {
-            bail!("cannot add dependency `{id}` as it conflicts with an existing dependency");
+        if self.target {
+            match &metadata.section.target {
+                Some(Target::Package { .. }) => {
+                    bail!("cannot add dependency `{id}` to a registry package target")
+                }
+                Some(Target::Local { dependencies, .. }) => {
+                    if dependencies.contains_key(id) {
+                        bail!("cannot add dependency `{id}` as it conflicts with an existing dependency");
+                    }
+                }
+                None => {}
+            }
+        } else {
+            if metadata.section.dependencies.contains_key(id) {
+                bail!("cannot add dependency `{id}` as it conflicts with an existing dependency");
+            }
         }
 
         Ok(())
