@@ -1,10 +1,10 @@
-use super::CommonOptions;
 use crate::{
     config::{Config, CONFIG_FILE_NAME},
     resolve_dependencies,
 };
 use anyhow::{bail, Context, Result};
 use cargo_component_core::{
+    command::CommonOptions,
     registry::{Dependency, DependencyResolution, DependencyResolver, RegistryPackage},
     terminal::Terminal,
     VersionedPackageId,

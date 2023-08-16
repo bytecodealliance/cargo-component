@@ -1,6 +1,6 @@
-use super::CommonOptions;
 use crate::config::{Config, CONFIG_FILE_NAME};
 use anyhow::{Context, Result};
+use cargo_component_core::command::CommonOptions;
 use clap::Args;
 
 /// Update dependencies as recorded in the lock file.

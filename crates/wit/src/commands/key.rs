@@ -1,6 +1,6 @@
-use super::CommonOptions;
 use anyhow::{bail, Context, Result};
 use cargo_component_core::{
+    command::CommonOptions,
     keyring::{self, delete_signing_key, get_signing_key, get_signing_key_entry, set_signing_key},
     terminal::{Colors, Terminal},
 };

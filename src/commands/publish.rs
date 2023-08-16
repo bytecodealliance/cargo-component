@@ -1,12 +1,12 @@
 use crate::{
-    config::{CargoArguments, CargoPackageSpec},
-    is_wasm_target, load_metadata, publish, run_cargo_command, Config, PackageComponentMetadata,
+    config::{CargoArguments, CargoPackageSpec, Config},
+    is_wasm_target, load_metadata, publish, run_cargo_command, PackageComponentMetadata,
     PublishOptions,
 };
 use anyhow::{bail, Context, Result};
-use cargo_component_core::{keyring::get_signing_key, registry::find_url};
-use clap::{ArgAction, Args};
-use std::{path::PathBuf, str::FromStr};
+use cargo_component_core::{command::CommonOptions, keyring::get_signing_key, registry::find_url};
+use clap::Args;
+use std::path::PathBuf;
 use warg_client::RegistryUrl;
 use warg_crypto::signing::PrivateKey;
 
@@ -14,21 +14,9 @@ use warg_crypto::signing::PrivateKey;
 #[derive(Args)]
 #[clap(disable_version_flag = true)]
 pub struct PublishCommand {
-    /// Do not print cargo log messages
-    #[clap(long = "quiet", short = 'q')]
-    pub quiet: bool,
-
-    /// Use verbose output (-vv very verbose/build.rs output)
-    #[clap(
-        long = "verbose",
-        short = 'v',
-        action = ArgAction::Count
-    )]
-    pub verbose: u8,
-
-    /// Coloring: auto, always, never
-    #[clap(long = "color", value_name = "WHEN")]
-    pub color: Option<String>,
+    /// The common command options.
+    #[clap(flatten)]
+    pub common: CommonOptions,
 
     /// Build for the target triple (defaults to `wasm32-wasi`)
     #[clap(long = "target", value_name = "TRIPLE")]
@@ -93,8 +81,10 @@ pub struct PublishCommand {
 
 impl PublishCommand {
     /// Executes the command.
-    pub async fn exec(self, config: &Config, cargo_args: &CargoArguments) -> Result<()> {
+    pub async fn exec(self) -> Result<()> {
         log::debug!("executing publish command");
+
+        let config = Config::new(self.common.new_terminal())?;
 
         if let Some(target) = &self.target {
             if !is_wasm_target(target) {
@@ -102,7 +92,7 @@ impl PublishCommand {
             }
         }
 
-        let metadata = load_metadata(cargo_args.manifest_path.as_deref())?;
+        let metadata = load_metadata(self.manifest_path.as_deref())?;
         let packages = [PackageComponentMetadata::new(
             if let Some(spec) = &self.cargo_package {
                 metadata
@@ -159,14 +149,9 @@ impl PublishCommand {
         };
 
         let cargo_build_args = CargoArguments {
-            color: self
-                .color
-                .as_deref()
-                .map(FromStr::from_str)
-                .transpose()
-                .unwrap(),
-            verbose: self.verbose as usize,
-            quiet: self.quiet,
+            color: self.common.color,
+            verbose: self.common.verbose as usize,
+            quiet: self.common.quiet,
             targets: self.target.clone().into_iter().collect(),
             manifest_path: self.manifest_path.clone(),
             frozen: self.frozen,
@@ -175,12 +160,18 @@ impl PublishCommand {
             offline: self.offline,
             workspace: false,
             packages: self.cargo_package.clone().into_iter().collect(),
-            subcommand: Some("build".to_string()),
         };
 
         let spawn_args = self.build_args()?;
-        let outputs =
-            run_cargo_command(config, &metadata, &packages, &cargo_build_args, &spawn_args).await?;
+        let outputs = run_cargo_command(
+            &config,
+            &metadata,
+            &packages,
+            Some("build"),
+            &cargo_build_args,
+            &spawn_args,
+        )
+        .await?;
         if outputs.len() != 1 {
             bail!(
                 "expected one output from `cargo build`, got {len}",
@@ -198,7 +189,7 @@ impl PublishCommand {
             dry_run: self.dry_run,
         };
 
-        publish(config, &options).await
+        publish(&config, &options).await
     }
 
     fn build_args(&self) -> Result<Vec<String>> {
@@ -206,19 +197,19 @@ impl PublishCommand {
         args.push("build".to_string());
         args.push("--release".to_string());
 
-        if self.quiet {
+        if self.common.quiet {
             args.push("-q".to_string());
         }
 
         args.extend(
             std::iter::repeat("-v")
-                .take(self.verbose as usize)
+                .take(self.common.verbose as usize)
                 .map(ToString::to_string),
         );
 
-        if let Some(color) = &self.color {
+        if let Some(color) = self.common.color {
             args.push("--color".to_string());
-            args.push(color.clone());
+            args.push(color.to_string());
         }
 
         if let Some(target) = &self.target {

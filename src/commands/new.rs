@@ -1,13 +1,10 @@
-use crate::{
-    config::{CargoArguments, Config},
-    generator::SourceGenerator,
-    metadata,
-};
+use crate::{config::Config, generator::SourceGenerator, metadata};
 use anyhow::{bail, Context, Result};
-use cargo_component_core::registry::{
-    Dependency, DependencyResolution, DependencyResolver, RegistryResolution,
+use cargo_component_core::{
+    command::CommonOptions,
+    registry::{Dependency, DependencyResolution, DependencyResolver, RegistryResolution},
 };
-use clap::{ArgAction, Args};
+use clap::Args;
 use heck::ToKebabCase;
 use semver::VersionReq;
 use std::{
@@ -39,9 +36,9 @@ fn escape_wit(s: &str) -> Cow<str> {
 #[derive(Args)]
 #[clap(disable_version_flag = true)]
 pub struct NewCommand {
-    /// Do not print cargo log messages
-    #[clap(long = "quiet", short = 'q')]
-    pub quiet: bool,
+    /// The common command options.
+    #[clap(flatten)]
+    pub common: CommonOptions,
 
     /// Initialize a new repository for the given version
     /// control system (git, hg, pijul, or fossil) or do not
@@ -50,14 +47,6 @@ pub struct NewCommand {
     #[clap(long = "vcs", value_name = "VCS", value_parser = ["git", "hg", "pijul", "fossil", "none"])]
     pub vcs: Option<String>,
 
-    /// Use verbose output (-vv very verbose output)
-    #[clap(
-        long = "verbose",
-        short = 'v',
-        action = ArgAction::Count
-    )]
-    pub verbose: u8,
-
     /// Create a command component [default]
     #[clap(long = "command", conflicts_with("reactor"))]
     pub command: bool,
@@ -65,10 +54,6 @@ pub struct NewCommand {
     /// Create a reactor component
     #[clap(long = "reactor")]
     pub reactor: bool,
-
-    /// Coloring: auto, always, never
-    #[clap(long = "color", value_name = "WHEN")]
-    pub color: Option<String>,
 
     /// Edition to set for the generated crate
     #[clap(long = "edition", value_name = "YEAR", value_parser = ["2015", "2018", "2021"])]
@@ -157,8 +142,10 @@ impl<'a> PackageName<'a> {
 
 impl NewCommand {
     /// Executes the command.
-    pub async fn exec(self, config: &Config, cargo_args: &CargoArguments) -> Result<()> {
+    pub async fn exec(self) -> Result<()> {
         log::debug!("executing new command");
+
+        let config = Config::new(self.common.new_terminal())?;
 
         let name = PackageName::new(&self.namespace, self.name.as_deref(), &self.path)?;
 
@@ -174,7 +161,7 @@ impl NewCommand {
         };
 
         let target = self
-            .resolve_target(config, &registries, target, cargo_args.network_allowed())
+            .resolve_target(&config, &registries, target, true)
             .await?;
         let source = self.generate_source(&target)?;
 
@@ -190,8 +177,8 @@ impl NewCommand {
             }
         }
 
-        self.update_manifest(config, &name, &out_dir, &registries, &target)?;
-        self.create_source_file(config, &out_dir, source.as_ref(), &target)?;
+        self.update_manifest(&config, &name, &out_dir, &registries, &target)?;
+        self.create_source_file(&config, &out_dir, source.as_ref(), &target)?;
         self.create_targets_file(&name, &out_dir)?;
         self.create_editor_settings_file(&out_dir)?;
 
@@ -214,14 +201,14 @@ impl NewCommand {
             command.arg("--vcs").arg(vcs);
         }
 
-        if self.quiet {
+        if self.common.quiet {
             command.arg("-q");
         }
 
-        command.args(std::iter::repeat("-v").take(self.verbose as usize));
+        command.args(std::iter::repeat("-v").take(self.common.verbose as usize));
 
-        if let Some(color) = &self.color {
-            command.arg("--color").arg(color);
+        if let Some(color) = self.common.color {
+            command.arg("--color").arg(color.to_string());
         }
 
         if !self.is_command() {

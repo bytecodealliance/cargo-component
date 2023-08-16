@@ -4,6 +4,7 @@ use cargo_component::{
     config::{CargoArguments, Config},
     load_component_metadata, load_metadata, run_cargo_command,
 };
+use cargo_component_core::terminal::{Color, Terminal, Verbosity};
 use clap::{CommandFactory, Parser};
 
 fn version() -> &'static str {
@@ -76,36 +77,57 @@ enum Command {
     // TODO: Vendor(VendorCommand),
 }
 
+fn detect_subcommand() -> Option<String> {
+    let mut iter = std::env::args().skip(1).peekable();
+
+    // Skip the first argument if it is `component` (i.e. `cargo component`)
+    if let Some(arg) = iter.peek() {
+        if arg == "component" {
+            iter.next().unwrap();
+        }
+    }
+
+    for arg in iter {
+        // Break out of processing at the first `--`
+        if arg == "--" {
+            break;
+        }
+
+        if !arg.starts_with('-') {
+            return Some(arg);
+        }
+    }
+
+    None
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     pretty_env_logger::init_custom_env("CARGO_COMPONENT_LOG");
 
-    let cargo_args = CargoArguments::parse()?;
-    log::debug!("parsed cargo arguments: {cargo_args:?}");
-
-    let config = Config::new(&cargo_args)?;
-    log::debug!("configuration: {config:?}");
-
-    match cargo_args.subcommand.as_deref() {
+    let subcommand = detect_subcommand();
+    match subcommand.as_deref() {
         // Check for built-in command or no command (shows help)
         Some(cmd) if BUILTIN_COMMANDS.contains(&cmd) => {
             if let Err(e) = match CargoComponent::parse() {
                 CargoComponent::Component(cmd) | CargoComponent::Command(cmd) => match cmd {
-                    Command::Add(cmd) => cmd.exec(&config, &cargo_args).await,
-                    Command::Key(cmd) => cmd.exec(&config, &cargo_args).await,
-                    Command::New(cmd) => cmd.exec(&config, &cargo_args).await,
-                    Command::Update(cmd) => cmd.exec(&config, &cargo_args).await,
-                    Command::Publish(cmd) => cmd.exec(&config, &cargo_args).await,
+                    Command::Add(cmd) => cmd.exec().await,
+                    Command::Key(cmd) => cmd.exec().await,
+                    Command::New(cmd) => cmd.exec().await,
+                    Command::Update(cmd) => cmd.exec().await,
+                    Command::Publish(cmd) => cmd.exec().await,
                 },
             } {
-                config.terminal().error(format!("{e:?}"))?;
+                let terminal = Terminal::new(Verbosity::Normal, Color::Auto);
+                terminal.error(format!("{e:?}"))?;
                 std::process::exit(1);
             }
         }
 
         // Check for explicitly unsupported commands (e.g. those that deal with crates.io)
         Some(cmd) if UNSUPPORTED_COMMANDS.contains(&cmd) => {
-            config.terminal().error(format!(
+            let terminal = Terminal::new(Verbosity::Normal, Color::Auto);
+            terminal.error(format!(
                 "command `{cmd}` is not supported by `cargo component`\n\n\
                  use `cargo {cmd}` instead"
             ))?;
@@ -124,6 +146,19 @@ async fn main() -> Result<()> {
 
         _ => {
             // Not a built-in command, run the cargo command
+            let cargo_args = CargoArguments::parse()?;
+            let config = Config::new(Terminal::new(
+                if cargo_args.quiet {
+                    Verbosity::Quiet
+                } else {
+                    match cargo_args.verbose {
+                        0 => Verbosity::Normal,
+                        _ => Verbosity::Verbose,
+                    }
+                },
+                cargo_args.color.unwrap_or_default(),
+            ))?;
+
             let metadata = load_metadata(cargo_args.manifest_path.as_deref())?;
             let packages = load_component_metadata(
                 &metadata,
@@ -133,8 +168,15 @@ async fn main() -> Result<()> {
             assert!(!packages.is_empty());
 
             let spawn_args: Vec<_> = std::env::args().skip(1).collect();
-            if let Err(e) =
-                run_cargo_command(&config, &metadata, &packages, &cargo_args, &spawn_args).await
+            if let Err(e) = run_cargo_command(
+                &config,
+                &metadata,
+                &packages,
+                subcommand.as_deref(),
+                &cargo_args,
+                &spawn_args,
+            )
+            .await
             {
                 config.terminal().error(format!("{e:?}"))?;
                 std::process::exit(1);

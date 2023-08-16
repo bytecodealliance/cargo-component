@@ -7,9 +7,8 @@
 //! discussion around this issue.
 //!
 //! To properly "wrap" `cargo` commands, we need to be able to
-//! detect certain arguments and subcommands, but not error out
-//! if the arguments are otherwise unknown as they will be passed
-//! to `cargo` directly.
+//! detect certain arguments, but not error out if the arguments
+//! are otherwise unknown as they will be passed to `cargo` directly.
 //!
 //! This will allow `cargo-component` to be used as a drop-in
 //! replacement for `cargo` without having to be fully aware of
@@ -20,7 +19,7 @@
 //! to function.
 
 use anyhow::{anyhow, bail, Context, Result};
-use cargo_component_core::terminal::{Color, Terminal, Verbosity};
+use cargo_component_core::terminal::{Color, Terminal};
 use parse_arg::{iter_short, match_arg};
 use semver::Version;
 use std::fmt;
@@ -367,8 +366,6 @@ pub struct CargoArguments {
     pub workspace: bool,
     /// The --package argument.
     pub packages: Vec<CargoPackageSpec>,
-    /// The subcommand to run.
-    pub subcommand: Option<String>,
 }
 
 impl CargoArguments {
@@ -415,7 +412,6 @@ impl CargoArguments {
             }
         }
 
-        let mut subcommand = None;
         while let Some(arg) = iter.next() {
             // Break out of processing at the first `--`
             if arg == "--" {
@@ -425,10 +421,6 @@ impl CargoArguments {
             // Parse options
             if args.parse(&arg, &mut iter)? {
                 continue;
-            }
-
-            if subcommand.is_none() {
-                subcommand = Some(arg);
             }
         }
 
@@ -460,7 +452,6 @@ impl CargoArguments {
                 .into_iter()
                 .map(CargoPackageSpec::new)
                 .collect::<Result<_>>()?,
-            subcommand,
         })
     }
 }
@@ -477,20 +468,8 @@ pub struct Config {
 }
 
 impl Config {
-    /// Create a new `Config` from the environment.
-    pub fn new(args: &CargoArguments) -> Result<Self> {
-        let terminal = Terminal::new(
-            if args.quiet {
-                Verbosity::Quiet
-            } else {
-                match args.verbose {
-                    0 => Verbosity::Normal,
-                    _ => Verbosity::Verbose,
-                }
-            },
-            args.color.unwrap_or_default(),
-        );
-
+    /// Create a new `Config` with the given terminal.
+    pub fn new(terminal: Terminal) -> Result<Self> {
         Ok(Self {
             warg: warg_client::Config::from_default_file()?.unwrap_or_default(),
             terminal,
@@ -783,7 +762,6 @@ mod test {
                 offline: false,
                 workspace: true,
                 packages: Vec::new(),
-                subcommand: Some("build".to_string()),
             }
         );
 
@@ -835,7 +813,6 @@ mod test {
                         version: Some(Version::parse("1.1.1").unwrap())
                     }
                 ],
-                subcommand: Some("publish".to_string()),
             }
         );
     }

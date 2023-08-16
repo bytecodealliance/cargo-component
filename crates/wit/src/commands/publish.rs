@@ -1,10 +1,9 @@
-use super::CommonOptions;
 use crate::{
     config::{Config, CONFIG_FILE_NAME},
     publish_wit_package, PublishOptions,
 };
 use anyhow::{Context, Result};
-use cargo_component_core::{keyring::get_signing_key, registry::find_url};
+use cargo_component_core::{command::CommonOptions, keyring::get_signing_key, registry::find_url};
 use clap::Args;
 use warg_client::RegistryUrl;
 use warg_crypto::signing::PrivateKey;

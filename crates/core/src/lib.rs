@@ -7,6 +7,7 @@ use semver::VersionReq;
 use std::str::FromStr;
 use warg_protocol::registry::PackageId;
 
+pub mod command;
 pub mod keyring;
 pub mod lock;
 pub mod progress;

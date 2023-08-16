@@ -74,6 +74,7 @@ pub async fn run_cargo_command(
     config: &Config,
     metadata: &Metadata,
     packages: &[PackageComponentMetadata<'_>],
+    subcommand: Option<&str>,
     cargo_args: &CargoArguments,
     spawn_args: &[String],
 ) -> Result<Vec<PathBuf>> {
@@ -101,10 +102,7 @@ pub async fn run_cargo_command(
     let mut cmd = Command::new(&cargo);
     cmd.args(args);
 
-    let is_build = matches!(
-        cargo_args.subcommand.as_deref(),
-        Some("b") | Some("build") | Some("rustc")
-    );
+    let is_build = matches!(subcommand, Some("b") | Some("build") | Some("rustc"));
 
     // Handle the target for build commands
     if is_build {
@@ -600,11 +598,13 @@ pub async fn update_lockfile(
     config: &Config,
     metadata: &Metadata,
     packages: &[PackageComponentMetadata<'_>],
-    cargo_args: &CargoArguments,
+    network_allowed: bool,
+    lock_update_allowed: bool,
+    locked: bool,
     dry_run: bool,
 ) -> Result<()> {
     // Read the current lock file and generate a new one
-    let map = create_resolution_map(config, packages, None, cargo_args.network_allowed()).await?;
+    let map = create_resolution_map(config, packages, None, network_allowed).await?;
 
     let file_lock = acquire_lock_file_ro(config.terminal(), metadata)?;
     let orig_lock_file = file_lock
@@ -662,12 +662,8 @@ pub async fn update_lockfile(
         // Update the lock file
         if new_lock_file != orig_lock_file {
             drop(file_lock);
-            let file_lock = acquire_lock_file_rw(
-                config.terminal(),
-                metadata,
-                cargo_args.lock_update_allowed(),
-                cargo_args.locked,
-            )?;
+            let file_lock =
+                acquire_lock_file_rw(config.terminal(), metadata, lock_update_allowed, locked)?;
             new_lock_file
                 .write(file_lock.file(), "cargo-component")
                 .with_context(|| {
