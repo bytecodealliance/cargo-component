@@ -183,8 +183,10 @@ impl AddCommand {
         };
 
         let mut config = InlineTable::new();
+        let mut key = self.package.id.as_ref();
 
-        if self.id.is_some() {
+        if let Some(id) = self.id.as_ref() {
+            key = id.as_ref();
             config.insert("package", Value::from(self.package.id.to_string()));
         }
 
@@ -193,10 +195,10 @@ impl AddCommand {
         }
 
         if config.is_empty() {
-            dependencies[self.package.id.as_ref()] = value(version);
+            dependencies[key] = value(version);
         } else {
             config.insert("version", Value::from(version));
-            dependencies[self.package.id.as_ref()] = value(config);
+            dependencies[key] = value(config);
         }
 
         if self.dry_run {
