@@ -56,7 +56,7 @@ pub struct AddCommand {
     #[clap(long = "target")]
     pub target: bool,
 
-    /// Add a package dependency to this directory.
+    /// Add a package dependency to a file or directory.
     #[clap(long = "path", value_name = "PATH")]
     pub path: Option<PathBuf>,
 }
