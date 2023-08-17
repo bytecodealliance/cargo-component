@@ -416,23 +416,53 @@ pub async fn update_lockfile(
 
     let new_lock_file = to_lock_file(&map);
 
-    // The lock file doesn't have transitive dependencies
-    // So we expect the entries (and the version requirements) to be the same
-    // Thus, only "updating" messages get printed for the packages that changed
     for old_pkg in &orig_lock_file.packages {
-        let new_pkg_index = new_lock_file
+        let new_pkg = match new_lock_file
             .packages
             .binary_search_by_key(&old_pkg.key(), LockedPackage::key)
-            .expect("locked packages should remain the same");
+            .map(|index| &new_lock_file.packages[index])
+        {
+            Ok(pkg) => pkg,
+            Err(_) => {
+                // The package is no longer a dependency
+                for old_ver in &old_pkg.versions {
+                    terminal.status_with_color(
+                        if dry_run { "Would remove" } else { "Removing" },
+                        format!(
+                            "dependency `{id}` v{version}",
+                            id = old_pkg.id,
+                            version = old_ver.version,
+                        ),
+                        Colors::Red,
+                    )?;
+                }
+                continue;
+            }
+        };
 
-        let new_pkg = &new_lock_file.packages[new_pkg_index];
         for old_ver in &old_pkg.versions {
-            let new_ver_index = new_pkg
+            let new_ver = match new_pkg
                 .versions
                 .binary_search_by_key(&old_ver.key(), LockedPackageVersion::key)
-                .expect("version requirements should remain the same");
+                .map(|index| &new_pkg.versions[index])
+            {
+                Ok(ver) => ver,
+                Err(_) => {
+                    // The version of the package is no longer a dependency
+                    terminal.status_with_color(
+                        if dry_run { "Would remove" } else { "Removing" },
+                        format!(
+                            "dependency `{id}` v{version}",
+                            id = old_pkg.id,
+                            version = old_ver.version,
+                        ),
+                        Colors::Red,
+                    )?;
+                    continue;
+                }
+            };
 
-            let new_ver = &new_pkg.versions[new_ver_index];
+            // The version has changed
             if old_ver.version != new_ver.version {
                 terminal.status_with_color(
                     if dry_run { "Would update" } else { "Updating" },
@@ -441,6 +471,51 @@ pub async fn update_lockfile(
                         id = old_pkg.id,
                         old = old_ver.version,
                         new = new_ver.version
+                    ),
+                    Colors::Cyan,
+                )?;
+            }
+        }
+    }
+
+    for new_pkg in &new_lock_file.packages {
+        let old_pkg = match orig_lock_file
+            .packages
+            .binary_search_by_key(&new_pkg.key(), LockedPackage::key)
+            .map(|index| &orig_lock_file.packages[index])
+        {
+            Ok(pkg) => pkg,
+            Err(_) => {
+                // The package is new
+                for new_ver in &new_pkg.versions {
+                    terminal.status_with_color(
+                        if dry_run { "Would add" } else { "Adding" },
+                        format!(
+                            "dependency `{id}` v{version}",
+                            id = new_pkg.id,
+                            version = new_ver.version,
+                        ),
+                        Colors::Green,
+                    )?;
+                }
+                continue;
+            }
+        };
+
+        for new_ver in &new_pkg.versions {
+            if old_pkg
+                .versions
+                .binary_search_by_key(&new_ver.key(), LockedPackageVersion::key)
+                .map(|index| &old_pkg.versions[index])
+                .is_err()
+            {
+                // The version is new
+                terminal.status_with_color(
+                    if dry_run { "Would add" } else { "Adding" },
+                    format!(
+                        "dependency `{id}` v{version}",
+                        id = new_pkg.id,
+                        version = new_ver.version,
                     ),
                     Colors::Green,
                 )?;

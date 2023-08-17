@@ -206,3 +206,77 @@ async fn update_with_compatible_changes_is_noop_for_dryrun() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn update_with_changed_dependencies() -> Result<()> {
+    let root = create_root()?;
+    let (_server, config) = spawn_server(&root).await?;
+    config.write_to_file(&root.join("warg-config.json"))?;
+
+    let project = Project::with_root(&root, "bar", "")?;
+    project.file("bar.wit", "package foo:bar\n")?;
+    project.file(
+        "wit.toml",
+        "version = \"1.0.0\"\n[dependencies]\n[registries]\n",
+    )?;
+
+    project
+        .wit("publish --init")
+        .env("WIT_PUBLISH_KEY", test_signing_key())
+        .assert()
+        .stderr(contains("Published package `foo:bar` v1.0.0"))
+        .success();
+
+    let project = Project::with_root(&root, "baz", "")?;
+    project.file("baz.wit", "package foo:baz\n")?;
+    project.file(
+        "wit.toml",
+        "version = \"1.0.0\"\n[dependencies]\n[registries]\n",
+    )?;
+
+    project
+        .wit("publish --init")
+        .env("WIT_PUBLISH_KEY", test_signing_key())
+        .assert()
+        .stderr(contains("Published package `foo:baz` v1.0.0"))
+        .success();
+
+    let project = Project::with_root(&root, "qux", "")?;
+    project.file("qux.wit", "package foo:qux\n")?;
+    project
+        .wit("add foo:bar")
+        .assert()
+        .stderr(contains("Added dependency `foo:bar` with version `1.0.0"))
+        .success();
+
+    project
+        .wit("build")
+        .assert()
+        .stderr(contains("Created package `qux.wasm`"))
+        .success();
+
+    project.file(
+        "wit.toml",
+        "version = \"1.0.0\"\n[dependencies]\n\"foo:baz\" = \"1.0.0\"\n[registries]\n",
+    )?;
+
+    project
+        .wit("update")
+        .assert()
+        .stderr(
+            contains("Removing dependency `foo:bar` v1.0.0")
+                .and(contains("Adding dependency `foo:baz` v1.0.0")),
+        )
+        .success();
+
+    project
+        .wit("build")
+        .assert()
+        .stderr(contains("Created package `qux.wasm`"))
+        .success();
+
+    let path = project.root().join("qux.wasm");
+    validate_component(&path)?;
+
+    Ok(())
+}
