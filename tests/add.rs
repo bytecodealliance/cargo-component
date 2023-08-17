@@ -91,7 +91,6 @@ async fn adds_dependencies_to_target_component() -> Result<()> {
         .stderr(contains("Added dependency `foo:bar` with version `1.1.0`"));
 
     let manifest = fs::read_to_string(project.root().join("Cargo.toml"))?;
-    println!("manifest = {manifest}");
     assert!(contains(r#""foo:bar" = "1.1.0""#).eval(&manifest));
     assert!(contains("package.metadata.component.target.dependencies").eval(&manifest));
 
@@ -101,6 +100,15 @@ async fn adds_dependencies_to_target_component() -> Result<()> {
         .stderr(contains(
             "cannot add dependency `foo:bar` as it conflicts with an existing dependency",
         ));
+
+    project
+        .cargo_component("add --target --path foo/baz foo:baz")
+        .assert()
+        .stderr(contains("Added dependency `foo:baz` from path `foo/baz`"));
+
+    let manifest = fs::read_to_string(project.root().join("Cargo.toml"))?;
+    assert!(contains(r#""foo:baz" = { path = "foo/baz" }"#).eval(&manifest));
+
     Ok(())
 }
 

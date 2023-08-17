@@ -13,7 +13,10 @@ use cargo_component_core::{
 use cargo_metadata::Package;
 use clap::Args;
 use semver::VersionReq;
-use std::{fs, path::PathBuf};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 use toml_edit::{value, Document, InlineTable, Item, Table, Value};
 use warg_protocol::registry::PackageId;
 
@@ -52,6 +55,10 @@ pub struct AddCommand {
     /// Add the dependency to the list of target dependencies
     #[clap(long = "target")]
     pub target: bool,
+
+    /// Add a package dependency to a file or directory.
+    #[clap(long = "path", value_name = "PATH")]
+    pub path: Option<PathBuf>,
 }
 
 impl AddCommand {
@@ -88,14 +95,26 @@ impl AddCommand {
 
         self.validate(&metadata, id)?;
 
-        let version = self.resolve_version(&config, &metadata, id, true).await?;
-        let version = version.trim_start_matches('^');
-        self.add(package, version)?;
+        if let Some(path) = self.path.as_ref() {
+            self.add_from_path(package, path)?;
 
-        config.terminal().status(
-            "Added",
-            format!("dependency `{id}` with version `{version}`"),
-        )?;
+            config.terminal().status(
+                "Added",
+                format!(
+                    "dependency `{id}` from path `{path}`",
+                    path = path.to_str().unwrap()
+                ),
+            )?;
+        } else {
+            let version = self.resolve_version(&config, &metadata, id, true).await?;
+            let version = version.trim_start_matches('^');
+            self.add(package, version)?;
+
+            config.terminal().status(
+                "Added",
+                format!("dependency `{id}` with version `{version}`"),
+            )?;
+        }
 
         Ok(())
     }
@@ -141,7 +160,10 @@ impl AddCommand {
         }
     }
 
-    fn add(&self, pkg: &Package, version: &str) -> Result<()> {
+    fn with_dependencies<F>(&self, pkg: &Package, body: F) -> Result<()>
+    where
+        F: FnOnce(&mut Table) -> Result<()>,
+    {
         let manifest = fs::read_to_string(&pkg.manifest_path).with_context(|| {
             format!(
                 "failed to read manifest file `{path}`",
@@ -172,17 +194,7 @@ impl AddCommand {
                 })?
         };
 
-        match self.id.as_ref() {
-            Some(id) => {
-                dependencies[id.as_ref()] = value(InlineTable::from_iter([
-                    ("package", Value::from(self.package.id.to_string())),
-                    ("version", Value::from(version)),
-                ]));
-            }
-            _ => {
-                dependencies[self.package.id.as_ref()] = value(version);
-            }
-        }
+        body(dependencies)?;
 
         if self.dry_run {
             println!("{document}");
@@ -196,6 +208,39 @@ impl AddCommand {
         }
 
         Ok(())
+    }
+
+    fn add(&self, pkg: &Package, version: &str) -> Result<()> {
+        self.with_dependencies(pkg, |dependencies| {
+            match self.id.as_ref() {
+                Some(id) => {
+                    dependencies[id.as_ref()] = value(InlineTable::from_iter([
+                        ("package", Value::from(self.package.id.to_string())),
+                        ("version", Value::from(version)),
+                    ]));
+                }
+                _ => {
+                    dependencies[self.package.id.as_ref()] = value(version);
+                }
+            }
+            Ok(())
+        })
+    }
+
+    fn add_from_path(&self, pkg: &Package, path: &Path) -> Result<()> {
+        self.with_dependencies(pkg, |dependencies| {
+            let key = match self.id.as_ref() {
+                Some(id) => id.as_ref(),
+                None => self.package.id.as_ref(),
+            };
+
+            dependencies[key] = value(InlineTable::from_iter([(
+                "path",
+                Value::from(path.to_str().unwrap()),
+            )]));
+
+            Ok(())
+        })
     }
 
     fn validate(&self, metadata: &ComponentMetadata, id: &PackageId) -> Result<()> {
