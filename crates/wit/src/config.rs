@@ -9,6 +9,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
+use toml_edit::Item;
 use url::Url;
 use warg_protocol::registry::PackageId;
 
@@ -115,12 +116,21 @@ impl Config {
     pub fn write(&self, path: impl AsRef<Path>) -> Result<()> {
         let path = path.as_ref();
 
-        let contents = toml_edit::ser::to_string_pretty(self).with_context(|| {
+        let mut contents = toml_edit::ser::to_document(self).with_context(|| {
             format!(
                 "failed to serialize configuration file `{path}`",
                 path = path.display()
             )
         })?;
+
+        // If the dependencies or registries tables are inline, convert
+        // to a table
+        for name in ["dependencies", "registries"] {
+            if let Some(table) = contents.get_mut(name).and_then(Item::as_inline_table_mut) {
+                let table = std::mem::take(table);
+                contents[name] = Item::Table(table.into_table());
+            }
+        }
 
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent).with_context(|| {
@@ -131,7 +141,7 @@ impl Config {
             })?;
         }
 
-        fs::write(path, contents).with_context(|| {
+        fs::write(path, contents.to_string()).with_context(|| {
             format!(
                 "failed to write configuration file `{path}`",
                 path = path.display()

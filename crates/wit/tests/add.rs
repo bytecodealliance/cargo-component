@@ -155,3 +155,18 @@ async fn does_not_modify_manifest_for_dry_run() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn validate_add_from_path() -> Result<()> {
+    let project = Project::new("foo")?;
+
+    project
+        .wit("add --path foo/baz foo:baz")
+        .assert()
+        .stderr(contains("Added dependency `foo:baz` from path `foo/baz`"));
+
+    let manifest = fs::read_to_string(project.root().join("wit.toml"))?;
+    assert!(contains(r#""foo:baz" = { path = "foo/baz" }"#).eval(&manifest));
+
+    Ok(())
+}

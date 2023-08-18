@@ -1,3 +1,5 @@
+use std::path::PathBuf;
+
 use crate::{
     config::{Config, CONFIG_FILE_NAME},
     resolve_dependencies,
@@ -67,6 +69,10 @@ pub struct AddCommand {
     #[clap(long, value_name = "ID")]
     pub id: Option<PackageId>,
 
+    /// Add a package dependency to a file or directory.
+    #[clap(long = "path", value_name = "PATH")]
+    pub path: Option<PathBuf>,
+
     /// The id of the package to add a dependency to.
     #[clap(value_name = "PACKAGE")]
     pub package: VersionedPackageId,
@@ -86,50 +92,63 @@ impl AddCommand {
         }
 
         let warg_config = warg_client::Config::from_default_file()?.unwrap_or_default();
-
         let terminal = self.common.new_terminal();
-        let version = resolve_version(
-            &config,
-            &warg_config,
-            &self.package,
-            &self.registry,
-            &terminal,
-        )
-        .await?;
+        let message = match self.path.as_deref() {
+            Some(path) => {
+                config
+                    .dependencies
+                    .insert(id.clone(), Dependency::Local(path.to_path_buf()));
 
-        let package = RegistryPackage {
-            id: self.id.is_some().then(|| self.package.id.clone()),
-            version: version.parse().expect("expected a valid version"),
-            registry: self.registry,
+                format!(
+                    "dependency `{id}` from path `{path}`{dry_run}",
+                    path = path.display(),
+                    dry_run = if self.dry_run { " (dry run)" } else { "" }
+                )
+            }
+            None => {
+                let version = resolve_version(
+                    &config,
+                    &warg_config,
+                    &self.package,
+                    &self.registry,
+                    &terminal,
+                )
+                .await?;
+
+                let package = RegistryPackage {
+                    id: self.id.is_some().then(|| self.package.id.clone()),
+                    version: version.parse().expect("expected a valid version"),
+                    registry: self.registry,
+                };
+
+                let id = self.id.as_ref().unwrap_or(&self.package.id);
+
+                config
+                    .dependencies
+                    .insert(id.clone(), Dependency::Package(package));
+
+                // Resolve all dependencies to ensure that the lockfile is up to date.
+                resolve_dependencies(
+                    &config,
+                    &config_path,
+                    &warg_config,
+                    &terminal,
+                    !self.dry_run,
+                )
+                .await?;
+
+                format!(
+                    "dependency `{id}` with version `{version}`{dry_run}",
+                    dry_run = if self.dry_run { " (dry run)" } else { "" }
+                )
+            }
         };
-
-        let id = self.id.as_ref().unwrap_or(&self.package.id);
-
-        config
-            .dependencies
-            .insert(id.clone(), Dependency::Package(package));
-
-        // Resolve all dependencies to ensure that the lockfile is up to date.
-        resolve_dependencies(
-            &config,
-            &config_path,
-            &warg_config,
-            &terminal,
-            !self.dry_run,
-        )
-        .await?;
 
         if !self.dry_run {
             config.write(config_path)?;
         }
 
-        terminal.status(
-            if self.dry_run { "Would add" } else { "Added" },
-            format!(
-                "dependency `{id}` with version `{version}`{dry_run}",
-                dry_run = if self.dry_run { " (dry run)" } else { "" }
-            ),
-        )?;
+        terminal.status(if self.dry_run { "Would add" } else { "Added" }, message)?;
 
         Ok(())
     }
