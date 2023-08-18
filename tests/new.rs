@@ -141,8 +141,12 @@ async fn it_targets_a_world() -> Result<()> {
         "1.2.3",
         r#"package foo:bar@1.2.3
 world foo {
-    import foo: func() -> string
-    export bar: func() -> string
+    resource file {
+        open: static func(path: string) -> file
+        path: func() -> string
+    }
+    import foo: func() -> file
+    export bar: func(file: borrow<file>) -> file
 }"#,
         true,
     )

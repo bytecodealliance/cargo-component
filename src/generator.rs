@@ -17,7 +17,7 @@ use warg_protocol::registry::PackageId;
 use wit_bindgen_rust_lib::to_rust_ident;
 use wit_component::DecodedWasm;
 use wit_parser::{
-    Function, Interface, Resolve, Type, TypeDef, TypeDefKind, TypeId, TypeOwner, WorldId,
+    Function, Handle, Interface, Resolve, Type, TypeDef, TypeDefKind, TypeId, TypeOwner, WorldId,
     WorldItem, WorldKey,
 };
 
@@ -491,8 +491,15 @@ impl<'a> SourceGenerator<'a> {
                 source.push('>');
             }
             TypeDefKind::Type(ty) => Self::print_type(resolve, ty, source, trie)?,
-            TypeDefKind::Resource | TypeDefKind::Handle(_) => {
-                todo!("implement resources support")
+            TypeDefKind::Handle(Handle::Own(id)) => {
+                Self::print_type_id(resolve, *id, source, trie)?
+            }
+            TypeDefKind::Handle(Handle::Borrow(id)) => {
+                source.push('&');
+                Self::print_type_id(resolve, *id, source, trie)?
+            }
+            TypeDefKind::Resource => {
+                bail!("unsupported anonymous resource type found in WIT package")
             }
             TypeDefKind::Unknown => unreachable!(),
         }
