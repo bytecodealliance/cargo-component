@@ -256,10 +256,8 @@ impl AddCommand {
                 }
                 None => {}
             }
-        } else {
-            if metadata.section.dependencies.contains_key(id) {
-                bail!("cannot add dependency `{id}` as it conflicts with an existing dependency");
-            }
+        } else if metadata.section.dependencies.contains_key(id) {
+            bail!("cannot add dependency `{id}` as it conflicts with an existing dependency");
         }
 
         Ok(())
