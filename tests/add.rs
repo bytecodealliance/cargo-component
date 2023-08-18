@@ -101,14 +101,6 @@ async fn adds_dependencies_to_target_component() -> Result<()> {
             "cannot add dependency `foo:bar` as it conflicts with an existing dependency",
         ));
 
-    project
-        .cargo_component("add --target --path foo/baz foo:baz")
-        .assert()
-        .stderr(contains("Added dependency `foo:baz` from path `foo/baz`"));
-
-    let manifest = fs::read_to_string(project.root().join("Cargo.toml"))?;
-    assert!(contains(r#""foo:baz" = { path = "foo/baz" }"#).eval(&manifest));
-
     Ok(())
 }
 
@@ -154,6 +146,27 @@ async fn prints_modified_manifest_for_dry_run() -> Result<()> {
 
     // Assert the dependency was added to the manifest
     assert!(!contains(r#"\"foo:bar\" = "1.2.3""#).eval(&manifest));
+
+    Ok(())
+}
+
+#[test]
+fn validate_add_from_path() -> Result<()> {
+    let project = Project::new("foo")?;
+
+    project
+        .cargo_component("add --path foo/baz foo:baz")
+        .assert()
+        .stderr(contains("Added dependency `foo:baz` from path `foo/baz`"));
+
+    project
+        .cargo_component("add --target --path foo/qux foo:qux")
+        .assert()
+        .stderr(contains("Added dependency `foo:qux` from path `foo/qux`"));
+
+    let manifest = fs::read_to_string(project.root().join("Cargo.toml"))?;
+    assert!(contains(r#""foo:baz" = { path = "foo/baz" }"#).eval(&manifest));
+    assert!(contains(r#""foo:qux" = { path = "foo/qux" }"#).eval(&manifest));
 
     Ok(())
 }

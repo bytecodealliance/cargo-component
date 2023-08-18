@@ -105,7 +105,14 @@ impl Serialize for Dependency {
                     .serialize(serializer)
                 }
             }
-            Self::Local(path) => path.serialize(serializer),
+            Self::Local(path) => {
+                #[derive(Serialize)]
+                struct Entry<'a> {
+                    path: &'a PathBuf,
+                }
+
+                Entry { path }.serialize(serializer)
+            }
         }
     }
 }
