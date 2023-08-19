@@ -1,5 +1,16 @@
 package example:component
 
+/// An example fileystem interface.
+interface filesystem {
+    flags permissions {
+        read,
+        write,
+        exec,
+    }
+
+    get-permissions: func() -> list<permissions>
+}
+
 /// An example cache interface.
 interface cache {
     /// Get a value from the cache.
@@ -17,6 +28,9 @@ interface backend {
 
 /// An example world for the component to target.
 world example {
+    /// The filesystem to use.
+    import filesystem
+
     /// The cache to use.
     import cache
 
