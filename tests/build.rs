@@ -367,7 +367,11 @@ fn empty_world_with_dep_valid() -> Result<()> {
             package foo:bar
 
             world the-world {
-                export hello: func()
+                flags foo {
+                    bar
+                }
+        
+                export hello: func() -> foo
             }
         ",
     )?;
@@ -376,12 +380,12 @@ fn empty_world_with_dep_valid() -> Result<()> {
         project.root().join("src/lib.rs"),
         "
             cargo_component_bindings::generate!();
-            use bindings::TheWorld;
+            use bindings::{TheWorld, Foo};
             struct Component;
 
             impl TheWorld for Component {
-                fn hello() {
-                    todo!()
+                fn hello() -> Foo {
+                    Foo::BAR
                 }
             }
         ",

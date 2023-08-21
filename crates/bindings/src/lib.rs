@@ -8,3 +8,7 @@ pub use cargo_component_macro::generate;
 // Re-export `wit_bindgen::rt` module for the generated code to use.
 #[doc(hidden)]
 pub use wit_bindgen::rt;
+
+// Re-export `wit_bindgen::bitflags` module for the generated code to use.
+#[doc(hidden)]
+pub use wit_bindgen::bitflags;
