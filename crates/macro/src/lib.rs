@@ -307,7 +307,8 @@ impl Config {
         let opts = Opts {
             exports,
             ownership: self.ownership,
-            runtime_path: Some("cargo_component_bindings::rt".to_string()),
+            runtime_path: Some("::cargo_component_bindings::rt".to_string()),
+            bitflags_path: Some("::cargo_component_bindings::bitflags".to_string()),
             ..Default::default()
         };
 

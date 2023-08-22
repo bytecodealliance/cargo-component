@@ -70,7 +70,7 @@ tokio = { version = "1.32.0", default-features = false, features = [
 tokio-util = "0.7.8"
 heck = "0.4.1"
 semver = "1.0.18"
-serde = { version = "1.0.183", features = ["derive"] }
+serde = { version = "1.0.185", features = ["derive"] }
 serde_json = "1.0.105"
 indexmap = "2.0.0"
 url = { version = "2.4.0", features = ["serde"] }
@@ -91,7 +91,9 @@ bytes = "1.4.0"
 proc-macro2 = "1.0.66"
 quote = "1.0.33"
 syn = "2.0.29"
-wit-bindgen-rust-lib = "0.10.0"
-wit-bindgen-core = "0.10.0"
-wit-bindgen-rust = "0.10.0"
-wit-bindgen = "0.10.0"
+
+# TODO: Update on next release to not use git
+wit-bindgen-rust-lib = { git = "https://github.com/bytecodealliance/wit-bindgen" }
+wit-bindgen-core = { git = "https://github.com/bytecodealliance/wit-bindgen" }
+wit-bindgen-rust = { git = "https://github.com/bytecodealliance/wit-bindgen" }
+wit-bindgen = { git = "https://github.com/bytecodealliance/wit-bindgen" }
