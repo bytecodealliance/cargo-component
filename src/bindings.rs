@@ -17,8 +17,8 @@ use std::{
 use warg_protocol::registry::PackageId;
 use wit_component::DecodedWasm;
 use wit_parser::{
-    Interface, Package, PackageName, Resolve, UnresolvedPackage, World, WorldId, WorldItem,
-    WorldKey,
+    Interface, Package, PackageName, Resolve, Type, TypeDefKind, TypeOwner, UnresolvedPackage,
+    World, WorldId, WorldItem, WorldKey,
 };
 
 fn named_world_key<'a>(resolve: &'a Resolve, orig: &'a WorldKey, prefix: &str) -> WorldKey {
@@ -467,6 +467,9 @@ impl<'a> BindingsEncoder<'a> {
     }
 
     // This function imports in the target world the exports of the source world.
+    //
+    // This is used for dependencies on other components so that their exports may
+    // be imported by the component being built.
     fn import_world(resolve: &mut Resolve, source: WorldId, target: WorldId) -> Result<()> {
         let mut types = IndexMap::default();
         let mut functions = IndexMap::default();
@@ -476,6 +479,19 @@ impl<'a> BindingsEncoder<'a> {
         {
             let source = &resolve.worlds[source];
             name = source.name.clone();
+
+            // Check for imported types, which must also import any owning interfaces
+            for item in source.imports.values() {
+                if let WorldItem::Type(ty) = &item {
+                    if let TypeDefKind::Type(Type::Id(ty)) = resolve.types[*ty].kind {
+                        if let TypeOwner::Interface(i) = resolve.types[ty].owner {
+                            interfaces.insert(WorldKey::Interface(i), i);
+                        }
+                    }
+                }
+            }
+
+            // Add imports for all exported items
             for (key, item) in &source.exports {
                 match item {
                     WorldItem::Function(f) => {
@@ -493,10 +509,12 @@ impl<'a> BindingsEncoder<'a> {
 
         let target = &mut resolve.worlds[target];
         for (key, id) in interfaces {
+            let named = matches!(key, WorldKey::Name(_));
             if target
                 .imports
-                .insert(key.clone(), WorldItem::Interface(id))
+                .insert(key, WorldItem::Interface(id))
                 .is_some()
+                && named
             {
                 let iface = &resolve.interfaces[id];
                 let pkg = &resolve.packages[iface.package.expect("interface has no package")];

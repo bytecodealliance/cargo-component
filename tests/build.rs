@@ -625,3 +625,105 @@ fn it_builds_resources_with_specified_ownership_model() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn it_builds_with_a_component_dependency() -> Result<()> {
+    let root = create_root()?;
+
+    let comp1 = Project::with_root(&root, "comp1", "")?;
+    comp1.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
+
+    fs::write(
+        comp1.root().join("wit/world.wit"),
+        "
+package my:comp1
+
+interface types {
+    record seed {
+        value: u32,
+    }
+}
+
+world random-generator {
+    use types.{seed}
+    export rand: func(seed: seed) -> u32
+}                
+",
+    )?;
+
+    fs::write(
+        comp1.root().join("src/lib.rs"),
+        r#"
+cargo_component_bindings::generate!();
+
+use bindings::{RandomGenerator, Seed};
+
+struct Component;
+
+impl RandomGenerator for Component {
+    fn rand(seed: Seed) -> u32 {
+        seed.value + 1
+    }
+}
+"#,
+    )?;
+
+    comp1
+        .cargo_component("build --release")
+        .assert()
+        .stderr(contains("Finished release [optimized] target(s)"))
+        .success();
+
+    let dep = comp1.release_wasm("comp1");
+    validate_component(&dep)?;
+
+    let comp2 = Project::with_root(&root, "comp2", "")?;
+    comp2.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        doc["package"]["metadata"]["component"]["dependencies"]["my:comp1"]["path"] =
+            value(dep.display().to_string());
+        Ok(doc)
+    })?;
+
+    fs::write(
+        comp2.root().join("wit/world.wit"),
+        "
+package my:comp2
+
+world random-generator {
+    export rand: func() -> u32
+}                
+",
+    )?;
+
+    fs::write(
+        comp2.root().join("src/lib.rs"),
+        r#"
+cargo_component_bindings::generate!();
+
+use bindings::{RandomGenerator, comp1};
+
+struct Component;
+
+impl RandomGenerator for Component {
+    fn rand() -> u32 {
+        comp1::rand(comp1::Seed { value: 1 })
+    }
+}
+"#,
+    )?;
+
+    comp2
+        .cargo_component("build --release")
+        .assert()
+        .stderr(contains("Finished release [optimized] target(s)"))
+        .success();
+
+    let path: std::path::PathBuf = comp2.release_wasm("comp2");
+    validate_component(&path)?;
+
+    Ok(())
+}
