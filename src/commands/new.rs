@@ -72,7 +72,7 @@ pub struct NewCommand {
     pub name: Option<String>,
 
     /// Code editor to use for rust-analyzer integration, defaults to `vscode`
-    #[clap(long = "editor", value_name = "EDITOR", value_parser = ["vscode", "none"])]
+    #[clap(long = "editor", value_name = "EDITOR", value_parser = ["emacs", "vscode", "none"])]
     pub editor: Option<String>,
 
     /// Use the specified target world from a WIT package.
@@ -447,6 +447,32 @@ world example {{
                     r#"{
     "rust-analyzer.check.overrideCommand": ["cargo", "component", "check", "--message-format=json"]
 }
+"#,
+                )
+                .with_context(|| {
+                    format!(
+                        "failed to write editor settings file `{path}`",
+                        path = settings_path.display()
+                    )
+                })
+            }
+            Some("emacs") => {
+                let settings_path = out_dir.join(".dir-locals.el");
+
+                fs::create_dir_all(out_dir)?;
+
+                fs::write(
+                    &settings_path,
+                    r#";;; Directory Local Variables
+;;; For more information see (info "(emacs) Directory Variables")
+
+((lsp-mode . ((lsp-rust-analyzer-cargo-watch-args . ["check"
+                                                     (\, "--message-format=json")])
+              (lsp-rust-analyzer-cargo-watch-command . "component")
+              (lsp-rust-analyzer-cargo-override-command . ["cargo"
+                                                           (\, "component")
+                                                           (\, "check")
+                                                           (\, "--message-format=json")]))))
 "#,
                 )
                 .with_context(|| {
