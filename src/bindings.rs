@@ -447,6 +447,7 @@ impl<'a> BindingsEncoder<'a> {
             name: pkg_name.clone(),
             interfaces: Default::default(),
             worlds: Default::default(),
+            docs: Default::default(),
         });
 
         resolve.package_names.insert(pkg_name, package);

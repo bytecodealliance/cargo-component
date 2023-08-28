@@ -199,11 +199,11 @@ The implementation of the component will be in `src/lib.rs`:
 ```rust
 cargo_component_bindings::generate!();
 
-use bindings::Example;
+use bindings::Guest;
 
 struct Component;
 
-impl Example for Component {
+impl Guest for Component {
     /// Say hello!
     fn hello_world() -> String {
         "Hello, World!".to_string()

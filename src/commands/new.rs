@@ -338,11 +338,11 @@ fn main() {
                 } else {
                     Ok(r#"cargo_component_bindings::generate!();
 
-use bindings::Example;
+use bindings::Guest;
 
 struct Component;
 
-impl Example for Component {
+impl Guest for Component {
     /// Say hello!
     fn hello_world() -> String {
         "Hello, World!".to_string()
@@ -420,7 +420,7 @@ impl Example for Component {
 /// An example world for the component to target.
 world example {{
     export hello-world: func() -> string
-}}                
+}}
 "#,
                 ns = escape_wit(&name.namespace),
                 pkg = escape_wit(&name.name),

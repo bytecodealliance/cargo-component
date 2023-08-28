@@ -287,7 +287,7 @@ world example {
     fs::write(
         project.root().join("src/lib.rs"),
         "cargo_component_bindings::generate!();
-use bindings::exports::{foo::bar::baz::{Baz, Ty}, bar::baz::qux::Qux};
+use bindings::exports::{foo::bar::baz::{Guest as Baz, Ty}, bar::baz::qux::Guest as Qux};
 
 struct Component;
 
@@ -330,11 +330,11 @@ fn it_builds_with_a_specified_implementor() -> Result<()> {
     implementor: CustomImplementor
 });
 
-use bindings::Example;
+use bindings::Guest;
 
 struct CustomImplementor;
 
-impl Example for CustomImplementor {
+impl Guest for CustomImplementor {
     fn hello_world() -> String {
         todo!()
     }
@@ -370,7 +370,7 @@ fn empty_world_with_dep_valid() -> Result<()> {
                 flags foo {
                     bar
                 }
-        
+
                 export hello: func() -> foo
             }
         ",
@@ -380,10 +380,10 @@ fn empty_world_with_dep_valid() -> Result<()> {
         project.root().join("src/lib.rs"),
         "
             cargo_component_bindings::generate!();
-            use bindings::{TheWorld, Foo};
+            use bindings::{Guest, Foo};
             struct Component;
 
-            impl TheWorld for Component {
+            impl Guest for Component {
                 fn hello() -> Foo {
                     Foo::BAR
                 }
@@ -465,7 +465,7 @@ fn it_builds_with_resources() -> Result<()> {
 
             pub struct KeyedInteger(Cell<u32>);
 
-            impl bindings::exports::baz::KeyedInteger for KeyedInteger {
+            impl bindings::exports::baz::GuestKeyedInteger for KeyedInteger {
                 fn new(x: u32) -> Self {
                     Self(Cell::new(x))
                 }
@@ -529,11 +529,11 @@ fn it_builds_with_resources_with_custom_implementor() -> Result<()> {
             });
 
             use std::cell::Cell;
-            use bindings::exports::baz::KeyedInteger;
+            use bindings::exports::baz::GuestKeyedInteger;
 
             pub struct MyKeyedInteger(Cell<u32>);
 
-            impl KeyedInteger for MyKeyedInteger {
+            impl GuestKeyedInteger for MyKeyedInteger {
                 fn new(x: u32) -> Self {
                     Self(Cell::new(x))
                 }
@@ -598,7 +598,7 @@ fn it_builds_resources_with_specified_ownership_model() -> Result<()> {
 
             pub struct KeyedInteger(Cell<u32>);
 
-            impl bindings::exports::baz::KeyedInteger for KeyedInteger {
+            impl bindings::exports::baz::GuestKeyedInteger for KeyedInteger {
                 fn new(x: u32) -> Self {
                     Self(Cell::new(x))
                 }
@@ -650,7 +650,7 @@ interface types {
 world random-generator {
     use types.{seed}
     export rand: func(seed: seed) -> u32
-}                
+}
 ",
     )?;
 
@@ -659,11 +659,11 @@ world random-generator {
         r#"
 cargo_component_bindings::generate!();
 
-use bindings::{RandomGenerator, Seed};
+use bindings::{Guest, Seed};
 
 struct Component;
 
-impl RandomGenerator for Component {
+impl Guest for Component {
     fn rand(seed: Seed) -> u32 {
         seed.value + 1
     }
@@ -695,7 +695,7 @@ package my:comp2
 
 world random-generator {
     export rand: func() -> u32
-}                
+}
 ",
     )?;
 
@@ -704,11 +704,11 @@ world random-generator {
         r#"
 cargo_component_bindings::generate!();
 
-use bindings::{RandomGenerator, comp1};
+use bindings::{Guest, comp1};
 
 struct Component;
 
-impl RandomGenerator for Component {
+impl Guest for Component {
     fn rand() -> u32 {
         comp1::rand(comp1::Seed { value: 1 })
     }
