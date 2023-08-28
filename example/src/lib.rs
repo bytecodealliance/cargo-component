@@ -2,12 +2,12 @@ cargo_component_bindings::generate!();
 
 use bindings::{
     example::component::{backend as origin, cache},
-    exports::example::component::backend::Backend,
+    exports::example::component::backend::Guest,
 };
 
 struct Component;
 
-impl Backend for Component {
+impl Guest for Component {
     fn fetch(url: String) -> Vec<u8> {
         if let Some(data) = cache::get(&url) {
             return data;
