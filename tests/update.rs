@@ -173,9 +173,9 @@ world foo {
         .stderr(contains("`foo:bar` v1.0.0 -> v1.1.0"));
 
     let source = r#"cargo_component_bindings::generate!();
-use bindings::{baz, Foo};
+use bindings::{baz, Guest};
 struct Component;
-impl Foo for Component {
+impl Guest for Component {
     fn bar() -> String {
         baz()
     }

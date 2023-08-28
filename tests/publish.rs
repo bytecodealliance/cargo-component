@@ -43,7 +43,7 @@ world foo {
 
     // Ensure there's a using declaration in the generated source
     let source = fs::read_to_string(project.root().join("src/lib.rs"))?;
-    assert!(source.contains("use bindings::Foo;"));
+    assert!(source.contains("use bindings::Guest;"));
 
     project
         .cargo_component("publish --init")
@@ -102,7 +102,7 @@ async fn it_publishes_a_dependency() -> Result<()> {
         &config,
         "my:world",
         "1.0.0",
-        r#"package my:%world@1.0.0 
+        r#"package my:%world@1.0.0
 world foo {
     export bar: func() -> string
 }"#,
@@ -138,9 +138,9 @@ world foo {
         .success();
 
     let source = r#"cargo_component_bindings::generate!();
-use bindings::Foo;
+use bindings::Guest;
 struct Component;
-impl Foo for Component {
+impl Guest for Component {
     fn bar() -> String {
         bindings::foo::bar()
     }

@@ -171,14 +171,10 @@ impl UseTrie {
     /// Inserts an export trait for the given world key.
     fn insert_export_trait(&mut self, resolve: &Resolve, key: &WorldKey) -> Cow<str> {
         match key {
-            WorldKey::Name(name) => self.insert(["bindings", "exports", name.as_str()], name),
+            WorldKey::Name(name) => self.insert(["bindings", "exports", name.as_str()], "Guest"),
             WorldKey::Interface(id) => {
                 let iface = &resolve.interfaces[*id];
-                self.insert_interface_type(
-                    resolve,
-                    iface,
-                    iface.name.as_deref().expect("unnamed interface"),
-                )
+                self.insert_interface_type(resolve, iface, "Guest")
             }
         }
     }
@@ -261,7 +257,7 @@ impl<'a> SourceGenerator<'a> {
             writeln!(
                 &mut imp,
                 "\nimpl {name} for Component {{",
-                name = trie.insert(["bindings"], &world.name)
+                name = trie.insert(["bindings"], "Guest")
             )
             .unwrap();
 
@@ -474,9 +470,6 @@ impl<'a> SourceGenerator<'a> {
             }
             TypeDefKind::Enum(_) => {
                 bail!("unsupported anonymous enum type found in WIT package")
-            }
-            TypeDefKind::Union(_) => {
-                bail!("unsupported anonymous union type found in WIT package")
             }
             TypeDefKind::Future(ty) => {
                 source.push_str("Future<");
