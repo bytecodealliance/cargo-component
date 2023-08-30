@@ -12,7 +12,6 @@ use cargo_component_core::{
 use config::Config;
 use indexmap::{IndexMap, IndexSet};
 use lock::{acquire_lock_file_ro, acquire_lock_file_rw, to_lock_file};
-use semver::Version;
 use std::{
     collections::{HashMap, HashSet},
     path::Path,
@@ -116,7 +115,7 @@ fn parse_wit_package(
     }
 
     // Parse the root package itself
-    let mut root = UnresolvedPackage::parse_dir(dir).with_context(|| {
+    let root = UnresolvedPackage::parse_dir(dir).with_context(|| {
         format!(
             "failed to parse package from directory `{dir}`",
             dir = dir.display()
@@ -135,57 +134,35 @@ fn parse_wit_package(
     assert!(visiting.is_empty());
 
     // Merge all of the dependencies first
-    let mut versions = HashMap::new();
     for name in order {
-        let pkg = match deps.remove(&name).unwrap() {
+        match deps.remove(&name).unwrap() {
             DecodedDependency::Wit {
                 resolution,
-                mut package,
+                package,
             } => {
-                fixup_foreign_deps(&mut package, &versions);
                 source_files.extend(package.source_files().map(Path::to_path_buf));
                 merged.push(package).with_context(|| {
                     format!("failed to merge dependency `{id}`", id = resolution.id())
-                })?
+                })?;
             }
             DecodedDependency::Wasm {
                 resolution,
                 decoded,
             } => {
-                let (resolve, pkg) = match decoded {
-                    DecodedWasm::WitPackage(resolve, pkg) => (resolve, pkg),
-                    DecodedWasm::Component(resolve, world) => {
-                        let pkg = resolve.worlds[world].package.unwrap();
-                        (resolve, pkg)
-                    }
+                let resolve = match decoded {
+                    DecodedWasm::WitPackage(resolve, _) => resolve,
+                    DecodedWasm::Component(resolve, _) => resolve,
                 };
 
-                merged
-                    .merge(resolve)
-                    .with_context(|| {
-                        format!(
-                            "failed to merge world of dependency `{id}`",
-                            id = resolution.id()
-                        )
-                    })?
-                    .packages[pkg.index()]
+                merged.merge(resolve).with_context(|| {
+                    format!(
+                        "failed to merge world of dependency `{id}`",
+                        id = resolution.id()
+                    )
+                })?;
             }
         };
-
-        let pkg = &merged.packages[pkg];
-        if let Some(version) = &pkg.name.version {
-            versions
-                .entry(PackageName {
-                    namespace: pkg.name.namespace.clone(),
-                    name: pkg.name.name.clone(),
-                    version: None,
-                })
-                .or_default()
-                .push(version.clone());
-        }
     }
-
-    fixup_foreign_deps(&mut root, &versions);
 
     let package = merged.push(root).with_context(|| {
         format!(
@@ -195,27 +172,6 @@ fn parse_wit_package(
     })?;
 
     return Ok((merged, package));
-
-    fn fixup_foreign_deps(
-        package: &mut UnresolvedPackage,
-        versions: &HashMap<PackageName, Vec<Version>>,
-    ) {
-        package.foreign_deps = std::mem::take(&mut package.foreign_deps)
-            .into_iter()
-            .map(|(mut k, v)| {
-                match versions.get(&k) {
-                    // Only assign the version if there's exactly one matching package
-                    // Otherwise, let `wit-parser` handle the ambiguity
-                    Some(versions) if versions.len() == 1 => {
-                        k.version = Some(versions[0].clone());
-                    }
-                    _ => {}
-                }
-
-                (k, v)
-            })
-            .collect();
-    }
 
     fn visit<'a>(
         dep: &'a DecodedDependency<'a>,
@@ -295,7 +251,6 @@ async fn build_wit_package(
         );
     }
 
-    pkg.name.version = Some(config.version.clone());
     let id = format!("{ns}:{name}", ns = pkg.name.namespace, name = pkg.name.name).parse()?;
 
     let bytes = wit_component::encode(&resolve, package)?;

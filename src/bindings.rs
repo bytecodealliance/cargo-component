@@ -8,7 +8,6 @@ use crate::{
 use anyhow::{bail, Context, Result};
 use cargo_component_core::registry::DecodedDependency;
 use indexmap::{IndexMap, IndexSet};
-use semver::Version;
 use std::{
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
@@ -101,9 +100,7 @@ impl<'a> BindingsEncoder<'a> {
     }
 
     /// Encodes the target world to a binary format.
-    ///
-    /// If an option isn't specified, the option from the package resolution will be used.
-    pub fn encode(mut self, version: Option<&Version>) -> Result<Vec<u8>> {
+    pub fn encode(mut self) -> Result<Vec<u8>> {
         let world = &self.resolve.worlds[self.world];
         let pkg_id = world.package.context("world has no package")?;
         let pkg = &mut self.resolve.packages[pkg_id];
@@ -112,8 +109,6 @@ impl<'a> BindingsEncoder<'a> {
             .package_names
             .remove(&pkg.name)
             .with_context(|| format!("package name `{name}` is not in map", name = pkg.name))?;
-
-        pkg.name.version = Some(version.unwrap_or(&self.resolution.metadata.version).clone());
 
         if self
             .resolve
@@ -250,7 +245,7 @@ impl<'a> BindingsEncoder<'a> {
         }
 
         // Parse the target package itself
-        let mut root = if path.is_dir() {
+        let root = if path.is_dir() {
             UnresolvedPackage::parse_dir(path).with_context(|| {
                 format!(
                     "failed to parse local target from directory `{}`",
@@ -278,60 +273,38 @@ impl<'a> BindingsEncoder<'a> {
         assert!(visiting.is_empty());
 
         // Merge all of the dependencies first
-        let mut versions = HashMap::new();
         for name in order {
-            let pkg = match deps.remove(&name).unwrap() {
+            match deps.remove(&name).unwrap() {
                 DecodedDependency::Wit {
                     resolution,
-                    mut package,
+                    package,
                 } => {
-                    fixup_foreign_deps(&mut package, &versions);
                     source_files.extend(package.source_files().map(Path::to_path_buf));
                     merged.push(package).with_context(|| {
                         format!(
                             "failed to merge target dependency `{id}`",
                             id = resolution.id()
                         )
-                    })?
+                    })?;
                 }
                 DecodedDependency::Wasm {
                     resolution,
                     decoded,
                 } => {
-                    let (resolve, pkg) = match decoded {
-                        DecodedWasm::WitPackage(resolve, pkg) => (resolve, pkg),
-                        DecodedWasm::Component(resolve, world) => {
-                            let pkg = resolve.worlds[world].package.unwrap();
-                            (resolve, pkg)
-                        }
+                    let resolve = match decoded {
+                        DecodedWasm::WitPackage(resolve, _) => resolve,
+                        DecodedWasm::Component(resolve, _) => resolve,
                     };
 
-                    merged
-                        .merge(resolve)
-                        .with_context(|| {
-                            format!(
-                                "failed to merge world of target dependency `{id}`",
-                                id = resolution.id()
-                            )
-                        })?
-                        .packages[pkg.index()]
+                    merged.merge(resolve).with_context(|| {
+                        format!(
+                            "failed to merge world of target dependency `{id}`",
+                            id = resolution.id()
+                        )
+                    })?;
                 }
-            };
-
-            let pkg = &merged.packages[pkg];
-            if let Some(version) = &pkg.name.version {
-                versions
-                    .entry(PackageName {
-                        namespace: pkg.name.namespace.clone(),
-                        name: pkg.name.name.clone(),
-                        version: None,
-                    })
-                    .or_default()
-                    .push(version.clone());
             }
         }
-
-        fixup_foreign_deps(&mut root, &versions);
 
         let package = merged.push(root).with_context(|| {
             format!(
@@ -356,27 +329,6 @@ impl<'a> BindingsEncoder<'a> {
             })?;
 
         return Ok((merged, world, source_files));
-
-        fn fixup_foreign_deps(
-            package: &mut UnresolvedPackage,
-            versions: &HashMap<PackageName, Vec<Version>>,
-        ) {
-            package.foreign_deps = std::mem::take(&mut package.foreign_deps)
-                .into_iter()
-                .map(|(mut k, v)| {
-                    match versions.get(&k) {
-                        // Only assign the version if there's exactly one matching package
-                        // Otherwise, let `wit-parser` handle the ambiguity
-                        Some(versions) if versions.len() == 1 => {
-                            k.version = Some(versions[0].clone());
-                        }
-                        _ => {}
-                    }
-
-                    (k, v)
-                })
-                .collect();
-        }
 
         fn visit<'a>(
             dep: &'a DecodedDependency<'a>,

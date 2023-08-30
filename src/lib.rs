@@ -363,7 +363,7 @@ async fn encode_target_world(
                 ),
             )?;
 
-            let encoded = encoder.encode(None)?;
+            let encoded = encoder.encode()?;
             fs::create_dir_all(&output_dir).with_context(|| {
                 format!(
                     "failed to create output directory `{path}`",
