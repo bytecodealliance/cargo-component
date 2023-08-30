@@ -39,4 +39,4 @@ assert_cmd = "2.0.12"
 predicates = "3.0.3"
 warg-server = { git = "https://github.com/bytecodealliance/registry" }
 tokio-util = { workspace = true }
-wasmparser = "0.111.0"
+wasmparser = "0.112.0"

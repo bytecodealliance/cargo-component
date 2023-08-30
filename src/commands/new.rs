@@ -244,7 +244,7 @@ impl NewCommand {
 
         if !self.is_command() {
             doc["lib"] = table();
-            doc["lib"]["crate-type"] = value(Value::from_iter(["cdylib"].into_iter()));
+            doc["lib"]["crate-type"] = value(Value::from_iter(["cdylib"]));
         }
 
         let mut component = Table::new();
