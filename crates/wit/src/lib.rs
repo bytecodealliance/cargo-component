@@ -244,13 +244,6 @@ async fn build_wit_package(
     let (mut resolve, package) = parse_wit_package(dir, &dependencies)?;
 
     let pkg = &mut resolve.packages[package];
-    if pkg.name.version.is_some() {
-        bail!(
-            "package parsed from `{dir}` has an explicit version",
-            dir = dir.display()
-        );
-    }
-
     let id = format!("{ns}:{name}", ns = pkg.name.namespace, name = pkg.name.name).parse()?;
 
     let bytes = wit_component::encode(&resolve, package)?;
