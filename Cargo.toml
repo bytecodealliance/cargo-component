@@ -59,7 +59,7 @@ warg-protocol = { git = "https://github.com/bytecodealliance/registry" }
 warg-crypto = { git = "https://github.com/bytecodealliance/registry" }
 warg-client = { git = "https://github.com/bytecodealliance/registry" }
 anyhow = "1.0.75"
-clap = { version = "4.3.23", features = ["derive"] }
+clap = { version = "4.4.1", features = ["derive"] }
 toml_edit = { version = "0.19.14", features = ["serde"] }
 pretty_env_logger = "0.5.0"
 log = "0.4.20"
@@ -70,10 +70,10 @@ tokio = { version = "1.32.0", default-features = false, features = [
 tokio-util = "0.7.8"
 heck = "0.4.1"
 semver = "1.0.18"
-serde = { version = "1.0.185", features = ["derive"] }
+serde = { version = "1.0.188", features = ["derive"] }
 serde_json = "1.0.105"
 indexmap = "2.0.0"
-url = { version = "2.4.0", features = ["serde"] }
+url = { version = "2.4.1", features = ["serde"] }
 wit-parser = "0.11.0"
 wit-component = "0.14.0"
 wasm-metadata = "0.10.3"
