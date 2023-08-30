@@ -1,5 +1,5 @@
 use crate::support::*;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use assert_cmd::prelude::*;
 use predicates::str::contains;
 use std::fs;
@@ -54,6 +54,12 @@ world foo {
 
     validate_component(&project.release_wasm("foo"))?;
 
+    let path = project.root().join("Cargo-component.lock");
+    let contents = fs::read_to_string(&path)
+        .with_context(|| format!("failed to read lock file `{path}`", path = path.display()))?;
+
+    assert!(contents.contains("id = \"my:world\""));
+    assert!(contents.contains("version = \"1.0.0\""));
     Ok(())
 }
 
