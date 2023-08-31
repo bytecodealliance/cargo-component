@@ -284,9 +284,11 @@ async fn encode_targets(
         encode_target_world(config, resolution, bindings_dir.as_std_path()).await?;
     }
 
-    // Update the lock file
+    // Update the lock file if it exists or if the new lock file is non-empty
     let new_lock_file = map.to_lock_file();
-    if Some(&new_lock_file) != lock_file.as_ref() {
+    if (lock_file.is_some() || !new_lock_file.packages.is_empty())
+        && Some(&new_lock_file) != lock_file.as_ref()
+    {
         drop(file_lock);
         let file_lock = acquire_lock_file_rw(
             config.terminal(),
