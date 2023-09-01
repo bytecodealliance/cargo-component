@@ -180,6 +180,7 @@ impl PublishCommand {
         }
 
         let options = PublishOptions {
+            package,
             registry_url,
             init: self.init,
             id,

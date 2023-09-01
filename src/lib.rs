@@ -3,8 +3,9 @@
 #![deny(missing_docs)]
 
 use crate::target::install_wasm32_wasi;
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{bail, Context, Result};
 use bindings::BindingsEncoder;
+use bytes::Bytes;
 use cargo_component_core::{
     lock::{LockFile, LockFileResolver, LockedPackage, LockedPackageVersion},
     registry::create_client,
@@ -12,7 +13,6 @@ use cargo_component_core::{
 };
 use cargo_metadata::{Metadata, MetadataCommand, Package};
 use config::{CargoArguments, CargoPackageSpec, Config};
-use futures::TryStreamExt;
 use lock::{acquire_lock_file_ro, acquire_lock_file_rw};
 use metadata::ComponentMetadata;
 use registry::{PackageDependencyResolution, PackageResolutionMap};
@@ -24,11 +24,10 @@ use std::{
     process::Command,
     time::{Duration, SystemTime},
 };
-use tokio::io::BufReader;
-use tokio_util::io::ReaderStream;
 use warg_client::storage::{ContentStorage, PublishEntry, PublishInfo};
 use warg_crypto::signing::PrivateKey;
 use warg_protocol::registry::PackageId;
+use wasm_metadata::{Link, LinkType, RegistryMetadata};
 use wit_component::ComponentEncoder;
 
 mod bindings;
@@ -511,6 +510,8 @@ fn create_component(config: &Config, path: &Path, binary: bool) -> Result<()> {
 
 /// Represents options for a publish operation.
 pub struct PublishOptions<'a> {
+    /// The package to publish.
+    pub package: &'a Package,
     /// The registry URL to publish to.
     pub registry_url: &'a str,
     /// Whether to initialize the package or not.
@@ -527,6 +528,59 @@ pub struct PublishOptions<'a> {
     pub dry_run: bool,
 }
 
+fn add_registry_metadata(package: &Package, bytes: &[u8], path: &Path) -> Result<Vec<u8>> {
+    let mut metadata = RegistryMetadata::default();
+    if !package.authors.is_empty() {
+        metadata.set_authors(Some(package.authors.clone()));
+    }
+
+    if !package.categories.is_empty() {
+        metadata.set_categories(Some(package.categories.clone()));
+    }
+
+    metadata.set_description(package.description.clone());
+
+    // TODO: registry metadata should have keywords
+    // if !package.keywords.is_empty() {
+    //     metadata.set_keywords(Some(package.keywords.clone()));
+    // }
+
+    metadata.set_license(package.license.clone());
+
+    let mut links = Vec::new();
+    if let Some(docs) = &package.documentation {
+        links.push(Link {
+            ty: LinkType::Documentation,
+            value: docs.clone(),
+        });
+    }
+
+    if let Some(homepage) = &package.homepage {
+        links.push(Link {
+            ty: LinkType::Homepage,
+            value: homepage.clone(),
+        });
+    }
+
+    if let Some(repo) = &package.repository {
+        links.push(Link {
+            ty: LinkType::Repository,
+            value: repo.clone(),
+        });
+    }
+
+    if !links.is_empty() {
+        metadata.set_links(Some(links));
+    }
+
+    metadata.add_to_wasm(bytes).with_context(|| {
+        format!(
+            "failed to add registry metadata to component `{path}`",
+            path = path.display()
+        )
+    })
+}
+
 /// Publish a component for the given workspace and publish options.
 pub async fn publish(config: &Config, options: &PublishOptions<'_>) -> Result<()> {
     if options.dry_run {
@@ -538,17 +592,19 @@ pub async fn publish(config: &Config, options: &PublishOptions<'_>) -> Result<()
 
     let client = create_client(config.warg(), options.registry_url, config.terminal())?;
 
+    let bytes = fs::read(options.path).with_context(|| {
+        format!(
+            "failed to read component `{path}`",
+            path = options.path.display()
+        )
+    })?;
+
+    let bytes = add_registry_metadata(options.package, &bytes, options.path)?;
+
     let content = client
         .content()
         .store_content(
-            Box::pin(
-                ReaderStream::new(BufReader::new(
-                    tokio::fs::File::open(options.path).await.with_context(|| {
-                        format!("failed to open `{path}`", path = options.path.display())
-                    })?,
-                ))
-                .map_err(|e| anyhow!(e)),
-            ),
+            Box::pin(futures::stream::once(async { Ok(Bytes::from(bytes)) })),
             None,
         )
         .await?;
