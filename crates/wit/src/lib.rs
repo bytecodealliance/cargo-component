@@ -12,11 +12,7 @@ use cargo_component_core::{
 use config::Config;
 use indexmap::{IndexMap, IndexSet};
 use lock::{acquire_lock_file_ro, acquire_lock_file_rw, to_lock_file};
-use std::{
-    collections::{HashMap, HashSet},
-    path::Path,
-    time::Duration,
-};
+use std::{collections::HashSet, path::Path, time::Duration};
 use warg_client::storage::{ContentStorage, PublishEntry, PublishInfo};
 use warg_crypto::signing::PrivateKey;
 use warg_protocol::registry::PackageId;
@@ -89,29 +85,16 @@ fn parse_wit_package(
 
     // Start by decoding all of the dependencies
     let mut deps = IndexMap::new();
-    let mut unversioned: HashMap<_, Vec<_>> = HashMap::new();
     for (id, resolution) in dependencies {
         let decoded = resolution.decode()?;
         let name = decoded.package_name();
 
-        let versionless = PackageName {
-            namespace: name.namespace.clone(),
-            name: name.name.clone(),
-            version: None,
-        };
-
-        let (index, prev) = deps.insert_full(name.clone(), decoded);
-        if let Some(prev) = prev {
+        if let Some(prev) = deps.insert(name.clone(), decoded) {
             bail!(
                 "duplicate definitions of package `{name}` found while decoding dependency `{id}`",
                 name = prev.package_name()
             );
         }
-
-        // We're storing the dependencies with versionless package ids
-        // This allows us to resolve a versionless foreign dependency to a singular
-        // versioned dependency, if there is one
-        unversioned.entry(versionless).or_default().push(index);
     }
 
     // Parse the root package itself
@@ -128,7 +111,7 @@ fn parse_wit_package(
     let mut order = IndexSet::new();
     let mut visiting = HashSet::new();
     for dep in deps.values() {
-        visit(dep, &deps, &unversioned, &mut order, &mut visiting)?;
+        visit(dep, &deps, &mut order, &mut visiting)?;
     }
 
     assert!(visiting.is_empty());
@@ -176,7 +159,6 @@ fn parse_wit_package(
     fn visit<'a>(
         dep: &'a DecodedDependency<'a>,
         deps: &'a IndexMap<PackageName, DecodedDependency>,
-        unversioned: &HashMap<PackageName, Vec<usize>>,
         order: &mut IndexSet<PackageName>,
         visiting: &mut HashSet<&'a PackageName>,
     ) -> Result<()> {
@@ -191,35 +173,40 @@ fn parse_wit_package(
                 resolution,
             } => {
                 for name in package.foreign_deps.keys() {
-                    if !visiting.insert(name) {
-                        bail!("foreign dependency `{name}` forms a dependency cycle while parsing dependency `{id}`", id = resolution.id());
-                    }
-
                     // Only visit known dependencies
                     // wit-parser will error on unknown foreign dependencies when
                     // the package is resolved
-                    match deps.get(name) {
-                        Some(dep) => {
-                            // Exact match on the dependency; visit it
-                            visit(dep, deps, unversioned, order, visiting)?
+                    if let Some(dep) = deps.get(name) {
+                        if !visiting.insert(name) {
+                            bail!("foreign dependency `{name}` forms a dependency cycle while parsing dependency `{id}`", id = resolution.id());
                         }
-                        None => match unversioned.get(name) {
-                            // Only visit if there's exactly one unversioned dependency
-                            // If there's more than one, it's ambiguous and wit-parser
-                            // will error when the package is resolved.
-                            Some(indexes) if indexes.len() == 1 => {
-                                let dep = &deps[indexes[0]];
-                                visit(dep, deps, unversioned, order, visiting)?;
-                            }
-                            _ => {}
-                        },
-                    }
 
-                    assert!(visiting.remove(name));
+                        visit(dep, deps, order, visiting)?;
+                        assert!(visiting.remove(name));
+                    }
                 }
             }
-            DecodedDependency::Wasm { .. } => {
-                // No unresolved foreign dependencies for decoded wasm files
+            DecodedDependency::Wasm {
+                decoded,
+                resolution,
+            } => {
+                // Look for foreign packages in the decoded dependency
+                for (_, package) in &decoded.resolve().packages {
+                    if package.name.namespace == dep.package_name().namespace
+                        && package.name.name == dep.package_name().name
+                    {
+                        continue;
+                    }
+
+                    if let Some(dep) = deps.get(&package.name) {
+                        if !visiting.insert(&package.name) {
+                            bail!("foreign dependency `{name}` forms a dependency cycle while parsing dependency `{id}`", id = resolution.id(), name = package.name);
+                        }
+
+                        visit(dep, deps, order, visiting)?;
+                        assert!(visiting.remove(&package.name));
+                    }
+                }
             }
         }
 
