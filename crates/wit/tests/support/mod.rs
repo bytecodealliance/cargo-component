@@ -11,6 +11,7 @@ use std::{
 };
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
+use toml_edit::Document;
 use warg_crypto::signing::PrivateKey;
 use warg_server::{policy::content::WasmContentPolicy, Config, Server};
 use wasmparser::{Chunk, Encoding, Parser, Payload, Validator, WasmFeatures};
@@ -185,6 +186,13 @@ impl Project {
         let mut cmd = wit(cmd);
         cmd.current_dir(&self.root);
         cmd
+    }
+
+    pub fn update_manifest(&self, f: impl FnOnce(Document) -> Result<Document>) -> Result<()> {
+        let manifest_path = self.root.join("wit.toml");
+        let manifest = fs::read_to_string(&manifest_path)?;
+        fs::write(manifest_path, f(manifest.parse()?)?.to_string())?;
+        Ok(())
     }
 }
 
