@@ -63,10 +63,7 @@ clap = { version = "4.4.1", features = ["derive"] }
 toml_edit = { version = "0.19.14", features = ["serde"] }
 pretty_env_logger = "0.5.0"
 log = "0.4.20"
-tokio = { version = "1.32.0", default-features = false, features = [
-    "macros",
-    "rt-multi-thread",
-] }
+tokio = { version = "1.32.0", default-features = false, features = ["macros", "rt-multi-thread"] }
 tokio-util = "0.7.8"
 heck = "0.4.1"
 semver = "1.0.18"
@@ -91,7 +88,6 @@ bytes = "1.4.0"
 proc-macro2 = "1.0.66"
 quote = "1.0.33"
 syn = "2.0.29"
-
 wit-bindgen-rust-lib = "0.11.0"
 wit-bindgen-core = "0.11.0"
 wit-bindgen-rust = "0.11.0"

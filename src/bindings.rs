@@ -9,7 +9,7 @@ use anyhow::{bail, Context, Result};
 use cargo_component_core::registry::DecodedDependency;
 use indexmap::{IndexMap, IndexSet};
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     path::{Path, PathBuf},
     time::SystemTime,
 };
@@ -222,26 +222,13 @@ impl<'a> BindingsEncoder<'a> {
 
         // Start by decoding all of the target dependencies
         let mut deps = IndexMap::new();
-        let mut unversioned: HashMap<_, Vec<_>> = HashMap::new();
         for (id, resolution) in &resolution.target_resolutions {
             let decoded = resolution.decode()?;
             let name = decoded.package_name();
 
-            let versionless = PackageName {
-                namespace: name.namespace.clone(),
-                name: name.name.clone(),
-                version: None,
-            };
-
-            let (index, prev) = deps.insert_full(name.clone(), decoded);
-            if let Some(prev) = prev {
+            if let Some(prev) = deps.insert(name.clone(), decoded) {
                 bail!("duplicate definitions of package `{name}` found while decoding target dependency `{id}`", name = prev.package_name());
             }
-
-            // We're storing the dependencies with versionless package ids
-            // This allows us to resolve a versionless foreign dependency to a singular
-            // versioned dependency, if there is one
-            unversioned.entry(versionless).or_default().push(index);
         }
 
         // Parse the target package itself
@@ -267,7 +254,7 @@ impl<'a> BindingsEncoder<'a> {
         let mut order = IndexSet::new();
         let mut visiting = HashSet::new();
         for dep in deps.values() {
-            visit(dep, &deps, &unversioned, &mut order, &mut visiting)?;
+            visit(dep, &deps, &mut order, &mut visiting)?;
         }
 
         assert!(visiting.is_empty());
@@ -333,7 +320,6 @@ impl<'a> BindingsEncoder<'a> {
         fn visit<'a>(
             dep: &'a DecodedDependency<'a>,
             deps: &'a IndexMap<PackageName, DecodedDependency>,
-            unversioned: &HashMap<PackageName, Vec<usize>>,
             order: &mut IndexSet<PackageName>,
             visiting: &mut HashSet<&'a PackageName>,
         ) -> Result<()> {
@@ -355,21 +341,8 @@ impl<'a> BindingsEncoder<'a> {
                         // Only visit known dependencies
                         // wit-parser will error on unknown foreign dependencies when
                         // the package is resolved
-                        match deps.get(name) {
-                            Some(dep) => {
-                                // Exact match on the dependency; visit it
-                                visit(dep, deps, unversioned, order, visiting)?
-                            }
-                            None => match unversioned.get(name) {
-                                // Only visit if there's exactly one unversioned dependency
-                                // If there's more than one, it's ambiguous and wit-parser
-                                // will error when the package is resolved.
-                                Some(indexes) if indexes.len() == 1 => {
-                                    let dep = &deps[indexes[0]];
-                                    visit(dep, deps, unversioned, order, visiting)?;
-                                }
-                                _ => {}
-                            },
+                        if let Some(dep) = deps.get(name) {
+                            visit(dep, deps, order, visiting)?
                         }
 
                         assert!(visiting.remove(name));
