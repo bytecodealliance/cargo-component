@@ -16,6 +16,7 @@ use std::{collections::HashSet, path::Path, time::Duration};
 use warg_client::storage::{ContentStorage, PublishEntry, PublishInfo};
 use warg_crypto::signing::PrivateKey;
 use warg_protocol::registry::PackageId;
+use wasm_metadata::{Link, LinkType, RegistryMetadata};
 use wit_component::DecodedWasm;
 use wit_parser::{PackageName, Resolve, UnresolvedPackage};
 
@@ -260,6 +261,56 @@ struct PublishOptions<'a> {
     dry_run: bool,
 }
 
+fn add_registry_metadata(config: &Config, bytes: &[u8]) -> Result<Vec<u8>> {
+    let mut metadata = RegistryMetadata::default();
+    if !config.authors.is_empty() {
+        metadata.set_authors(Some(config.authors.clone()));
+    }
+
+    if !config.categories.is_empty() {
+        metadata.set_categories(Some(config.categories.clone()));
+    }
+
+    metadata.set_description(config.description.clone());
+
+    // TODO: registry metadata should have keywords
+    // if !package.keywords.is_empty() {
+    //     metadata.set_keywords(Some(package.keywords.clone()));
+    // }
+
+    metadata.set_license(config.license.clone());
+
+    let mut links = Vec::new();
+    if let Some(docs) = &config.documentation {
+        links.push(Link {
+            ty: LinkType::Documentation,
+            value: docs.clone(),
+        });
+    }
+
+    if let Some(homepage) = &config.homepage {
+        links.push(Link {
+            ty: LinkType::Homepage,
+            value: homepage.clone(),
+        });
+    }
+
+    if let Some(repo) = &config.repository {
+        links.push(Link {
+            ty: LinkType::Repository,
+            value: repo.clone(),
+        });
+    }
+
+    if !links.is_empty() {
+        metadata.set_links(Some(links));
+    }
+
+    metadata
+        .add_to_wasm(bytes)
+        .context("failed to add registry metadata to component")
+}
+
 async fn publish_wit_package(options: PublishOptions<'_>, terminal: &Terminal) -> Result<()> {
     let (id, bytes) = build_wit_package(
         options.config,
@@ -274,6 +325,7 @@ async fn publish_wit_package(options: PublishOptions<'_>, terminal: &Terminal) -
         return Ok(());
     }
 
+    let bytes = add_registry_metadata(options.config, &bytes)?;
     let id = options.package.unwrap_or(&id);
     let client = create_client(options.warg_config, options.url, terminal)?;
 

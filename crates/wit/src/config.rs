@@ -62,6 +62,13 @@ impl ConfigBuilder {
             version: self.version.unwrap_or_else(|| Version::new(0, 1, 0)),
             dependencies: Default::default(),
             registries: self.registries,
+            authors: Default::default(),
+            categories: Default::default(),
+            description: None,
+            license: None,
+            documentation: None,
+            homepage: None,
+            repository: None,
         }
     }
 }
@@ -72,9 +79,32 @@ pub struct Config {
     /// The current package version.
     pub version: Version,
     /// The package dependencies.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub dependencies: HashMap<PackageId, Dependency>,
     /// The registries to use for sourcing packages.
+    #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub registries: HashMap<String, Url>,
+    /// The authors of the package.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub authors: Vec<String>,
+    /// The categories of the package.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub categories: Vec<String>,
+    /// The package description.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// The package license.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub license: Option<String>,
+    /// The package documentation URL.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub documentation: Option<String>,
+    /// The package homepage URL.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub homepage: Option<String>,
+    /// The package repository URL.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub repository: Option<String>,
 }
 
 impl Config {

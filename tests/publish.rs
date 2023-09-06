@@ -2,7 +2,12 @@ use crate::support::*;
 use anyhow::{Context, Result};
 use assert_cmd::prelude::*;
 use predicates::str::contains;
+use semver::Version;
 use std::fs;
+use toml_edit::{value, Array};
+use warg_client::Client;
+use warg_protocol::registry::PackageId;
+use wasm_metadata::LinkType;
 
 mod support;
 
@@ -163,6 +168,113 @@ impl Guest for Component {
         .success();
 
     validate_component(&project.release_wasm("bar"))?;
+
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn it_publishes_with_registry_metadata() -> Result<()> {
+    let root = create_root()?;
+    let (_server, config) = spawn_server(&root).await?;
+    config.write_to_file(&root.join("warg-config.json"))?;
+
+    let authors = ["Jane Doe <jane@example.com>"];
+    let categories = ["wasm"];
+    let description = "A test package";
+    let license = "Apache-2.0";
+    let documentation = "https://example.com/docs";
+    let homepage = "https://example.com/home";
+    let repository = "https://example.com/repo";
+
+    let project = Project::with_root(&root, "foo", "")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+
+        let package = &mut doc["package"];
+        package["authors"] = value(Array::from_iter(authors));
+        package["categories"] = value(Array::from_iter(categories));
+        package["description"] = value(description);
+        package["license"] = value(license);
+        package["documentation"] = value(documentation);
+        package["homepage"] = value(homepage);
+        package["repository"] = value(repository);
+        Ok(doc)
+    })?;
+
+    project
+        .cargo_component("publish --init")
+        .env("CARGO_COMPONENT_PUBLISH_KEY", test_signing_key())
+        .assert()
+        .stderr(contains("Published package `component:foo` v0.1.0"))
+        .success();
+
+    validate_component(&project.release_wasm("foo"))?;
+
+    let client = Client::new_with_config(None, &config)?;
+    let download = client
+        .download_exact(&PackageId::new("component:foo")?, &Version::parse("0.1.0")?)
+        .await?;
+
+    let bytes = fs::read(&download.path).with_context(|| {
+        format!(
+            "failed to read downloaded package `{path}`",
+            path = download.path.display()
+        )
+    })?;
+
+    let metadata = wasm_metadata::RegistryMetadata::from_wasm(&bytes)
+        .with_context(|| {
+            format!(
+                "failed to parse registry metadata from `{path}`",
+                path = download.path.display()
+            )
+        })?
+        .expect("missing registry metadata");
+
+    assert_eq!(
+        metadata.get_authors().expect("missing authors").as_slice(),
+        authors
+    );
+    assert_eq!(
+        metadata
+            .get_categories()
+            .expect("missing categories")
+            .as_slice(),
+        categories
+    );
+    assert_eq!(
+        metadata.get_description().expect("missing description"),
+        description
+    );
+    assert_eq!(metadata.get_license().expect("missing license"), license);
+
+    let links = metadata.get_links().expect("missing links");
+    assert_eq!(links.len(), 3);
+
+    assert_eq!(
+        links
+            .iter()
+            .find(|link| link.ty == LinkType::Documentation)
+            .expect("missing documentation")
+            .value,
+        documentation
+    );
+    assert_eq!(
+        links
+            .iter()
+            .find(|link| link.ty == LinkType::Homepage)
+            .expect("missing homepage")
+            .value,
+        homepage
+    );
+    assert_eq!(
+        links
+            .iter()
+            .find(|link| link.ty == LinkType::Repository)
+            .expect("missing repository")
+            .value,
+        repository
+    );
 
     Ok(())
 }

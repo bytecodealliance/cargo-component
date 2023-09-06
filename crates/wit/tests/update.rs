@@ -51,6 +51,12 @@ async fn update_without_changes_is_a_noop() -> Result<()> {
         .success();
 
     project
+        .wit("build")
+        .assert()
+        .success()
+        .stderr(contains("Created package `baz.wasm`"));
+
+    project
         .wit("update")
         .assert()
         .success()
@@ -81,6 +87,12 @@ async fn test_update_without_compatible_changes_is_a_noop() -> Result<()> {
         .assert()
         .stderr(contains("Added dependency `foo:bar` with version `0.1.0"))
         .success();
+
+    project
+        .wit("build")
+        .assert()
+        .success()
+        .stderr(contains("Created package `baz.wasm`"));
 
     fs::write(
         root.join("bar/wit.toml"),
@@ -130,6 +142,12 @@ async fn update_with_compatible_changes() -> Result<()> {
         .assert()
         .stderr(contains("Added dependency `foo:bar` with version `1.0.0"))
         .success();
+
+    project
+        .wit("build")
+        .assert()
+        .success()
+        .stderr(contains("Created package `baz.wasm`"));
 
     fs::write(
         root.join("bar/wit.toml"),
@@ -182,6 +200,12 @@ async fn update_with_compatible_changes_is_noop_for_dryrun() -> Result<()> {
         .assert()
         .stderr(contains("Added dependency `foo:bar` with version `1.0.0"))
         .success();
+
+    project
+        .wit("build")
+        .assert()
+        .success()
+        .stderr(contains("Created package `baz.wasm`"));
 
     fs::write(
         root.join("bar/wit.toml"),

@@ -1,9 +1,4 @@
-use std::path::PathBuf;
-
-use crate::{
-    config::{Config, CONFIG_FILE_NAME},
-    resolve_dependencies,
-};
+use crate::config::{Config, CONFIG_FILE_NAME};
 use anyhow::{bail, Context, Result};
 use cargo_component_core::{
     command::CommonOptions,
@@ -13,6 +8,7 @@ use cargo_component_core::{
 };
 use clap::Args;
 use semver::VersionReq;
+use std::path::PathBuf;
 use warg_protocol::registry::PackageId;
 
 async fn resolve_version(
@@ -126,16 +122,6 @@ impl AddCommand {
                 config
                     .dependencies
                     .insert(id.clone(), Dependency::Package(package));
-
-                // Resolve all dependencies to ensure that the lockfile is up to date.
-                resolve_dependencies(
-                    &config,
-                    &config_path,
-                    &warg_config,
-                    &terminal,
-                    !self.dry_run,
-                )
-                .await?;
 
                 format!(
                     "dependency `{id}` with version `{version}`{dry_run}",
