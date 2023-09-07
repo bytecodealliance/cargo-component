@@ -12,9 +12,6 @@ cargo-component-bindings = { path = "../crates/bindings" }
 [package.metadata.component]
 package = "example:component"
 
-[package.metadata.component.target]
-path = "wit"
-
 [package.metadata.component.dependencies]
 
 [workspace]

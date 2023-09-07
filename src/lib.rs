@@ -173,8 +173,7 @@ pub async fn run_cargo_command(
     Ok(outputs)
 }
 
-fn last_modified_time(path: impl AsRef<Path>) -> Result<SystemTime> {
-    let path = path.as_ref();
+fn last_modified_time(path: &Path) -> Result<SystemTime> {
     path.metadata()
         .with_context(|| {
             format!(
@@ -379,13 +378,7 @@ async fn encode_target_world(
                 )
             })?;
 
-            let world = resolution
-                .metadata
-                .section
-                .target
-                .as_ref()
-                .and_then(|t| t.world())
-                .unwrap_or("");
+            let world = resolution.metadata.section.target.world().unwrap_or("");
 
             fs::write(&world_path, world).with_context(|| {
                 format!(

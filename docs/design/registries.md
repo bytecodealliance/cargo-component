@@ -321,9 +321,6 @@ version = "1.2.3"
 [package.metadata.component]
 package = "my-org:my-component"
 
-[package.metadata.component.target]
-path = "wit"
-
 [package.metadata.component.target.dependencies]
 "wasi:cli" = "1.2.3"
 

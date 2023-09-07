@@ -179,7 +179,12 @@ impl AddCommand {
         })?;
 
         let dependencies = if self.target {
-            document["package"]["metadata"]["component"]["target"]["dependencies"]
+            let target = document["package"]["metadata"]["component"]["target"]
+                .or_insert(Item::Table(Table::new()))
+                .as_table_mut()
+                .unwrap();
+
+            target["dependencies"]
                 .or_insert(Item::Table(Table::new()))
                 .as_table_mut()
                 .unwrap()
@@ -246,15 +251,14 @@ impl AddCommand {
     fn validate(&self, metadata: &ComponentMetadata, id: &PackageId) -> Result<()> {
         if self.target {
             match &metadata.section.target {
-                Some(Target::Package { .. }) => {
+                Target::Package { .. } => {
                     bail!("cannot add dependency `{id}` to a registry package target")
                 }
-                Some(Target::Local { dependencies, .. }) => {
+                Target::Local { dependencies, .. } => {
                     if dependencies.contains_key(id) {
                         bail!("cannot add dependency `{id}` as it conflicts with an existing dependency");
                     }
                 }
-                None => {}
             }
         } else if metadata.section.dependencies.contains_key(id) {
             bail!("cannot add dependency `{id}` as it conflicts with an existing dependency");

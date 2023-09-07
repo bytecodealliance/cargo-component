@@ -224,13 +224,14 @@ fn it_builds_with_local_wit_deps() -> Result<()> {
     let project = Project::new("foo")?;
     project.update_manifest(|mut doc| {
         redirect_bindings_crate(&mut doc);
-        doc["package"]["metadata"]["component"]["target"]["path"] = value("wit");
         let mut dependencies = Table::new();
         dependencies["foo:bar"]["path"] = value("wit/deps/foo-bar");
         dependencies["bar:baz"]["path"] = value("wit/deps/bar-baz/qux.wit");
         dependencies["baz:qux"]["path"] = value("wit/deps/foo-bar/deps/baz-qux/qux.wit");
-        doc["package"]["metadata"]["component"]["target"]["dependencies"] =
-            Item::Table(dependencies);
+
+        let target =
+            doc["package"]["metadata"]["component"]["target"].or_insert(Item::Table(Table::new()));
+        target["dependencies"] = Item::Table(dependencies);
         Ok(doc)
     })?;
 
