@@ -58,12 +58,7 @@ impl<'a> PackageDependencyResolution<'a> {
         lock_file: Option<LockFileResolver<'_>>,
         network_allowed: bool,
     ) -> Result<DependencyResolutionMap> {
-        let target_deps = metadata
-            .section
-            .target
-            .as_ref()
-            .map(|t| t.dependencies())
-            .unwrap_or_default();
+        let target_deps = metadata.section.target.dependencies();
 
         let mut resolver = DependencyResolver::new(
             config.warg(),

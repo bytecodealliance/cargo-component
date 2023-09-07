@@ -9,9 +9,18 @@ use serde::{
     Deserialize,
 };
 use serde_json::from_value;
-use std::{borrow::Cow, collections::HashMap, path::PathBuf, str::FromStr, time::SystemTime};
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    path::{Path, PathBuf},
+    str::FromStr,
+    time::SystemTime,
+};
 use url::Url;
 use warg_protocol::registry::PackageId;
+
+/// The default directory to look for a target WIT file.
+pub const DEFAULT_WIT_DIR: &str = "wit";
 
 /// The target of a component.
 ///
@@ -35,7 +44,9 @@ pub enum Target {
     /// The target is a world from a local wit document.
     Local {
         /// The path to the wit document defining the world.
-        path: PathBuf,
+        ///
+        /// Defaults to the `wit` directory.
+        path: Option<PathBuf>,
         /// The name of the world being targeted.
         ///
         /// [Resolve::select_world][select-world] will be used
@@ -64,6 +75,16 @@ impl Target {
     pub fn world(&self) -> Option<&str> {
         match self {
             Self::Package { world, .. } | Self::Local { world, .. } => world.as_deref(),
+        }
+    }
+}
+
+impl Default for Target {
+    fn default() -> Self {
+        Self::Local {
+            path: None,
+            world: None,
+            dependencies: HashMap::new(),
         }
     }
 }
@@ -163,7 +184,7 @@ impl<'de> Deserialize<'de> for Target {
                             world: entry.world,
                         })
                     }
-                    (Some(path), None) => {
+                    (path, None) => {
                         for (present, name) in [
                             (entry.version.is_some(), "version"),
                             (entry.registry.is_some(), "registry"),
@@ -183,7 +204,6 @@ impl<'de> Deserialize<'de> for Target {
                     (Some(_), Some(_)) => Err(de::Error::custom(
                         "cannot specify both `path` and `package` fields in a target entry",
                     )),
-                    (None, None) => Err(de::Error::missing_field("package")),
                 }
             }
         }
@@ -199,7 +219,7 @@ pub struct ComponentSection {
     /// The package id of the component, for publishing.
     pub package: Option<PackageId>,
     /// The world targeted by the component.
-    pub target: Option<Target>,
+    pub target: Target,
     /// The dependencies of the component.
     pub dependencies: HashMap<PackageId, Dependency>,
     /// The registries to use for the component.
@@ -232,7 +252,12 @@ impl ComponentMetadata {
         );
 
         let mut section: ComponentSection = match package.metadata.get("component").cloned() {
-            Some(component) => from_value(component)?,
+            Some(component) => from_value(component).with_context(|| {
+                format!(
+                    "failed to deserialize component metadata from `{path}`",
+                    path = package.manifest_path
+                )
+            })?,
             None => {
                 log::debug!(
                     "manifest `{path}` has no component metadata",
@@ -252,14 +277,16 @@ impl ComponentMetadata {
                     path = package.manifest_path
                 )
             })?;
-        let modified_at = crate::last_modified_time(&package.manifest_path)?;
+        let modified_at = crate::last_modified_time(package.manifest_path.as_std_path())?;
 
         // Make all paths stored in the metadata relative to the manifest directory.
-        if let Some(Target::Local {
+        if let Target::Local {
             path, dependencies, ..
-        }) = &mut section.target
+        } = &mut section.target
         {
-            *path = manifest_dir.join(path.as_path());
+            if let Some(path) = path {
+                *path = manifest_dir.join(path.as_path());
+            }
 
             for dependency in dependencies.values_mut() {
                 if let Dependency::Local(path) = dependency {
@@ -281,5 +308,27 @@ impl ComponentMetadata {
             modified_at,
             section,
         }))
+    }
+
+    /// Gets the path to a local target.
+    ///
+    /// Returns `None` if the target is a registry package or
+    /// if a path is not specified and the default path does not exist.
+    pub fn target_path(&self) -> Option<Cow<Path>> {
+        match &self.section.target {
+            Target::Local {
+                path: Some(path), ..
+            } => Some(path.into()),
+            Target::Local { path: None, .. } => {
+                let path = self.manifest_path.parent().unwrap().join(DEFAULT_WIT_DIR);
+
+                if path.exists() {
+                    Some(path.into())
+                } else {
+                    None
+                }
+            }
+            Target::Package { .. } => None,
+        }
     }
 }

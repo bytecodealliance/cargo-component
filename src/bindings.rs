@@ -77,8 +77,8 @@ impl<'a> BindingsEncoder<'a> {
     pub fn reason(&self, last_modified_output: SystemTime) -> Result<Option<&'static str>> {
         let metadata = self.metadata();
         let manifest_modified = metadata.modified_at > last_modified_output;
-        let target_modified = if let Some(Target::Local { path, .. }) = &metadata.section.target {
-            last_modified_time(path)? > last_modified_output
+        let target_modified = if let Some(path) = metadata.target_path() {
+            last_modified_time(&path)? > last_modified_output
         } else {
             false
         };
@@ -154,18 +154,19 @@ impl<'a> BindingsEncoder<'a> {
     fn create_target_world(
         resolution: &PackageDependencyResolution,
     ) -> Result<(Resolve, WorldId, Vec<PathBuf>)> {
-        let (mut merged, world_id, source_files) = match &resolution.metadata.section.target {
-            Some(Target::Package { id, world, .. }) => {
+        let (mut merged, world_id, source_files) =
+            if let Target::Package { id, world, .. } = &resolution.metadata.section.target {
                 Self::target_package(resolution, id, world.as_deref())?
-            }
-            Some(Target::Local { path, world, .. }) => {
-                Self::target_local_path(resolution, path, world.as_deref())?
-            }
-            None => {
+            } else if let Some(path) = resolution.metadata.target_path() {
+                Self::target_local_path(
+                    resolution,
+                    &path,
+                    resolution.metadata.section.target.world(),
+                )?
+            } else {
                 let (merged, world) = Self::target_empty_world(resolution);
                 (merged, world, Vec::new())
-            }
-        };
+            };
 
         // Merge all component dependencies as interface imports
         for (id, dependency) in &resolution.resolutions {

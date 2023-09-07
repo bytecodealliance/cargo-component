@@ -1,4 +1,4 @@
-use crate::{config::Config, generator::SourceGenerator, metadata};
+use crate::{config::Config, generator::SourceGenerator, metadata, metadata::DEFAULT_WIT_DIR};
 use anyhow::{bail, Context, Result};
 use cargo_component_core::{
     command::CommonOptions,
@@ -257,8 +257,8 @@ impl NewCommand {
         ));
 
         if !self.is_command() {
-            component["target"] = match target.as_ref() {
-                Some((resolution, world)) => match world {
+            if let Some((resolution, world)) = target.as_ref() {
+                component["target"] = match world {
                     Some(world) => value(format!(
                         "{id}/{world}@{version}",
                         id = resolution.id,
@@ -269,13 +269,8 @@ impl NewCommand {
                         id = resolution.id,
                         version = resolution.version
                     )),
-                },
-                None => {
-                    let mut target_deps = Table::new();
-                    target_deps["path"] = value("wit");
-                    Item::Table(target_deps)
-                }
-            };
+                };
+            }
         }
 
         component["dependencies"] = Item::Table(Table::new());
@@ -402,7 +397,7 @@ impl Guest for Component {
             return Ok(());
         }
 
-        let wit_path = out_dir.join("wit");
+        let wit_path = out_dir.join(DEFAULT_WIT_DIR);
         fs::create_dir(&wit_path).with_context(|| {
             format!(
                 "failed to create targets directory `{wit_path}`",
