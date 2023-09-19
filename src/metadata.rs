@@ -220,6 +220,8 @@ pub struct ComponentSection {
     pub package: Option<PackageId>,
     /// The world targeted by the component.
     pub target: Target,
+    /// The path to the WASI adapter to use.
+    pub adapter: Option<PathBuf>,
     /// The dependencies of the component.
     pub dependencies: HashMap<PackageId, Dependency>,
     /// The registries to use for the component.
