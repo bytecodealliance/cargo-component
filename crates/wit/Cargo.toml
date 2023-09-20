@@ -36,7 +36,7 @@ pretty_env_logger = { workspace = true }
 
 [dev-dependencies]
 assert_cmd = "2.0.12"
-predicates = "3.0.3"
+predicates = "3.0.4"
 warg-server = { git = "https://github.com/bytecodealliance/registry" }
 tokio-util = { workspace = true }
-wasmparser = "0.112.0"
+wasmparser = "0.113.1"

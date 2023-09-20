@@ -43,9 +43,9 @@ bytes = { workspace = true }
 
 [dev-dependencies]
 assert_cmd = "2.0.12"
-predicates = "3.0.3"
-wasmparser = "0.112.0"
-wat = "1.0.71"
+predicates = "3.0.4"
+wasmparser = "0.113.1"
+wat = "1.0.73"
 warg-server = { git = "https://github.com/bytecodealliance/registry" }
 
 [workspace]
@@ -59,8 +59,8 @@ warg-protocol = { git = "https://github.com/bytecodealliance/registry" }
 warg-crypto = { git = "https://github.com/bytecodealliance/registry" }
 warg-client = { git = "https://github.com/bytecodealliance/registry" }
 anyhow = "1.0.75"
-clap = { version = "4.4.1", features = ["derive"] }
-toml_edit = { version = "0.19.14", features = ["serde"] }
+clap = { version = "4.4.4", features = ["derive"] }
+toml_edit = { version = "0.20.0", features = ["serde"] }
 pretty_env_logger = "0.5.0"
 log = "0.4.20"
 tokio = { version = "1.32.0", default-features = false, features = ["macros", "rt-multi-thread"] }
@@ -68,27 +68,27 @@ tokio-util = "0.7.8"
 heck = "0.4.1"
 semver = "1.0.18"
 serde = { version = "1.0.188", features = ["derive"] }
-serde_json = "1.0.105"
+serde_json = "1.0.107"
 indexmap = "2.0.0"
 url = { version = "2.4.1", features = ["serde"] }
-wit-parser = "0.11.0"
-wit-component = "0.14.0"
-wasm-metadata = "0.10.3"
+wit-parser = "0.11.1"
+wit-component = "0.14.2"
+wasm-metadata = "0.10.5"
 parse_arg = "0.1.4"
-cargo_metadata = "0.17.0"
+cargo_metadata = "0.18.0"
 keyring = "2.0.5"
-libc = "0.2.147"
+libc = "0.2.148"
 owo-colors = "3.5.0"
 unicode-width = "0.1.10"
 p256 = "0.13.2"
 rand_core = "0.6.4"
 rpassword = "7.2.0"
 futures = "0.3.28"
-bytes = "1.4.0"
-proc-macro2 = "1.0.66"
+bytes = "1.5.0"
+proc-macro2 = "1.0.67"
 quote = "1.0.33"
-syn = "2.0.29"
-wit-bindgen-rust-lib = "0.11.0"
-wit-bindgen-core = "0.11.0"
-wit-bindgen-rust = "0.11.0"
-wit-bindgen = "0.11.0"
+syn = "2.0.37"
+wit-bindgen-rust-lib = "0.12.0"
+wit-bindgen-core = "0.12.0"
+wit-bindgen-rust = "0.12.0"
+wit-bindgen = "0.12.0"
