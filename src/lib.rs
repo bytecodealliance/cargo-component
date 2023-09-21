@@ -3,7 +3,7 @@
 #![deny(missing_docs)]
 
 use crate::target::install_wasm32_wasi;
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use bindings::BindingsGenerator;
 use bytes::Bytes;
 use cargo_component_core::{
@@ -23,7 +23,7 @@ use std::{
     io::Read,
     path::{Path, PathBuf},
     process::Command,
-    time::{Duration, SystemTime},
+    time::{Duration, SystemTime}, env,
 };
 use warg_client::storage::{ContentStorage, PublishEntry, PublishInfo};
 use warg_crypto::signing::PrivateKey;
@@ -106,9 +106,71 @@ pub async fn run_cargo_command(
     cmd.args(args);
 
     let is_build = matches!(subcommand, Some("b") | Some("build") | Some("rustc"));
+    let is_run = matches!(subcommand, Some("run") | Some("test") | Some("bench"));
 
-    // Handle the target for build commands
-    if is_build {
+    if is_run {
+        // We check here before we actually build that a runtime is present.
+        // We first check the CARGO_TARGET_WASM32_WASI_RUNNER environement
+        // variable for a user-supplied runtime (path or executable) and use
+        // the default, namely `wasmtime`, if it is not set.
+        let (wasi_runner, using_default) = env::var("CARGO_TARGET_WASM32_WASI_RUNNER")
+            .map(|runner_override| (runner_override, false))
+            .unwrap_or_else(|_| {
+                (
+                    "wasmtime -W component-model -S preview2 -S common".to_string(),
+                    true,
+                )
+            });
+
+        // Treat the wasi_runner variable as an exectable, followed by a whitespace-
+        // separated list of arguments to the executable. This allows the user to
+        // provide arguments which are passed to wasmtime without having to add more
+        // command-line argument parsing to this crate.
+        let (wasi_runner, wasi_runner_extra_args) = {
+            let mut words = wasi_runner.split_whitespace();
+            let runner = words
+                .next()
+                .ok_or_else(|| anyhow!("$CARGO_TARGET_WASM32_WASI_RUNNER must not be empty"))?;
+            let extra_args = words.collect::<Vec<_>>();
+            (runner, extra_args)
+        };
+
+        if !using_default {
+            // check if the override is either a valid path or command found on $PATH
+            if !(Path::new(&wasi_runner).exists() || which::which(wasi_runner).is_ok()) {
+                bail!(
+                    "failed to find `{}` (specified by $CARGO_TARGET_WASM32_WASI_RUNNER) \
+                        on the filesytem or in $PATH, you'll want to fix the path or unset \
+                        the $CARGO_TARGET_WASM32_WASI_RUNNER environment variable before \
+                        running this command\n",
+                    &wasi_runner
+                );
+            }
+        } else if which::which(wasi_runner).is_err() {
+            let mut msg = format!(
+                "failed to find `{}` in $PATH, you'll want to \
+                    install `{}` before running this command\n",
+                wasi_runner, wasi_runner
+            );
+            // Because we know what runtime is being used here, we can print
+            // out installation information.
+            if cfg!(unix) {
+                msg.push_str("you can also install through a shell:\n\n");
+                msg.push_str("\tcurl https://wasmtime.dev/install.sh -sSf | bash\n");
+            } else {
+                msg.push_str("you can also install through the installer:\n\n");
+                msg.push_str("\thttps://github.com/bytecodealliance/wasmtime/releases/download/dev/wasmtime-dev-x86_64-windows.msi\n");
+            }
+            bail!("{}", msg);
+        }
+
+        let runner_env = format!("{} {}", wasi_runner, wasi_runner_extra_args.join(" "));
+        log::debug!("runner arguments`{runner_env:?}`");
+        cmd.env("CARGO_TARGET_WASM32_WASI_RUNNER", runner_env);
+    }
+
+    // Handle the target for build and run commands
+    if is_build || is_run {
         install_wasm32_wasi(config)?;
 
         // Add an implicit wasm32-wasi target if there isn't a wasm target present

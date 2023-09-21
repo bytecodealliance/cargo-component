@@ -48,6 +48,7 @@ rand_core = { workspace = true }
 rpassword = { workspace = true }
 futures = { workspace = true }
 bytes = { workspace = true }
+which = { workspace = true }
 
 [dev-dependencies]
 assert_cmd = "2.0.12"
@@ -78,7 +79,7 @@ semver = "1.0.20"
 serde = { version = "1.0.193", features = ["derive"] }
 serde_json = "1.0.108"
 indexmap = "2.1.0"
-url = { version = "2.4.1", features = ["serde"] }
+url = { version = "2.5.0", features = ["serde"] }
 wit-parser = "0.13.0"
 wit-component = "0.18.2"
 wasm-metadata = "0.10.13"
@@ -96,5 +97,6 @@ bytes = "1.5.0"
 proc-macro2 = "1.0.69"
 quote = "1.0.33"
 syn = "2.0.39"
+which = "5.0.0"
 wit-bindgen-rust = "0.14.0"
 wit-bindgen-core = "0.14.0"
