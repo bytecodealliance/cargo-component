@@ -39,6 +39,7 @@ wit-component = { workspace = true }
 wasm-metadata = { workspace = true }
 parse_arg = { workspace = true }
 cargo_metadata = { workspace = true }
+cargo-config2 = { workspace = true }
 libc = { workspace = true }
 warg-protocol = { workspace = true }
 warg-crypto = { workspace = true }
@@ -85,6 +86,7 @@ wit-component = "0.18.2"
 wasm-metadata = "0.10.13"
 parse_arg = "0.1.4"
 cargo_metadata = "0.18.1"
+cargo-config2 = "0.1.16"
 keyring = "2.0.5"
 libc = "0.2.150"
 owo-colors = "3.5.0"

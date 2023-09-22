@@ -3,7 +3,7 @@
 #![deny(missing_docs)]
 
 use crate::target::install_wasm32_wasi;
-use anyhow::{anyhow, bail, Context, Result};
+use anyhow::{bail, Context, Result};
 use bindings::BindingsGenerator;
 use bytes::Bytes;
 use cargo_component_core::{
@@ -11,6 +11,7 @@ use cargo_component_core::{
     registry::create_client,
     terminal::{Colors, Terminal},
 };
+use cargo_config2::{PathAndArgs, TargetTripleRef};
 use cargo_metadata::{Metadata, MetadataCommand, Package};
 use config::{CargoArguments, CargoPackageSpec, Config};
 use lock::{acquire_lock_file_ro, acquire_lock_file_rw};
@@ -109,44 +110,50 @@ pub async fn run_cargo_command(
     let is_run = matches!(subcommand, Some("run") | Some("test") | Some("bench"));
 
     if is_run {
+        let cargo_config = cargo_config2::Config::load()?;
+
         // We check here before we actually build that a runtime is present.
         // We first check the CARGO_TARGET_WASM32_WASI_RUNNER environement
         // variable for a user-supplied runtime (path or executable) and use
         // the default, namely `wasmtime`, if it is not set.
-        let (wasi_runner, using_default) = env::var("CARGO_TARGET_WASM32_WASI_RUNNER")
+        let (runner, using_default) = cargo_config
+            .runner(TargetTripleRef::from("wasm32-wasi"))
+            .unwrap_or_default()
             .map(|runner_override| (runner_override, false))
-            .unwrap_or_else(|_| {
+            .unwrap_or_else(|| {
                 (
-                    "wasmtime -W component-model -S preview2 -S common".to_string(),
+                    PathAndArgs::new("wasmtime")
+                        .args(vec![
+                            "-W",
+                            "component-model",
+                            "-S",
+                            "preview2",
+                            "-S",
+                            "common",
+                        ])
+                        .to_owned(),
                     true,
                 )
             });
 
-        // Treat the wasi_runner variable as an exectable, followed by a whitespace-
+        // Treat the wasi_runner variable as an executable, followed by a whitespace-
         // separated list of arguments to the executable. This allows the user to
         // provide arguments which are passed to wasmtime without having to add more
         // command-line argument parsing to this crate.
-        let (wasi_runner, wasi_runner_extra_args) = {
-            let mut words = wasi_runner.split_whitespace();
-            let runner = words
-                .next()
-                .ok_or_else(|| anyhow!("$CARGO_TARGET_WASM32_WASI_RUNNER must not be empty"))?;
-            let extra_args = words.collect::<Vec<_>>();
-            (runner, extra_args)
-        };
+        let wasi_runner = runner.path.to_string_lossy().into_owned();
 
         if !using_default {
             // check if the override is either a valid path or command found on $PATH
-            if !(Path::new(&wasi_runner).exists() || which::which(wasi_runner).is_ok()) {
+            if !(runner.path.exists() || which::which(runner.path).is_ok()) {
                 bail!(
                     "failed to find `{}` (specified by $CARGO_TARGET_WASM32_WASI_RUNNER) \
                         on the filesytem or in $PATH, you'll want to fix the path or unset \
                         the $CARGO_TARGET_WASM32_WASI_RUNNER environment variable before \
                         running this command\n",
-                    &wasi_runner
+                    wasi_runner
                 );
             }
-        } else if which::which(wasi_runner).is_err() {
+        } else if which::which(runner.path).is_err() {
             let mut msg = format!(
                 "failed to find `{}` in $PATH, you'll want to \
                     install `{}` before running this command\n",
@@ -164,10 +171,19 @@ pub async fn run_cargo_command(
             bail!("{}", msg);
         }
 
-        let runner_env = format!("{} {}", wasi_runner, wasi_runner_extra_args.join(" "));
-        log::debug!("runner arguments`{runner_env:?}`");
+        let runner_env = {
+            let mut v = Vec::with_capacity(1 + runner.args.len());
+            v.push(wasi_runner);
+            for arg in &runner.args {
+                v.push(arg.to_string_lossy().into_owned());
+            }
+            v.join(" ")
+        };
+        log::debug!("runner arguments`{:?}`", runner_env);
         cmd.env("CARGO_TARGET_WASM32_WASI_RUNNER", runner_env);
     }
+
+    // TODO: consider targets from .cargo/config.toml
 
     // Handle the target for build and run commands
     if is_build || is_run {

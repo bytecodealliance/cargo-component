@@ -513,6 +513,7 @@ dependencies = [
  "assert_cmd",
  "bytes",
  "cargo-component-core",
+ "cargo-config2",
  "cargo_metadata",
  "clap",
  "futures",
@@ -588,6 +589,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.39",
+]
+
+[[package]]
+name = "cargo-config2"
+version = "0.1.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f387366785e82c7ec7ef5b845a7f61324fbf5d467d6a878469eac30c1c44b1b"
+dependencies = [
+ "home",
+ "once_cell",
+ "serde",
+ "serde_derive",
+ "toml_edit 0.21.0",
 ]
 
 [[package]]
