@@ -113,9 +113,9 @@ pub async fn run_cargo_command(
         let cargo_config = cargo_config2::Config::load()?;
 
         // We check here before we actually build that a runtime is present.
-        // We first check the CARGO_TARGET_WASM32_WASI_RUNNER environement
-        // variable for a user-supplied runtime (path or executable) and use
-        // the default, namely `wasmtime`, if it is not set.
+        // We first check the runner for `wasm32-wasi` in the order from
+        // cargo's convention for a user-supplied runtime (path or executable)
+        // and use the default, namely `wasmtime`, if it is not set.
         let (runner, using_default) = cargo_config
             .runner(TargetTripleRef::from("wasm32-wasi"))
             .unwrap_or_default()
@@ -136,10 +136,10 @@ pub async fn run_cargo_command(
                 )
             });
 
-        // Treat the wasi_runner variable as an executable, followed by a whitespace-
-        // separated list of arguments to the executable. This allows the user to
-        // provide arguments which are passed to wasmtime without having to add more
-        // command-line argument parsing to this crate.
+        // Treat the runner object as an executable with list of arguments it
+        // that was extracted by splitting each whitespace. This allows the user
+        // to provide arguments which are passed to wasmtime without having to
+        // add more command-line argument parsing to this crate.
         let wasi_runner = runner.path.to_string_lossy().into_owned();
 
         if !using_default {
