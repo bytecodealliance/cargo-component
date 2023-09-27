@@ -720,3 +720,41 @@ impl Guest for Component {
 
     Ok(())
 }
+
+#[test]
+fn it_builds_with_adapter() -> Result<()> {
+    let project = Project::new("foo")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        doc["package"]["metadata"]["component"]["adapter"] = value("not-a-valid-path");
+        Ok(doc)
+    })?;
+
+    project
+        .cargo_component("build")
+        .assert()
+        .stderr(contains(
+            "error: failed to read module adapter `not-a-valid-path`",
+        ))
+        .failure();
+
+    let project = Project::new("foo")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        doc["package"]["metadata"]["component"]["adapter"] = value(format!(
+            "../../../../../adapters/{version}/wasi_snapshot_preview1.reactor.wasm",
+            version = env!("WASI_ADAPTER_VERSION")
+        ));
+        Ok(doc)
+    })?;
+
+    project
+        .cargo_component("build")
+        .assert()
+        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .success();
+
+    validate_component(&project.debug_wasm("foo"))?;
+
+    Ok(())
+}

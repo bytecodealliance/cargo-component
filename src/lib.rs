@@ -18,6 +18,7 @@ use metadata::ComponentMetadata;
 use registry::{PackageDependencyResolution, PackageResolutionMap};
 use semver::Version;
 use std::{
+    borrow::Cow,
     fs::{self, File},
     io::Read,
     path::{Path, PathBuf},
@@ -144,13 +145,18 @@ pub async fn run_cargo_command(
                     "debug"
                 });
 
-            for PackageComponentMetadata { package, .. } in packages {
+            for PackageComponentMetadata { package, metadata } in packages {
+                let metadata = match metadata {
+                    Some(metadata) => metadata,
+                    None => continue,
+                };
+
                 let is_bin = package.targets.iter().any(|t| t.is_bin());
 
                 // First try for <name>.wasm
                 let path = out_dir.join(&package.name).with_extension("wasm");
                 if path.exists() {
-                    create_component(config, path.as_std_path(), is_bin)?;
+                    create_component(config, metadata, path.as_std_path(), is_bin)?;
                     outputs.push(path.to_path_buf().into_std_path_buf());
                     continue;
                 }
@@ -160,7 +166,7 @@ pub async fn run_cargo_command(
                     .join(package.name.replace('-', "_"))
                     .with_extension("wasm");
                 if path.exists() {
-                    create_component(config, path.as_std_path(), is_bin)?;
+                    create_component(config, metadata, path.as_std_path(), is_bin)?;
                     outputs.push(path.to_path_buf().into_std_path_buf());
                     continue;
                 }
@@ -424,7 +430,39 @@ fn is_wasm_module(path: impl AsRef<Path>) -> Result<bool> {
     Ok(bytes[4..] == [0x01, 0x00, 0x00, 0x00])
 }
 
-fn create_component(config: &Config, path: &Path, binary: bool) -> Result<()> {
+fn adapter_bytes(metadata: &ComponentMetadata, binary: bool) -> Result<Cow<[u8]>> {
+    if let Some(adapter) = &metadata.section.adapter {
+        return Ok(fs::read(adapter)
+            .with_context(|| {
+                format!(
+                    "failed to read module adapter `{path}`",
+                    path = adapter.display()
+                )
+            })?
+            .into());
+    }
+
+    if binary {
+        Ok(Cow::Borrowed(include_bytes!(concat!(
+            "../adapters/",
+            env!("WASI_ADAPTER_VERSION"),
+            "/wasi_snapshot_preview1.command.wasm"
+        ))))
+    } else {
+        Ok(Cow::Borrowed(include_bytes!(concat!(
+            "../adapters/",
+            env!("WASI_ADAPTER_VERSION"),
+            "/wasi_snapshot_preview1.reactor.wasm"
+        ))))
+    }
+}
+
+fn create_component(
+    config: &Config,
+    metadata: &ComponentMetadata,
+    path: &Path,
+    binary: bool,
+) -> Result<()> {
     // If the compilation output is not a WebAssembly module, then do nothing
     // Note: due to the way cargo currently works on macOS, it will overwrite
     // a previously generated component on an up-to-date build.
@@ -460,22 +498,7 @@ fn create_component(config: &Config, path: &Path, binary: bool) -> Result<()> {
     )?;
 
     let encoder = ComponentEncoder::default()
-        .adapter(
-            "wasi_snapshot_preview1",
-            if binary {
-                include_bytes!(concat!(
-                    "../adapters/",
-                    env!("WASI_ADAPTER_VERSION"),
-                    "/wasi_snapshot_preview1.command.wasm"
-                ))
-            } else {
-                include_bytes!(concat!(
-                    "../adapters/",
-                    env!("WASI_ADAPTER_VERSION"),
-                    "/wasi_snapshot_preview1.reactor.wasm"
-                ))
-            },
-        )?
+        .adapter("wasi_snapshot_preview1", &adapter_bytes(metadata, binary)?)?
         .module(&module)?
         .validate(true);
 
