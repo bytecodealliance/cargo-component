@@ -1,11 +1,17 @@
 [package]
 name = "cargo-component"
+description = "A cargo extension for authoring WebAssembly components"
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+repository = { workspace = true }
+
+[workspace.package]
 version = "0.1.0"
 edition = "2021"
 authors = ["Peter Huene <peter@huene.dev>"]
-description = "A cargo extension for authoring WebAssembly components"
 license = "Apache-2.0 WITH LLVM-exception"
-documentation = "https://docs.rs/cargo-component"
 categories = ["wasm"]
 keywords = ["webassembly", "wasm", "components", "component-model"]
 repository = "https://github.com/bytecodealliance/cargo-component"
@@ -44,42 +50,42 @@ bytes = { workspace = true }
 [dev-dependencies]
 assert_cmd = "2.0.12"
 predicates = "3.0.4"
-wasmparser = "0.113.1"
-wat = "1.0.73"
-warg-server = { git = "https://github.com/bytecodealliance/registry" }
+wasmparser = "0.113.2"
+wat = "1.0.74"
+warg-server = "0.1.0"
 
 [workspace]
 members = ["crates/bindings", "crates/macro", "crates/core", "crates/wit"]
 exclude = ["target/tests"]
 
 [workspace.dependencies]
-cargo-component-core = { path = "crates/core" }
-cargo-component-macro = { path = "crates/macro" }
-warg-protocol = { git = "https://github.com/bytecodealliance/registry" }
-warg-crypto = { git = "https://github.com/bytecodealliance/registry" }
-warg-client = { git = "https://github.com/bytecodealliance/registry" }
+cargo-component-core = { path = "crates/core", version = "0.1.0" }
+cargo-component-macro = { path = "crates/macro", version = "0.1.0" }
+warg-protocol = "0.1.0"
+warg-crypto = "0.1.0"
+warg-client = "0.1.0"
 anyhow = "1.0.75"
-clap = { version = "4.4.4", features = ["derive"] }
-toml_edit = { version = "0.20.0", features = ["serde"] }
+clap = { version = "4.4.5", features = ["derive"] }
+toml_edit = { version = "0.20.1", features = ["serde"] }
 pretty_env_logger = "0.5.0"
 log = "0.4.20"
 tokio = { version = "1.32.0", default-features = false, features = ["macros", "rt-multi-thread"] }
-tokio-util = "0.7.8"
+tokio-util = "0.7.9"
 heck = "0.4.1"
-semver = "1.0.18"
+semver = "1.0.19"
 serde = { version = "1.0.188", features = ["derive"] }
 serde_json = "1.0.107"
-indexmap = "2.0.0"
+indexmap = "2.0.1"
 url = { version = "2.4.1", features = ["serde"] }
-wit-parser = "0.11.1"
-wit-component = "0.14.2"
-wasm-metadata = "0.10.5"
+wit-parser = "0.11.3"
+wit-component = "0.14.4"
+wasm-metadata = "0.10.6"
 parse_arg = "0.1.4"
 cargo_metadata = "0.18.0"
 keyring = "2.0.5"
 libc = "0.2.148"
 owo-colors = "3.5.0"
-unicode-width = "0.1.10"
+unicode-width = "0.1.11"
 p256 = "0.13.2"
 rand_core = "0.6.4"
 rpassword = "7.2.0"

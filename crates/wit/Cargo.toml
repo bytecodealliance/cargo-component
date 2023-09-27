@@ -1,14 +1,13 @@
 [package]
 name = "wit"
-version = "0.1.0"
-edition = "2021"
-authors = ["Peter Huene <peter@huene.dev>"]
 description = "A tool for building and publishing WIT packages to a registry."
-license = "Apache-2.0 WITH LLVM-exception"
-documentation = "https://docs.rs/wit"
-categories = ["wasm"]
-keywords = ["webassembly", "wasm", "components", "component-model"]
-repository = "https://github.com/bytecodealliance/cargo-component/tree/main/crates/wit"
+version = { workspace = true }
+edition = { workspace = true }
+authors = { workspace = true }
+license = { workspace = true }
+categories = { workspace = true }
+keywords = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]
 cargo-component-core = { path = "../core" }
@@ -37,6 +36,6 @@ pretty_env_logger = { workspace = true }
 [dev-dependencies]
 assert_cmd = "2.0.12"
 predicates = "3.0.4"
-warg-server = { git = "https://github.com/bytecodealliance/registry" }
+warg-server = "0.1.0"
 tokio-util = { workspace = true }
-wasmparser = "0.113.1"
+wasmparser = "0.113.2"
