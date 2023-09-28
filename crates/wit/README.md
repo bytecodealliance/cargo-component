@@ -13,8 +13,10 @@ for defining interfaces, types, and worlds used in WebAssembly components.
 
 ## Installation
 
+To install `wit` subcommand, run the following command:
+
 ```
-cargo install --git https://github.com/bytecodealliance/cargo-component --locked wit
+cargo install wit
 ```
 
 ## Initializing a WIT package

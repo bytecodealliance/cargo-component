@@ -17,7 +17,7 @@ const CRATES_TO_PUBLISH: &[&str] = &[
     "cargo-component-macro",
     "cargo-component-bindings",
     "cargo-component-core",
-    //"wit",
+    "wit",
     "cargo-component",
 ];
 
@@ -29,7 +29,7 @@ const PUBLIC_CRATES: &[&str] = &[
     "cargo-component-macro",
     "cargo-component-bindings",
     "cargo-component-core",
-    //"wit",
+    "wit",
     "cargo-component",
 ];
 
