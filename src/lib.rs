@@ -20,11 +20,13 @@ use registry::{PackageDependencyResolution, PackageResolutionMap};
 use semver::Version;
 use std::{
     borrow::Cow,
+    env,
+    ffi::OsStr,
     fs::{self, File},
-    io::Read,
+    io::{self, Read, Write},
     path::{Path, PathBuf},
     process::Command,
-    time::{Duration, SystemTime}, env,
+    time::{Duration, SystemTime},
 };
 use warg_client::storage::{ContentStorage, PublishEntry, PublishInfo};
 use warg_crypto::signing::PrivateKey;
@@ -89,6 +91,10 @@ pub async fn run_cargo_command(
         .ok()
         .unwrap_or_else(|| PathBuf::from("cargo"));
 
+    let is_build = matches!(subcommand, Some("b") | Some("build") | Some("rustc"));
+    let is_run = matches!(subcommand, Some("run"));
+    let is_test = matches!(subcommand, Some("test") | Some("bench"));
+
     let mut args = spawn_args.iter().peekable();
     if let Some(arg) = args.peek() {
         if *arg == "component" {
@@ -104,12 +110,31 @@ pub async fn run_cargo_command(
     );
 
     let mut cmd = Command::new(&cargo);
+    if is_run {
+        cmd.arg("build");
+        if let Some(arg) = args.peek() {
+            if Some((*arg).as_str()) == subcommand {
+                args.next().unwrap();
+            }
+        }
+    }
     cmd.args(args);
 
-    let is_build = matches!(subcommand, Some("b") | Some("build") | Some("rustc"));
-    let is_run = matches!(subcommand, Some("run") | Some("test") | Some("bench"));
+    // TODO: consider targets from .cargo/config.toml
 
-    if is_run {
+    // Handle the target for build and run commands
+    if is_build || is_run || is_test {
+        install_wasm32_wasi(config)?;
+
+        // Add an implicit wasm32-wasi target if there isn't a wasm target present
+        if !cargo_args.targets.iter().any(|t| is_wasm_target(t)) {
+            cmd.arg("--target").arg("wasm32-wasi");
+        }
+    }
+
+    let mut outputs = Vec::new();
+    let mut cmd_run: Option<Command> = None;
+    if is_run || is_test {
         let cargo_config = cargo_config2::Config::load()?;
 
         // We check here before we actually build that a runtime is present.
@@ -171,43 +196,99 @@ pub async fn run_cargo_command(
             bail!("{}", msg);
         }
 
-        let runner_env = {
-            let mut v = Vec::with_capacity(1 + runner.args.len());
-            v.push(wasi_runner);
+        if is_run {
+            let mut command = Command::new(&wasi_runner);
+            command.args(&runner.args);
+            cmd_run = Some(command);
+        } else if is_test {
+            let mut command = Command::new(cmd.get_program());
+            if let Some(dir) = cmd.get_current_dir() {
+                command.current_dir(dir);
+            }
+            let envs: Vec<(&OsStr, &OsStr)> = cmd
+                .get_envs()
+                .filter(|(_, value)| value.is_some())
+                .map(|(k, value)| (k, value.unwrap()))
+                .collect();
+            command.envs(envs);
+            command.args(cmd.get_args());
+            command.arg("--no-run");
+            // .arg("--message-format")
+            // .arg("json-render-diagnostics");
+
+            log::warn!("spawning cargo command: `{:?}`", command);
+            let output = command.output().context(format!(
+                "failed to spawn `{cargo}`",
+                cargo = cargo.display()
+            ))?;
+            let cmd_output = String::from_utf8_lossy(&output.stdout);
+            log::warn!("build command stdout: {}", cmd_output);
+            log::warn!(
+                "build command stderr: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            if !output.status.success() {
+                std::process::exit(output.status.code().unwrap_or(1));
+            }
+
+            // Try wasm file within deps folder
+            let mut output = cmd_output.trim();
+            // TODO: use json message format argument to extract executables
+            if let Some(pos) = output.rfind("/deps/") {
+                output = &output[(pos + 6)..(output.len() - 1)];
+
+                let out_dir = metadata.target_directory.join("wasm32-wasi").join(
+                    // Per design, cargo bench builds dependencies in release mode
+                    // See: https://github.com/rust-lang/cargo/issues/2234
+                    if cargo_args.release || matches!(subcommand, Some("bench")) {
+                        "release"
+                    } else {
+                        "debug"
+                    },
+                );
+                let path = out_dir.join("deps").join(output).with_extension("wasm");
+                if path.exists() {
+                    create_component(config, metadata, path.as_std_path(), false)?;
+                    outputs.push(path.to_path_buf().into_std_path_buf());
+                } else {
+                    log::debug!(
+                        "unable to convert wasm file to component `{}`",
+                        path.to_string(),
+                    );
+                }
+            }
+
+            let mut v: Vec<String> = vec![wasi_runner];
             for arg in &runner.args {
                 v.push(arg.to_string_lossy().into_owned());
             }
-            v.join(" ")
-        };
-        log::debug!("runner arguments`{:?}`", runner_env);
-        cmd.env("CARGO_TARGET_WASM32_WASI_RUNNER", runner_env);
+            let runner_env = v.join(" ");
+            cmd.env("CARGO_TARGET_WASM32_WASI_RUNNER", runner_env);
+        }
     }
 
-    // TODO: consider targets from .cargo/config.toml
+    let mut cmd_output = "".to_string();
 
-    // Handle the target for build and run commands
+    let output = cmd.output().context(format!(
+        "failed to spawn `{cargo}`",
+        cargo = cargo.display()
+    ))?;
+
+    if let Ok(value) = String::from_utf8(output.stderr) {
+        cmd_output = value;
+    }
+    config
+        .terminal()
+        .write_stdout(String::from_utf8_lossy(&output.stdout), None)?;
+    io::stdout().flush().ok();
+    config.terminal().error(cmd_output)?;
+    io::stderr().flush().ok();
+
+    if !output.status.success() {
+        std::process::exit(output.status.code().unwrap_or(1));
+    }
+
     if is_build || is_run {
-        install_wasm32_wasi(config)?;
-
-        // Add an implicit wasm32-wasi target if there isn't a wasm target present
-        if !cargo_args.targets.iter().any(|t| is_wasm_target(t)) {
-            cmd.arg("--target").arg("wasm32-wasi");
-        }
-    }
-
-    match cmd.status() {
-        Ok(status) => {
-            if !status.success() {
-                std::process::exit(status.code().unwrap_or(1));
-            }
-        }
-        Err(e) => {
-            bail!("failed to spawn `{cargo}`: {e}", cargo = cargo.display());
-        }
-    }
-
-    let mut outputs = Vec::new();
-    if is_build {
         log::debug!("searching for WebAssembly modules to componentize");
         let targets = cargo_args
             .targets
@@ -254,6 +335,32 @@ pub async fn run_cargo_command(
 
                 log::debug!("no output found for package `{name}`", name = package.name);
             }
+        }
+    }
+
+    if let Some(mut cmd) = cmd_run {
+        cmd.args(outputs.iter());
+        log::debug!(
+            "spawning `{:?}` with arguments `{:?}`",
+            cmd.get_program(),
+            cmd.get_args()
+        );
+        let output = cmd.output().context("failed to spawn wasi runner")?;
+        config.terminal().write_stdout(
+            format!(
+                "wasi runner stdout: {}",
+                String::from_utf8_lossy(&output.stdout)
+            ),
+            None,
+        )?;
+        io::stdout().flush().ok();
+        config.terminal().error(format!(
+            "wasi runner stderr: {}",
+            String::from_utf8_lossy(&output.stdout)
+        ))?;
+        io::stderr().flush().ok();
+        if !output.status.success() {
+            std::process::exit(output.status.code().unwrap_or(1));
         }
     }
 
