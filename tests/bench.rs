@@ -1,11 +1,13 @@
 use crate::support::*;
 use anyhow::Result;
 use assert_cmd::prelude::*;
+use predicates::str::contains;
 use std::fs;
 
 mod support;
 
 #[test]
+#[ignore = "only works in nightly mode"]
 fn it_runs_bench_with_basic_component() -> Result<()> {
     let project = Project::new("foo")?;
     project.update_manifest(|mut doc| {
@@ -38,7 +40,6 @@ cargo_component_bindings::generate!();
 extern crate test;
 
 use bindings::{Guest, Size};
-use std::mem::replace;
 use test::Bencher;
 
 struct Component;
@@ -51,25 +52,6 @@ fn fibonacci(n: Size) -> u32 {
     }
 }
 
-struct Fibonacci {
-    curr: u32,
-    next: u32,
-}
-
-impl Iterator for Fibonacci {
-    type Item = u32;
-    fn next(&mut self) -> Option<u32> {
-        let new_next = self.curr + self.next;
-        let new_curr = replace(&mut self.next, new_next);
-
-        Some(replace(&mut self.curr, new_curr))
-    }
-}
-
-fn fibonacci_sequence() -> Fibonacci {
-    Fibonacci { curr: 1, next: 1 }
-}
-
 impl Guest for Component {
     fn fibonacci(size: Size) -> u32 {
         fibonacci(size)
@@ -79,13 +61,17 @@ impl Guest for Component {
 #[bench]
 fn bench_recursive_fibonacci(b: &mut Bencher) {
     b.iter(|| {
-        (0..20).map(fibonacci).collect::<Vec<u32>>()
+        (0..5).map(fibonacci).collect::<Vec<u32>>()
     })
-}
-"#,
+}"#,
     )?;
 
-    project.cargo_component("bench").assert().success();
+    project
+        .cargo_component("bench")
+        .assert()
+        .stdout(contains("test bench_recursive_fibonacci ..."))
+        .stdout(contains("test result: ok."))
+        .success();
 
     Ok(())
 }
