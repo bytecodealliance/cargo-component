@@ -9,6 +9,7 @@ license = { workspace = true }
 categories = { workspace = true }
 keywords = { workspace = true }
 repository = { workspace = true }
+readme = "README.md"
 
 [dependencies]
 cargo-component-core = { workspace = true }
