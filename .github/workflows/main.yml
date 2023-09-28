@@ -24,8 +24,10 @@ jobs:
       uses: mozilla-actions/sccache-action@v0.0.3
     - name: Install Rust
       run: |
-        rustup update stable --no-self-update
-        rustup update nightly --no-self-update
+        rustup toolchain uninstall stable
+        rustup toolchain uninstall nightly
+        rustup install stable --profile=minimal --no-self-update
+        rustup install nightly --profile=minimal --no-self-update
         rustup default stable
         rustup target add wasm32-wasi
         rustup target add wasm32-wasi --toolchain nightly
