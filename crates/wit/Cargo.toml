@@ -10,7 +10,7 @@ keywords = { workspace = true }
 repository = { workspace = true }
 
 [dependencies]
-cargo-component-core = { path = "../core" }
+cargo-component-core = { workspace = true }
 anyhow = { workspace = true }
 semver = { workspace = true }
 url = { workspace = true }

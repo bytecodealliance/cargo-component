@@ -38,12 +38,8 @@ may cause build errors for existing component projects.
 To install the `cargo component` subcommand, run the following command:
 
 ```
-cargo install --git https://github.com/bytecodealliance/cargo-component --locked cargo-component
+cargo install cargo-component
 ```
-
-The [currently published crate](https://crates.io/crates/cargo-component)
-on crates.io is a nonfunctional placeholder and these instructions will be
-updated to install the crates.io package once a proper release is made.
 
 ## Motivation
 

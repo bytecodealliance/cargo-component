@@ -14,11 +14,10 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
-use toml_edit::{table, value, Document, InlineTable, Item, Table, Value};
+use toml_edit::{table, value, Document, Item, Table, Value};
 use url::Url;
 
 const BINDINGS_CRATE_NAME: &str = "cargo-component-bindings";
-const BINDINGS_CRATE_URL: &str = "https://github.com/bytecodealliance/cargo-component";
 
 fn escape_wit(s: &str) -> Cow<str> {
     match s {
@@ -289,8 +288,7 @@ impl NewCommand {
         metadata["component"] = Item::Table(component);
 
         doc["package"]["metadata"] = Item::Table(metadata);
-        doc["dependencies"][BINDINGS_CRATE_NAME] =
-            value(InlineTable::from_iter([("git", BINDINGS_CRATE_URL)]));
+        doc["dependencies"][BINDINGS_CRATE_NAME] = value(env!("CARGO_PKG_VERSION"));
 
         fs::write(&manifest_path, doc.to_string()).with_context(|| {
             format!(
