@@ -303,6 +303,10 @@ impl ComponentMetadata {
             }
         }
 
+        if let Some(adapter) = section.adapter.as_mut() {
+            *adapter = manifest_dir.join(adapter.as_path());
+        }
+
         Ok(Some(Self {
             name: package.name.clone(),
             version: package.version.clone(),
