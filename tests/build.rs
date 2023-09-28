@@ -733,9 +733,7 @@ fn it_builds_with_adapter() -> Result<()> {
     project
         .cargo_component("build")
         .assert()
-        .stderr(contains(
-            "error: failed to read module adapter `not-a-valid-path`",
-        ))
+        .stderr(contains("error: failed to read module adapter"))
         .failure();
 
     let project = Project::new("foo")?;

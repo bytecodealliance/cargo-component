@@ -498,8 +498,8 @@ fn create_component(
     )?;
 
     let encoder = ComponentEncoder::default()
-        .adapter("wasi_snapshot_preview1", &adapter_bytes(metadata, binary)?)?
         .module(&module)?
+        .adapter("wasi_snapshot_preview1", &adapter_bytes(metadata, binary)?)?
         .validate(true);
 
     let mut producers = wasm_metadata::Producers::empty();
