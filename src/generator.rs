@@ -14,7 +14,7 @@ use std::{
     process::{Command, Stdio},
 };
 use warg_protocol::registry::PackageId;
-use wit_bindgen_rust_lib::to_rust_ident;
+use wit_bindgen_rust::to_rust_ident;
 use wit_component::DecodedWasm;
 use wit_parser::{
     Function, Handle, Interface, Resolve, Type, TypeDef, TypeDefKind, TypeId, TypeOwner, WorldId,

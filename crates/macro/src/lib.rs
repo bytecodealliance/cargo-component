@@ -4,7 +4,7 @@
 
 use heck::ToUpperCamelCase;
 use proc_macro2::{Span, TokenStream};
-use quote::quote;
+use quote::{quote, ToTokens};
 use std::{
     borrow::Cow,
     collections::HashMap,
@@ -22,8 +22,7 @@ use wit_bindgen_core::{
     wit_parser::{Resolve, TypeDefKind, WorldId, WorldItem, WorldKey},
     Files,
 };
-use wit_bindgen_rust::{ExportKey, Opts};
-use wit_bindgen_rust_lib::Ownership;
+use wit_bindgen_rust::{ExportKey, Opts, Ownership};
 use wit_component::DecodedWasm;
 
 fn implementor_path_str(path: &syn::Path) -> String {
@@ -61,6 +60,7 @@ fn implementor_path_str(path: &syn::Path) -> String {
 /// - `implementor`: The name of the type to implement world exports on.
 /// - `resources`: A map of resource names to resource implementor types.
 /// - `ownership`: The ownership model to use for resources.
+/// - `additional_derives`: Additional derive macro attributes to add to generated types
 ///
 /// # Examples
 ///
@@ -167,6 +167,7 @@ mod kw {
     syn::custom_keyword!(implementor);
     syn::custom_keyword!(resources);
     syn::custom_keyword!(ownership);
+    syn::custom_keyword!(additional_derives);
 }
 
 #[derive(Clone)]
@@ -188,6 +189,8 @@ enum Opt {
     Implementor(Span, syn::Path),
     Resources(Span, Vec<Resource>),
     Ownership(Span, Ownership),
+    // Parse as paths so we can take the concrete types/macro names rather than raw strings
+    AdditionalDerives(Vec<syn::Path>),
 }
 
 impl Parse for Opt {
@@ -220,6 +223,13 @@ impl Parse for Opt {
                     .parse()
                     .map_err(|e| Error::new(ownership.span(), e))?,
             ))
+        } else if l.peek(kw::additional_derives) {
+            input.parse::<kw::additional_derives>()?;
+            input.parse::<Token![:]>()?;
+            let contents;
+            syn::bracketed!(contents in input);
+            let list = Punctuated::<_, Token![,]>::parse_terminated(&contents)?;
+            Ok(Opt::AdditionalDerives(list.into_iter().collect()))
         } else {
             Err(l.error())
         }
@@ -233,6 +243,7 @@ struct Config {
     implementor: Option<syn::Path>,
     resources: HashMap<String, syn::Path>,
     ownership: Ownership,
+    additional_derives: Vec<String>,
 }
 
 impl Config {
@@ -274,6 +285,10 @@ impl Config {
                     key.push_str(&package.name.name);
                     key.push('/');
                     key.push_str(interface.name.as_ref().expect("interface must have a name"));
+                    if let Some(version) = package.name.version.as_ref() {
+                        key.push('@');
+                        key.push_str(&version.to_string());
+                    }
                     key
                 }
             };
@@ -309,6 +324,7 @@ impl Config {
             ownership: self.ownership,
             runtime_path: Some("::cargo_component_bindings::rt".to_string()),
             bitflags_path: Some("::cargo_component_bindings::bitflags".to_string()),
+            additional_derive_attributes: self.additional_derives,
             ..Default::default()
         };
 
@@ -352,6 +368,7 @@ impl Parse for Config {
         let mut implementor: Option<syn::Path> = None;
         let mut resources: Option<Vec<Resource>> = None;
         let mut ownership: Option<Ownership> = None;
+        let mut additional_derives = Vec::new();
 
         if input.peek(token::Brace) {
             let content;
@@ -398,6 +415,12 @@ impl Parse for Config {
 
                         ownership = Some(value);
                     }
+                    Opt::AdditionalDerives(paths) => {
+                        additional_derives = paths
+                            .into_iter()
+                            .map(|p| p.into_token_stream().to_string())
+                            .collect()
+                    }
                 }
             }
         }
@@ -414,6 +437,7 @@ impl Parse for Config {
                 .map(|r| r.into_iter().map(|r| (r.key.value(), r.value)).collect())
                 .unwrap_or_default(),
             ownership: ownership.unwrap_or_default(),
+            additional_derives,
         })
     }
 }
