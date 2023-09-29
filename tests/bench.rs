@@ -7,13 +7,20 @@ use std::fs;
 mod support;
 
 #[test]
-#[ignore = "only works in nightly mode"]
 fn it_runs_bench_with_basic_component() -> Result<()> {
     let project = Project::new("foo")?;
     project.update_manifest(|mut doc| {
         redirect_bindings_crate(&mut doc);
         Ok(doc)
     })?;
+
+    fs::write(
+        project.root().join("rust-toolchain.toml"),
+        r#"
+[toolchain]
+channel = "nightly"
+"#,
+    )?;
 
     fs::write(
         project.root().join("wit/world.wit"),

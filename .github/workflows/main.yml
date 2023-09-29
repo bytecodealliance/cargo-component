@@ -24,10 +24,9 @@ jobs:
       uses: mozilla-actions/sccache-action@v0.0.3
     - name: Install Rust
       run: |
-        rustup toolchain uninstall stable
-        rustup toolchain uninstall nightly
-        rustup install stable --profile=minimal --no-self-update
-        rustup install nightly --profile=minimal --no-self-update
+        rustup set profile minimal
+        rustup update stable --no-self-update
+        rustup update nightly --no-self-update
         rustup default stable
         rustup target add wasm32-wasi
         rustup target add wasm32-wasi --toolchain nightly
@@ -37,10 +36,8 @@ jobs:
       shell: bash
     - name: Install Wasmtime
       run: cargo install wasmtime-cli --locked --features="component-model" --git https://github.com/bytecodealliance/wasmtime --rev 848764a9412a1bd66de4087f5ba0670d61384af1
-    - name: Run all tests on stable
+    - name: Run all tests
       run: cargo test --all
-    - name: Run benchmark tests on nigthly
-      run: cargo +nightly test --test bench -- --ignored
 
   example:
     name: Build example component
