@@ -15,14 +15,6 @@ fn it_runs_bench_with_basic_component() -> Result<()> {
     })?;
 
     fs::write(
-        project.root().join("rust-toolchain.toml"),
-        r#"
-[toolchain]
-channel = "nightly"
-"#,
-    )?;
-
-    fs::write(
         project.root().join("wit/world.wit"),
         "
 package my:fibonacci
@@ -75,6 +67,7 @@ fn bench_recursive_fibonacci(b: &mut Bencher) {
 
     project
         .cargo_component("bench")
+        .env("RUSTUP_TOOLCHAIN", "nightly")
         .assert()
         .stdout(contains("test bench_recursive_fibonacci ..."))
         .stdout(contains("test result: ok."))
