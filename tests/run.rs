@@ -8,8 +8,72 @@ use toml_edit::{value, Item, Table};
 mod support;
 
 #[test]
-fn it_runs_with_basic_component() -> Result<()> {
-    let project = Project::new("bar")?;
+fn it_runs_with_command_component() -> Result<()> {
+    let project = Project::new_bin("bar")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        let mut dependencies = Table::new();
+        dependencies["wasi:cli"]["path"] = value("wit/deps/cli");
+
+        let target =
+            doc["package"]["metadata"]["component"]["target"].or_insert(Item::Table(Table::new()));
+        target["dependencies"] = Item::Table(dependencies);
+        Ok(doc)
+    })?;
+
+    fs::create_dir_all(project.root().join("wit/deps/cli"))?;
+    fs::write(
+        project.root().join("wit/deps/cli/run.wit"),
+        "
+package wasi:cli
+
+interface environment {
+    get-environment: func() -> list<tuple<string, string>>
+    get-arguments: func() -> list<string>
+    initial-cwd: func() -> option<string>  
+}",
+    )?;
+
+    fs::write(
+        project.root().join("wit/world.wit"),
+        "
+package my:command
+
+world generator {
+    import wasi:cli/environment
+}",
+    )?;
+
+    fs::write(
+        project.root().join("src/main.rs"),
+        r#"
+cargo_component_bindings::generate!();
+
+use bindings::wasi::cli::environment::get_arguments;
+
+fn main() {
+    if get_arguments().iter().any(|v| v == "--verbose") {
+        println!("[guest] running component 'my:command'");
+    }
+}"#,
+    )?;
+
+    project
+        .cargo_component("run")
+        .arg("--")
+        .arg("--verbose")
+        .assert()
+        .stdout(contains("[guest] running component 'my:command'"))
+        .success();
+
+    validate_component(&project.debug_wasm("bar"))?;
+
+    Ok(())
+}
+
+#[test]
+fn it_runs_with_reactor_component() -> Result<()> {
+    let project = Project::new("baz")?;
     project.update_manifest(|mut doc| {
         redirect_bindings_crate(&mut doc);
         let mut dependencies = Table::new();
@@ -35,7 +99,7 @@ interface run {
     fs::write(
         project.root().join("wit/world.wit"),
         "
-package my:command
+package my:reactor
 
 world generator {
     export wasi:cli/run
@@ -53,8 +117,10 @@ struct Component;
 
 impl Guest for Component {
     fn run() -> Result<(), ()> {
-        if std::env::args().any(|v| v == "--verbose") {
-            println!("[guest] running component 'my:command'");
+        println!("[guest] running component 'my:reactor'");
+        match std::env::vars().find_map(|(k, v)| if k == "APP_NAME" { Some(v) } else { None }) {
+            Some(value) => println!("Hello, {}!", value),
+            None => println!("Hello, World!"),
         }
         Ok(())
     }
@@ -63,13 +129,16 @@ impl Guest for Component {
 
     project
         .cargo_component("run")
-        .arg("--")
-        .arg("--verbose")
+        .env(
+            "CARGO_TARGET_WASM32_WASI_RUNNER",
+            "wasmtime --env APP_NAME=CargoComponent -C cache=no -W component-model -S preview2 -S common",
+        )
         .assert()
-        .stdout(contains("[guest] running component 'my:command'"))
+        .stdout(contains("[guest] running component 'my:reactor'"))
+        .stdout(contains("Hello, CargoComponent!"))
         .success();
 
-    validate_component(&project.debug_wasm("bar"))?;
+    validate_component(&project.debug_wasm("baz"))?;
 
     Ok(())
 }
