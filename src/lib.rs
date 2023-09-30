@@ -224,7 +224,7 @@ pub async fn run_cargo_command(
     if let Ok(value) = String::from_utf8(output.stdout) {
         cmd_output = value;
     }
-    if !(is_build && is_run && is_test) || config.terminal().verbosity() == Verbosity::Verbose {
+    if !(is_build || is_run || is_test) || config.terminal().verbosity() == Verbosity::Verbose {
         log::trace!("--- cargo command stdout [BEGIN] ---");
         println!("{}", cmd_output);
         log::trace!("--- cargo command stdout [END] ---");
