@@ -53,7 +53,9 @@ struct Component;
 
 impl Guest for Component {
     fn run() -> Result<(), ()> {
-        println!("[guest] running component 'my:command'");
+        if std::env::args().any(|v| v == "--verbose") {
+            println!("[guest] running component 'my:command'");
+        }
         Ok(())
     }
 }"#,
@@ -61,6 +63,8 @@ impl Guest for Component {
 
     project
         .cargo_component("run")
+        .arg("--")
+        .arg("--verbose")
         .assert()
         .stdout(contains("[guest] running component 'my:command'"))
         .success();

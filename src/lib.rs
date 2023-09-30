@@ -95,9 +95,13 @@ pub async fn run_cargo_command(
     let is_run = matches!(subcommand, Some("run"));
     let is_test = matches!(subcommand, Some("test") | Some("bench"));
 
-    let needs_runner = !spawn_args.iter().any(|a| a == "--no-run");
+    let (build_args, runtime_args) = match spawn_args.iter().position(|a| a == "--") {
+        Some(position) => spawn_args.split_at(position),
+        None => (spawn_args, &[] as &[String]),
+    };
+    let needs_runner = !build_args.iter().any(|a| a == "--no-run");
 
-    let mut args = spawn_args.iter().peekable();
+    let mut args = build_args.iter().peekable();
     if let Some(arg) = args.peek() {
         if *arg == "component" {
             args.next().unwrap();
@@ -315,8 +319,10 @@ pub async fn run_cargo_command(
     if let Some(runner) = runner {
         for run in outputs.iter() {
             let mut cmd = Command::new(&runner.path);
-            cmd.args(&runner.args);
-            cmd.arg("--").arg(run);
+            cmd.args(&runner.args)
+                .arg("--")
+                .arg(run)
+                .args(runtime_args.iter().skip(1));
             log::debug!("spawning command {:?}", cmd);
 
             let output = cmd.output().context("failed to spawn wasi runner")?;
