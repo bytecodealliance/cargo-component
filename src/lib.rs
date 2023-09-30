@@ -9,10 +9,10 @@ use bytes::Bytes;
 use cargo_component_core::{
     lock::{LockFile, LockFileResolver, LockedPackage, LockedPackageVersion},
     registry::create_client,
-    terminal::{Colors, Terminal},
+    terminal::{Colors, Terminal, Verbosity},
 };
 use cargo_config2::{PathAndArgs, TargetTripleRef};
-use cargo_metadata::{Metadata, MetadataCommand, Package};
+use cargo_metadata::{Message, Metadata, MetadataCommand, Package};
 use config::{CargoArguments, CargoPackageSpec, Config};
 use lock::{acquire_lock_file_ro, acquire_lock_file_rw};
 use metadata::ComponentMetadata;
@@ -23,7 +23,7 @@ use std::{
     env,
     ffi::OsStr,
     fs::{self, File},
-    io::{self, Read, Write},
+    io::Read,
     path::{Path, PathBuf},
     process::Command,
     time::{Duration, SystemTime},
@@ -95,6 +95,8 @@ pub async fn run_cargo_command(
     let is_run = matches!(subcommand, Some("run"));
     let is_test = matches!(subcommand, Some("test") | Some("bench"));
 
+    let needs_runner = !spawn_args.iter().any(|a| a == "--no-run");
+
     let mut args = spawn_args.iter().peekable();
     if let Some(arg) = args.peek() {
         if *arg == "component" {
@@ -122,7 +124,7 @@ pub async fn run_cargo_command(
 
     // TODO: consider targets from .cargo/config.toml
 
-    // Handle the target for build and run commands
+    // Handle the target for build, run and test commands
     if is_build || is_run || is_test {
         install_wasm32_wasi(config)?;
 
@@ -130,18 +132,26 @@ pub async fn run_cargo_command(
         if !cargo_args.targets.iter().any(|t| is_wasm_target(t)) {
             cmd.arg("--target").arg("wasm32-wasi");
         }
+
+        // It will output the message as json so we can extract the wasm files
+        // that will be componentized
+        cmd.arg("--message-format").arg("json-render-diagnostics");
     }
 
-    let mut outputs = Vec::new();
-    let mut cmd_run: Option<Command> = None;
-    if is_run || is_test {
+    if needs_runner && is_test {
+        cmd.arg("--no-run");
+        cmd.env("CARGO_TARGET_WASM32_WASI_RUNNER", "echo");
+    }
+
+    let mut runner: Option<PathAndArgs> = None;
+    if needs_runner && (is_run || is_test) {
         let cargo_config = cargo_config2::Config::load()?;
 
         // We check here before we actually build that a runtime is present.
         // We first check the runner for `wasm32-wasi` in the order from
         // cargo's convention for a user-supplied runtime (path or executable)
         // and use the default, namely `wasmtime`, if it is not set.
-        let (runner, using_default) = cargo_config
+        let (r, using_default) = cargo_config
             .runner(TargetTripleRef::from("wasm32-wasi"))
             .unwrap_or_default()
             .map(|runner_override| (runner_override, false))
@@ -160,16 +170,17 @@ pub async fn run_cargo_command(
                     true,
                 )
             });
+        runner = Some(r.clone());
 
         // Treat the runner object as an executable with list of arguments it
         // that was extracted by splitting each whitespace. This allows the user
         // to provide arguments which are passed to wasmtime without having to
         // add more command-line argument parsing to this crate.
-        let wasi_runner = runner.path.to_string_lossy().into_owned();
+        let wasi_runner = r.path.to_string_lossy().into_owned();
 
         if !using_default {
             // check if the override is either a valid path or command found on $PATH
-            if !(runner.path.exists() || which::which(runner.path).is_ok()) {
+            if !(r.path.exists() || which::which(r.path).is_ok()) {
                 bail!(
                     "failed to find `{}` (specified by $CARGO_TARGET_WASM32_WASI_RUNNER) \
                         on the filesytem or in $PATH, you'll want to fix the path or unset \
@@ -178,7 +189,7 @@ pub async fn run_cargo_command(
                     wasi_runner
                 );
             }
-        } else if which::which(runner.path).is_err() {
+        } else if which::which(r.path).is_err() {
             let mut msg = format!(
                 "failed to find `{}` in $PATH, you'll want to \
                     install `{}` before running this command\n",
@@ -195,172 +206,130 @@ pub async fn run_cargo_command(
             }
             bail!("{}", msg);
         }
-
-        if is_run {
-            let mut command = Command::new(&wasi_runner);
-            command.args(&runner.args);
-            cmd_run = Some(command);
-        } else if is_test {
-            let mut command = Command::new(cmd.get_program());
-            if let Some(dir) = cmd.get_current_dir() {
-                command.current_dir(dir);
-            }
-            let envs: Vec<(&OsStr, &OsStr)> = cmd
-                .get_envs()
-                .filter(|(_, value)| value.is_some())
-                .map(|(k, value)| (k, value.unwrap()))
-                .collect();
-            command.envs(envs);
-            command.args(cmd.get_args());
-            command.arg("--no-run");
-            // .arg("--message-format")
-            // .arg("json-render-diagnostics");
-
-            log::warn!("spawning cargo command: `{:?}`", command);
-            let output = command.output().context(format!(
-                "failed to spawn `{cargo}`",
-                cargo = cargo.display()
-            ))?;
-            let cmd_output = String::from_utf8_lossy(&output.stdout);
-            log::warn!("build command stdout: {}", cmd_output);
-            log::warn!(
-                "build command stderr: {}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-            if !output.status.success() {
-                std::process::exit(output.status.code().unwrap_or(1));
-            }
-
-            // Try wasm file within deps folder
-            let mut output = cmd_output.trim();
-            // TODO: use json message format argument to extract executables
-            if let Some(pos) = output.rfind("/deps/") {
-                output = &output[(pos + 6)..(output.len() - 1)];
-
-                let out_dir = metadata.target_directory.join("wasm32-wasi").join(
-                    // Per design, cargo bench builds dependencies in release mode
-                    // See: https://github.com/rust-lang/cargo/issues/2234
-                    if cargo_args.release || matches!(subcommand, Some("bench")) {
-                        "release"
-                    } else {
-                        "debug"
-                    },
-                );
-                let path = out_dir.join("deps").join(output).with_extension("wasm");
-                if path.exists() {
-                    create_component(config, metadata, path.as_std_path(), false)?;
-                    outputs.push(path.to_path_buf().into_std_path_buf());
-                } else {
-                    log::debug!(
-                        "unable to convert wasm file to component `{}`",
-                        path.to_string(),
-                    );
-                }
-            }
-
-            let mut v: Vec<String> = vec![wasi_runner];
-            for arg in &runner.args {
-                v.push(arg.to_string_lossy().into_owned());
-            }
-            let runner_env = v.join(" ");
-            cmd.env("CARGO_TARGET_WASM32_WASI_RUNNER", runner_env);
-        }
     }
 
+    let mut outputs = Vec::new();
     let mut cmd_output = "".to_string();
+    log::debug!("spawning command {:?}", cmd);
 
     let output = cmd.output().context(format!(
         "failed to spawn `{cargo}`",
         cargo = cargo.display()
     ))?;
 
-    if let Ok(value) = String::from_utf8(output.stderr) {
+    if let Ok(value) = String::from_utf8(output.stdout) {
         cmd_output = value;
     }
-    config
-        .terminal()
-        .write_stdout(String::from_utf8_lossy(&output.stdout), None)?;
-    io::stdout().flush().ok();
-    config.terminal().error(cmd_output)?;
-    io::stderr().flush().ok();
+    if !(is_build && is_run && is_test) || config.terminal().verbosity() == Verbosity::Verbose {
+        log::trace!("--- cargo command stdout [BEGIN] ---");
+        println!("{}", cmd_output);
+        log::trace!("--- cargo command stdout [END] ---");
+    }
+    log::trace!("--- cargo command stderr [BEGIN] ---");
+    eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+    log::trace!("--- cargo command stderr [END] ---");
 
     if !output.status.success() {
         std::process::exit(output.status.code().unwrap_or(1));
     }
 
-    if is_build || is_run {
+    let build = extract_build_details(&cmd_output)?;
+
+    if is_build || is_run || is_test {
         log::debug!("searching for WebAssembly modules to componentize");
-        let targets = cargo_args
-            .targets
-            .iter()
-            .map(String::as_str)
-            .filter(|t| is_wasm_target(t))
-            .chain(cargo_args.targets.is_empty().then_some("wasm32-wasi"));
+        for (wasm, package_name, fresh) in build.wasms.iter() {
+            if wasm.exists() {
+                for PackageComponentMetadata { package, metadata } in packages {
+                    if package_name == &package.name {
+                        if let Some(metadata) = &metadata {
+                            let is_bin = is_test || package.targets.iter().any(|t| t.is_bin());
 
-        for target in targets {
-            let out_dir = metadata
-                .target_directory
-                .join(target)
-                .join(if cargo_args.release {
-                    "release"
-                } else {
-                    "debug"
-                });
+                            let parent = match wasm.parent() {
+                                Some(folder) => {
+                                    if folder.file_name().and_then(OsStr::to_str) == Some("deps") {
+                                        folder.parent().unwrap_or(folder)
+                                    } else {
+                                        folder
+                                    }
+                                }
+                                None => wasm.as_path(),
+                            };
+                            let basename = wasm
+                                .file_name()
+                                .ok_or_else(|| anyhow::anyhow!("failed to get wasm file name"))?;
 
-            for PackageComponentMetadata { package, metadata } in packages {
-                let metadata = match metadata {
-                    Some(metadata) => metadata,
-                    None => continue,
-                };
+                            // Cargo will always overwrite our `wasm` above with its own internal
+                            // cache. It's internal cache largely uses hard links.
+                            //
+                            // If `fresh` is *false*, then Cargo just built `wasm` and we need to
+                            // process it. If `fresh` is *true*, then we may have previously
+                            // processed it. If our previous processing was successful the output
+                            // was placed at `*.component.wasm`, so we use that to overwrite the
+                            // `*.wasm` file. In the process we also create a `*.module.wasm` for
+                            // debugging.
+                            //
+                            // Note that we remove files before renaming and such to ensure that
+                            // we're not accidentally updating the wrong hard link and such.
+                            let temporary_module =
+                                parent.join(basename).with_extension("module.wasm");
+                            let temporary_component =
+                                parent.join(basename).with_extension("component.wasm");
 
-                let is_bin = package.targets.iter().any(|t| t.is_bin());
+                            drop(fs::remove_file(&temporary_module));
+                            fs::rename(wasm, &temporary_module)?;
+                            if !*fresh || !temporary_component.exists() {
+                                fs::copy(&temporary_module, &temporary_component)?;
+                                create_component(config, metadata, &temporary_component, is_bin)?;
+                            }
+                            drop(fs::remove_file(wasm));
+                            fs::hard_link(&temporary_component, wasm)
+                                .or_else(|_| fs::copy(&temporary_component, wasm).map(|_| ()))?;
 
-                // First try for <name>.wasm
-                let path = out_dir.join(&package.name).with_extension("wasm");
-                if path.exists() {
-                    create_component(config, metadata, path.as_std_path(), is_bin)?;
-                    outputs.push(path.to_path_buf().into_std_path_buf());
-                    continue;
+                            outputs.push(temporary_component);
+                        }
+                    }
                 }
+            } else {
+                log::debug!(
+                    "unable to convert wasm file to component `{}`",
+                    wasm.to_string_lossy(),
+                );
+            }
+        }
 
-                // Next, try replacing `-` with `_`
-                let path = out_dir
-                    .join(package.name.replace('-', "_"))
-                    .with_extension("wasm");
-                if path.exists() {
-                    create_component(config, metadata, path.as_std_path(), is_bin)?;
-                    outputs.push(path.to_path_buf().into_std_path_buf());
-                    continue;
-                }
-
+        for PackageComponentMetadata {
+            package,
+            metadata: _,
+        } in packages
+        {
+            if !build
+                .wasms
+                .iter()
+                .any(|(_, package_id, _)| package_id.starts_with(&package.name))
+            {
                 log::debug!("no output found for package `{name}`", name = package.name);
             }
         }
     }
 
-    if let Some(mut cmd) = cmd_run {
-        cmd.args(outputs.iter());
-        log::debug!(
-            "spawning `{:?}` with arguments `{:?}`",
-            cmd.get_program(),
-            cmd.get_args()
-        );
-        let output = cmd.output().context("failed to spawn wasi runner")?;
-        config.terminal().write_stdout(
-            format!(
-                "wasi runner stdout: {}",
-                String::from_utf8_lossy(&output.stdout)
-            ),
-            None,
-        )?;
-        io::stdout().flush().ok();
-        config.terminal().error(format!(
-            "wasi runner stderr: {}",
-            String::from_utf8_lossy(&output.stdout)
-        ))?;
-        io::stderr().flush().ok();
-        if !output.status.success() {
-            std::process::exit(output.status.code().unwrap_or(1));
+    if let Some(runner) = runner {
+        for run in outputs.iter() {
+            let mut cmd = Command::new(&runner.path);
+            cmd.args(&runner.args);
+            cmd.arg("--").arg(run);
+            log::debug!("spawning command {:?}", cmd);
+
+            let output = cmd.output().context("failed to spawn wasi runner")?;
+            log::trace!("--- wasi runner stdout [BEGIN] ---");
+            println!("{}", String::from_utf8_lossy(&output.stdout));
+            log::trace!("--- wasi runner stdout [END] ---");
+            log::trace!("--- wasi runner stderr [BEGIN] ---");
+            eprintln!("{}", String::from_utf8_lossy(&output.stderr));
+            log::trace!("--- wasi runner stderr [END] ---");
+            log::debug!(
+                "wasi runner status code: {}",
+                output.status.code().unwrap_or(1)
+            );
         }
     }
 
@@ -760,6 +729,36 @@ fn create_component(
             path = path.display()
         )
     })
+}
+
+/// Represents known cargo build outputs.
+#[derive(Default, Debug)]
+struct CargoBuild {
+    /// The `*.wasm` artifacts we found during this build, in addition to the
+    /// profile that they were built with and whether or not it was `fresh`
+    /// during this build.
+    wasms: Vec<(PathBuf, String, bool)>,
+}
+
+fn extract_build_details(json: &str) -> Result<CargoBuild> {
+    let mut build = CargoBuild::default();
+    if json.is_empty() {
+        return Ok(build);
+    }
+    let reader = std::io::BufReader::new(json.as_bytes()); //command.stdout.take().unwrap());
+    for message in Message::parse_stream(reader) {
+        if let Message::CompilerArtifact(artifact) = message? {
+            for file in artifact.filenames {
+                let file = PathBuf::from(file);
+                if file.extension().and_then(|s| s.to_str()) == Some("wasm") {
+                    build
+                        .wasms
+                        .push((file, artifact.target.name.clone(), artifact.fresh));
+                }
+            }
+        }
+    }
+    Ok(build)
 }
 
 /// Represents options for a publish operation.
