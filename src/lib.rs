@@ -125,6 +125,15 @@ pub async fn run_cargo_command(
     }
     cmd.args(args);
 
+    // We need to set the `color` parameter to "always", otherwise
+    // ANSI colors are being stripped out by default
+    if !build_args
+        .iter()
+        .any(|a| a == "--color" || a.starts_with("--color="))
+    {
+        cmd.arg("--color").arg("always");
+    }
+
     // TODO: consider targets from .cargo/config.toml
 
     // Handle the target for build, run and test commands

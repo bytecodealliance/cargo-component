@@ -159,7 +159,7 @@ world foo {
     })?;
 
     project
-        .cargo_component("build")
+        .cargo_component("build --color never")
         .assert()
         .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
         .success();
