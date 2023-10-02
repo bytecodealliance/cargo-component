@@ -143,6 +143,8 @@ pub async fn run_cargo_command(
 
     if needs_runner && is_test {
         cmd.arg("--no-run");
+        // Replace original runner environment variable because
+        // the runner will be invoked after wasm has been built
         cmd.env("CARGO_TARGET_WASM32_WASI_RUNNER", "echo");
     }
 
@@ -223,6 +225,9 @@ pub async fn run_cargo_command(
     if let Ok(value) = String::from_utf8(output.stdout) {
         cmd_output = value;
     }
+
+    // Because there is no real use for the end user, standard output will be hidden
+    // by default as it used for presenting the cargo build details
     if !(is_build || is_run || is_test) || config.terminal().verbosity() == Verbosity::Verbose {
         log::trace!("--- cargo command stdout [BEGIN] ---");
         println!("{}", cmd_output);
@@ -747,18 +752,21 @@ fn create_component(
 /// Represents known cargo build outputs.
 #[derive(Default, Debug)]
 struct CargoBuild {
-    /// The `*.wasm` artifacts we found during this build, in addition to the
-    /// profile that they were built with and whether or not it was `fresh`
+    /// The `*.wasm` artifacts we found during this build, in addition to the target
+    /// package that this artifact was compiled for and whether or not it was `fresh`
     /// during this build.
     wasms: Vec<(PathBuf, String, bool)>,
 }
 
+/// Extract Cargo build details (such as generated artifacts, package name, etc) that
+/// was requested with `message-format` argument
+/// https://doc.rust-lang.org/cargo/reference/external-tools.html#json-messages
 fn extract_build_details(json: &str) -> Result<CargoBuild> {
     let mut build = CargoBuild::default();
     if json.is_empty() {
         return Ok(build);
     }
-    let reader = std::io::BufReader::new(json.as_bytes()); //command.stdout.take().unwrap());
+    let reader = std::io::BufReader::new(json.as_bytes());
     for message in Message::parse_stream(reader) {
         if let Message::CompilerArtifact(artifact) = message? {
             for file in artifact.filenames {
