@@ -22,8 +22,7 @@ use std::{
     borrow::Cow,
     env,
     ffi::OsStr,
-    fs::{self, File},
-    io::Read,
+    fs,
     path::{Path, PathBuf},
     process::Command,
     time::{Duration, SystemTime},
@@ -237,10 +236,9 @@ pub async fn run_cargo_command(
         std::process::exit(output.status.code().unwrap_or(1));
     }
 
-    let build = extract_build_details(&cmd_output)?;
-
     if is_build || is_run || is_test {
         log::debug!("searching for WebAssembly modules to componentize");
+        let build = extract_build_details(&cmd_output)?;
         for (wasm, package_name, fresh) in build.wasms.iter() {
             if wasm.exists() {
                 for PackageComponentMetadata { package, metadata } in packages {
@@ -282,8 +280,48 @@ pub async fn run_cargo_command(
                             drop(fs::remove_file(&temporary_module));
                             fs::rename(wasm, &temporary_module)?;
                             if !*fresh || !temporary_component.exists() {
-                                fs::copy(&temporary_module, &temporary_component)?;
-                                create_component(config, metadata, &temporary_component, is_bin)?;
+                                let path = &temporary_module;
+                                let bytes = &mut fs::read(path).with_context(|| {
+                                    format!(
+                                        "failed to read output module `{path}`",
+                                        path = path.display()
+                                    )
+                                })?;
+
+                                // If the compilation output is not a WebAssembly module, then do nothing
+                                // Note: due to the way cargo currently works on macOS, it will overwrite
+                                // a previously generated component on an up-to-date build.
+                                //
+                                // As a result, users on macOS will see a "creating component" message
+                                // even if the build is up-to-date.
+                                //
+                                // See: https://github.com/rust-lang/cargo/blob/99ad42deb4b0be0cdb062d333d5e63460a94c33c/crates/cargo-util/src/paths.rs#L542-L550
+                                if bytes.len() < 8 || bytes[0..4] != [0x0, b'a', b's', b'm'] {
+                                    bail!(
+                                        "expected `{path}` to be a WebAssembly module",
+                                        path = path.display()
+                                    );
+                                }
+                                // Check for the module header version
+                                if bytes[4..8] == [0x01, 0x00, 0x00, 0x00] {
+                                    if is_test {
+                                        // To prevent the test entrypoint to clash with default WASI
+                                        // command export, we will rename it to something random
+                                        replace_export(bytes);
+                                    }
+                                    fs::write(&temporary_component, bytes)?;
+                                    create_component(
+                                        config,
+                                        metadata,
+                                        &temporary_component,
+                                        is_bin,
+                                    )?;
+                                } else {
+                                    log::debug!(
+                                        "output file `{path}` is already a WebAssembly component",
+                                        path = path.display()
+                                    );
+                                }
                             }
                             drop(fs::remove_file(wasm));
                             fs::hard_link(&temporary_component, wasm)
@@ -607,29 +645,14 @@ async fn generate_package_bindings(
     Ok(())
 }
 
-fn is_wasm_module(path: impl AsRef<Path>) -> Result<bool> {
-    let path = path.as_ref();
-
-    let mut file = File::open(path)
-        .with_context(|| format!("failed to open `{path}` for read", path = path.display()))?;
-
-    let mut bytes = [0u8; 8];
-    file.read(&mut bytes).with_context(|| {
-        format!(
-            "failed to read file header for `{path}`",
-            path = path.display()
-        )
-    })?;
-
-    if bytes[0..4] != [0x0, b'a', b's', b'm'] {
-        bail!(
-            "expected `{path}` to be a WebAssembly module",
-            path = path.display()
-        );
+fn replace_export(buf: &mut [u8]) {
+    let from = "wasi:cli/run".as_bytes();
+    let to = "aaaa:cli/run".as_bytes();
+    for i in 0..=buf.len() - from.len() {
+        if buf[i..].starts_with(from) {
+            buf[i..(i + from.len())].clone_from_slice(to);
+        }
     }
-
-    // Check for the module header version
-    Ok(bytes[4..] == [0x01, 0x00, 0x00, 0x00])
 }
 
 fn adapter_bytes(metadata: &ComponentMetadata, binary: bool) -> Result<Cow<[u8]>> {
@@ -665,22 +688,6 @@ fn create_component(
     path: &Path,
     binary: bool,
 ) -> Result<()> {
-    // If the compilation output is not a WebAssembly module, then do nothing
-    // Note: due to the way cargo currently works on macOS, it will overwrite
-    // a previously generated component on an up-to-date build.
-    //
-    // As a result, users on macOS will see a "creating component" message
-    // even if the build is up-to-date.
-    //
-    // See: https://github.com/rust-lang/cargo/blob/99ad42deb4b0be0cdb062d333d5e63460a94c33c/crates/cargo-util/src/paths.rs#L542-L550
-    if !is_wasm_module(path)? {
-        ::log::debug!(
-            "output file `{path}` is already a WebAssembly component",
-            path = path.display()
-        );
-        return Ok(());
-    }
-
     ::log::debug!(
         "componentizing WebAssembly module `{path}` as a {kind} component",
         path = path.display(),
