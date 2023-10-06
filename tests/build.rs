@@ -756,3 +756,23 @@ fn it_builds_with_adapter() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn it_errors_if_adapter_is_not_wasm() -> Result<()> {
+    let project = Project::new("foo")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        doc["package"]["metadata"]["component"]["adapter"] = value("foo.wasm");
+        Ok(doc)
+    })?;
+
+    fs::write(project.root().join("foo.wasm"), "not wasm")?;
+
+    project
+        .cargo_component("build")
+        .assert()
+        .stderr(contains("error: failed to load adapter module"))
+        .failure();
+
+    Ok(())
+}
