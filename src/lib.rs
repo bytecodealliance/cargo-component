@@ -499,7 +499,18 @@ fn create_component(
 
     let encoder = ComponentEncoder::default()
         .module(&module)?
-        .adapter("wasi_snapshot_preview1", &adapter_bytes(metadata, binary)?)?
+        .adapter("wasi_snapshot_preview1", &adapter_bytes(metadata, binary)?)
+        .with_context(|| {
+            format!(
+                "failed to load adapter module `{path}`",
+                path = if let Some(path) = &metadata.section.adapter {
+                    path.as_path()
+                } else {
+                    Path::new("<built-in>")
+                }
+                .display()
+            )
+        })?
         .validate(true);
 
     let mut producers = wasm_metadata::Producers::empty();

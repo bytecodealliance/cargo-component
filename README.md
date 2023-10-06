@@ -157,19 +157,42 @@ As this target is for a _preview1_ release of WASI, the WebAssembly module
 produced by the Rust compiler must be adapted to the _preview2_ version of WASI
 supported by the component model.
 
-The adaptation is automatically performed when `wasm32-wasi` is targeted.
+The adaptation is automatically performed when `wasm32-wasi` is targeted using 
+a built-in WASI adapter snapshotted out of the Wasmtime repository.
 
-To prevent this, override the target to `wasm32-unknown-unknown` using the
-`--target` option when building. This, however, will disable WASI support.
+As WASI preview2 has not stabilized yet, occasionally the output of 
+`cargo-component` may differ in its WASI interface definitions from a host 
+runtime like Wasmtime.
 
-Use the _preview2_ version of [`wasi-common`][2] in your host to run components
-produced by `cargo component`.
+When this occurs, you may override the built-in adapter `cargo-component` uses 
+by setting the `adapter` setting in the `[package.metadata.component]` table in 
+`Cargo.toml` to the path to the adapter module to use.
+
+To build the adapter module, clone the [Wasmtime repository](https://github.com/bytecodealliance/wasmtime)
+and run the following commands:
+
+```
+git checkout $REV
+
+cargo build -p wasi-preview1-component-adapter --target wasm32-unknown-unknown --release
+
+cp wasm32-unknown-unknown/release/wasi_snapshot_preview1.wasm $PROJECT
+```
+
+where `$REV` is the Wasmtime commit hash you want to use and `$PROJECT` is the 
+path to your component project.
+
+Next, edit `Cargo.toml` to point at the adapter:
+
+```toml
+[package.metadata.component]
+adapter = "wasi_snapshot_preview1.wasm"
+```
 
 When the Rust compiler supports a [_preview2_ version of the WASI target][1],
 support in `cargo component` for adapting a _preview1_ module will be removed.
 
 [1]: https://github.com/rust-lang/compiler-team/issues/594
-[2]: https://github.com/bytecodealliance/preview2-prototyping/tree/main/wasi-common
 
 ## Getting Started
 
