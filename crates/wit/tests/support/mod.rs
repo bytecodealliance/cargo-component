@@ -30,43 +30,10 @@ pub fn root() -> Result<PathBuf> {
         static TEST_ID: usize = NEXT_ID.fetch_add(1, SeqCst);
     }
     let id = TEST_ID.with(|n| *n);
-    let mut path = env::current_exe()?;
-    path.pop(); // remove test exe name
-    path.pop(); // remove `deps`
-    path.pop(); // remove `debug` or `release`
-    path.push("tests");
-    path.push("wit");
+    let mut path: PathBuf = env!("CARGO_TARGET_TMPDIR").into();
+    path.push(format!("wit-{test}-{id}", test = env!("CARGO_CRATE_NAME")));
     fs::create_dir_all(&path)?;
-
-    exclude_test_directories()?;
-
-    Ok(path.join(format!("t{id}")))
-}
-
-// This works around an apparent bug in cargo where
-// a directory is explicitly excluded from a workspace,
-// but `cargo new` still detects `workspace.package` settings
-// and sets them to be inherited in the new project.
-fn exclude_test_directories() -> Result<()> {
-    let mut path = env::current_exe()?;
-    path.pop(); // remove test exe name
-    path.pop(); // remove `deps`
-    path.pop(); // remove `debug` or `release`
-    path.push("tests");
-    path.push("Cargo.toml");
-
-    if !path.exists() {
-        fs::write(
-            &path,
-            r#"
-    [workspace]
-    exclude = ["cargo-component", "wit"]
-    "#,
-        )
-        .with_context(|| format!("failed to write `{path}`", path = path.display()))?;
-    }
-
-    Ok(())
+    Ok(path)
 }
 
 pub fn create_root() -> Result<PathBuf> {
