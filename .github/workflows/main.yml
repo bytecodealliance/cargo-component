@@ -30,7 +30,6 @@ jobs:
         rustup default stable
         rustup target add wasm32-wasi
         rustup target add wasm32-unknown-unknown
-      shell: bash
     - name: Run all tests
       run: cargo test --all
 
