@@ -8,6 +8,9 @@ on:
 
 jobs:
   test:
+    defaults:
+      run:
+        shell: bash
     name: Run tests
     runs-on: ${{ matrix.os }}
     strategy:
@@ -22,7 +25,11 @@ jobs:
     - name: Run sccache-cache
       uses: mozilla-actions/sccache-action@v0.0.3
     - name: Install Rust
-      run: rustup update stable --no-self-update && rustup default stable && rustup target add wasm32-wasi && rustup target add wasm32-unknown-unknown
+      run: |
+        rustup update stable --no-self-update
+        rustup default stable
+        rustup target add wasm32-wasi
+        rustup target add wasm32-unknown-unknown
       shell: bash
     - name: Run all tests
       run: cargo test --all
