@@ -475,7 +475,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-component"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -515,7 +515,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-component-bindings"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "cargo-component-macro",
  "wit-bindgen",
@@ -523,7 +523,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-component-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -549,7 +549,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-component-macro"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "heck",
  "proc-macro2",

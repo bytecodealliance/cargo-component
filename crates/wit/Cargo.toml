@@ -1,16 +1,18 @@
 [package]
 name = "wit"
+# This tool has an independent version from `cargo-component`.
+version = "0.1.0"
 description = "A tool for building and publishing WIT packages to a registry."
-version = { workspace = true }
 edition = { workspace = true }
 authors = { workspace = true }
 license = { workspace = true }
 categories = { workspace = true }
 keywords = { workspace = true }
 repository = { workspace = true }
+readme = "README.md"
 
 [dependencies]
-cargo-component-core = { path = "../core" }
+cargo-component-core = { workspace = true }
 anyhow = { workspace = true }
 semver = { workspace = true }
 url = { workspace = true }

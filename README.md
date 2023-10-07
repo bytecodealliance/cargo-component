@@ -38,12 +38,8 @@ may cause build errors for existing component projects.
 To install the `cargo component` subcommand, run the following command:
 
 ```
-cargo install --git https://github.com/bytecodealliance/cargo-component --locked cargo-component
+cargo install cargo-component
 ```
-
-The [currently published crate](https://crates.io/crates/cargo-component)
-on crates.io is a nonfunctional placeholder and these instructions will be
-updated to install the crates.io package once a proper release is made.
 
 ## Motivation
 
@@ -295,9 +291,8 @@ for other IDEs.
 ## Contributing to `cargo component`
 
 `cargo component` is a [Bytecode Alliance](https://bytecodealliance.org/)
-project, and follows
-the Bytecode Alliance's [Code of Conduct](CODE_OF_CONDUCT.md) and
-[Organizational Code of Conduct](ORG_CODE_OF_CONDUCT.md).
+project, and follows the Bytecode Alliance's [Code of Conduct](CODE_OF_CONDUCT.md)
+and [Organizational Code of Conduct](ORG_CODE_OF_CONDUCT.md).
 
 ### Getting the Code
 
@@ -333,14 +328,10 @@ command. This is checked on CI.
 The CI for the `cargo component` repository is relatively significant. It tests
 changes on Windows, macOS, and Linux.
 
-It also performs a "dry run" of the release process to ensure that release
-binaries can be built and are ready to be published (_coming soon_).
-
-### Publishing (_coming soon_)
+### Publishing
 
 Publication of this crate is entirely automated via CI. A publish happens
 whenever a tag is pushed to the repository, so to publish a new version you'll
-want to make a PR that bumps the version numbers (see the `bump.rs` scripts in
-the root of the repository), merge the PR, then tag the PR and push the tag.
-That should trigger all that's necessary to publish all the crates and binaries
-to crates.io.
+want to make a PR that bumps the version numbers (see the `ci/publish.rs` 
+script), merge the PR, then tag the PR and push the tag. That should trigger 
+all that's necessary to publish all the crates and binaries to crates.io.
