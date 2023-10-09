@@ -253,10 +253,12 @@ pub async fn run_cargo_command(
     if is_build || is_run || is_test {
         log::debug!("searching for WebAssembly modules to componentize");
         let build = extract_build_details(&cmd_output)?;
-        for (wasm, package_name, fresh) in build.wasms.iter() {
+        for (wasm, package_id, target_name, fresh) in build.wasms.iter() {
             if wasm.exists() {
                 for PackageComponentMetadata { package, metadata } in packages {
-                    if package_name == &package.name {
+                    // When passing `--bin` the target name will be the binary being executed,
+                    // but the package id still points to the package the binary is part of.
+                    if target_name == &package.name || package_id.starts_with(&package.name) {
                         if let Some(metadata) = &metadata {
                             let is_bin = is_test || package.targets.iter().any(|t| t.is_bin());
 
@@ -361,7 +363,7 @@ pub async fn run_cargo_command(
             if !build
                 .wasms
                 .iter()
-                .any(|(_, package_id, _)| package_id.starts_with(&package.name))
+                .any(|(_, package_id, _, _)| package_id.starts_with(&package.name))
             {
                 log::debug!("no output found for package `{name}`", name = package.name);
             }
@@ -764,7 +766,7 @@ struct CargoBuild {
     /// The `*.wasm` artifacts we found during this build, in addition to the target
     /// package that this artifact was compiled for and whether or not it was `fresh`
     /// during this build.
-    wasms: Vec<(PathBuf, String, bool)>,
+    wasms: Vec<(PathBuf, String, String, bool)>,
 }
 
 /// Extract Cargo build details (such as generated artifacts, package name, etc) that
@@ -781,9 +783,12 @@ fn extract_build_details(json: &str) -> Result<CargoBuild> {
             for file in artifact.filenames {
                 let file = PathBuf::from(file);
                 if file.extension().and_then(|s| s.to_str()) == Some("wasm") {
-                    build
-                        .wasms
-                        .push((file, artifact.target.name.clone(), artifact.fresh));
+                    build.wasms.push((
+                        file,
+                        artifact.package_id.to_string(),
+                        artifact.target.name.clone(),
+                        artifact.fresh,
+                    ));
                 }
             }
         }
