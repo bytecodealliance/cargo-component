@@ -776,3 +776,73 @@ fn it_errors_if_adapter_is_not_wasm() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn it_adds_additional_derives() -> Result<()> {
+    let project = Project::new("foo")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
+
+    std::process::Command::new("cargo")
+        .args(["add", "serde", "--features", "derive"])
+        .current_dir(project.root())
+        .assert()
+        .success();
+    std::process::Command::new("cargo")
+        .args(["add", "serde_json"])
+        .current_dir(project.root())
+        .assert()
+        .success();
+
+    fs::write(
+        project.root().join("wit/world.wit"),
+        "
+package my:derive
+
+interface foo {
+    record bar {
+        value: u32,
+    }
+}
+
+world foo-world {
+    use foo.{bar}
+
+    export baz: func(thing: bar) -> list<u8>
+}
+",
+    )?;
+    fs::write(
+        project.root().join("src/lib.rs"),
+        r#"cargo_component_bindings::generate!({
+    additional_derives: [serde::Serialize, serde::Deserialize]
+});
+
+use bindings::Guest;
+use bindings::my::derive::foo::Bar;
+
+struct Component;
+
+impl Guest for Component {
+    fn baz(thing: Bar) -> Vec<u8> {
+        let stuff = serde_json::to_vec(&thing).unwrap();
+        // Check we got the derived deserialize
+        let _thing: Bar = serde_json::from_slice(&stuff).unwrap();
+        stuff
+    }
+}
+"#,
+    )?;
+
+    project
+        .cargo_component("build")
+        .assert()
+        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .success();
+
+    validate_component(&project.debug_wasm("foo"))?;
+
+    Ok(())
+}

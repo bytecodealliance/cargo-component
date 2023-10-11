@@ -32,7 +32,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 indexmap = { workspace = true }
 url = { workspace = true }
-wit-bindgen-rust-lib = { workspace = true }
+wit-bindgen-rust = { workspace = true }
 wit-parser = { workspace = true }
 wit-component = { workspace = true }
 wasm-metadata = { workspace = true }
@@ -95,7 +95,6 @@ bytes = "1.5.0"
 proc-macro2 = "1.0.67"
 quote = "1.0.33"
 syn = "2.0.37"
-wit-bindgen-rust-lib = "0.12.0"
-wit-bindgen-core = "0.12.0"
-wit-bindgen-rust = "0.12.0"
-wit-bindgen = "0.12.0"
+wit-bindgen-rust = { git = "https://github.com/bytecodealliance/wit-bindgen.git", version = "0.12.0" }
+wit-bindgen-core = { git = "https://github.com/bytecodealliance/wit-bindgen.git", version = "0.12.0" }
+wit-bindgen = { git = "https://github.com/bytecodealliance/wit-bindgen.git", version = "0.12.0" }
