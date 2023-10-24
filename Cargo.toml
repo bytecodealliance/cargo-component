@@ -9,7 +9,7 @@ repository = { workspace = true }
 readme = "README.md"
 
 [workspace.package]
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["Peter Huene <peter@huene.dev>"]
 license = "Apache-2.0 WITH LLVM-exception"
@@ -60,8 +60,8 @@ members = ["crates/bindings", "crates/macro", "crates/core", "crates/wit"]
 exclude = ["target/tests"]
 
 [workspace.dependencies]
-cargo-component-core = { path = "crates/core", version = "0.2.0" }
-cargo-component-macro = { path = "crates/macro", version = "0.2.0" }
+cargo-component-core = { path = "crates/core", version = "0.3.0" }
+cargo-component-macro = { path = "crates/macro", version = "0.3.0" }
 warg-protocol = "0.2.0"
 warg-crypto = "0.2.0"
 warg-client = "0.2.0"
