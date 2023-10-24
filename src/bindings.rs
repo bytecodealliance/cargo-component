@@ -120,6 +120,7 @@ impl<'a> BindingsEncoder<'a> {
         }
 
         wit_component::encode(
+            Some(true),
             &self.resolve,
             self.resolve.worlds[self.world]
                 .package
