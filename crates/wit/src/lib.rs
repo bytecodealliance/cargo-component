@@ -234,7 +234,7 @@ async fn build_wit_package(
     let pkg = &mut resolve.packages[package];
     let id = format!("{ns}:{name}", ns = pkg.name.namespace, name = pkg.name.name).parse()?;
 
-    let bytes = wit_component::encode(&resolve, package)?;
+    let bytes = wit_component::encode(Some(true), &resolve, package)?;
 
     let mut producers = wasm_metadata::Producers::empty();
     producers.add(
