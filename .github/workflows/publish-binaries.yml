@@ -32,6 +32,9 @@ jobs:
             os: ubuntu-latest
           - rust-target: x86_64-apple-darwin
             os: macos-latest
+          - rust-target: x86_64-pc-windows-gnu
+            os: windows-latest
+
     needs:
       - bump_dev_release
     permissions:
@@ -41,7 +44,10 @@ jobs:
       - name: Install Rust
         run: rustup update stable --no-self-update && rustup default stable && rustup target add ${{ matrix.rust-target }}
       - run: cargo build --release --target ${{ matrix.rust-target }}
+      - run: mv ./target/${{ matrix.rust-target }}/release/cargo-component.exe ./target/${{ matrix.rust-target }}/release/cargo-component-${{ matrix.rust-target }}
+        if: matrix.os == 'windows-latest'
       - run: mv ./target/${{ matrix.rust-target }}/release/cargo-component ./target/${{ matrix.rust-target }}/release/cargo-component-${{ matrix.rust-target }}
+        if: matrix.os != 'windows-latest'
       - name: Login GH CLI
         run: gh auth login --with-token < <(echo ${{ secrets.GITHUB_TOKEN }})
       - run: gh release upload -R bytecodealliance/cargo-component --clobber dev target/${{ matrix.rust-target }}/release/cargo-component-${{ matrix.rust-target }}
@@ -57,6 +63,9 @@ jobs:
             os: ubuntu-latest
           - rust-target: x86_64-apple-darwin
             os: macos-latest
+          - rust-target: x86_64-pc-windows-gnu
+            os: windows-latest
+
     permissions:
       contents: write
     steps:
@@ -64,7 +73,10 @@ jobs:
       - name: Install Rust
         run: rustup update stable --no-self-update && rustup default stable && rustup target add ${{ matrix.rust-target }}
       - run: cargo build --release --target ${{ matrix.rust-target }}
+      - run: mv ./target/${{ matrix.rust-target }}/release/cargo-component.exe ./target/${{ matrix.rust-target }}/release/cargo-component-${{ matrix.rust-target }}
+        if: matrix.os == 'windows-latest'
       - run: mv ./target/${{ matrix.rust-target }}/release/cargo-component ./target/${{ matrix.rust-target }}/release/cargo-component-${{ matrix.rust-target }}
+        if: matrix.os != 'windows-latest'
       - name: Login GH CLI
         run: gh auth login --with-token < <(echo ${{ secrets.GITHUB_TOKEN }})
       - run: gh release upload -R bytecodealliance/cargo-component --clobber ${{ github.ref_name }} target/${{ matrix.rust-target }}/release/cargo-component-${{ matrix.rust-target }}
