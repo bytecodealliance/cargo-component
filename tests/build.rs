@@ -846,3 +846,47 @@ impl Guest for Component {
 
     Ok(())
 }
+
+#[test]
+fn it_builds_with_versioned_wit() -> Result<()> {
+    let project = Project::new("foo")?;
+    project.update_manifest(|mut doc| {
+        redirect_bindings_crate(&mut doc);
+        Ok(doc)
+    })?;
+
+    fs::write(
+        project.root().join("wit/world.wit"),
+        "
+            package foo:bar@1.2.3
+
+            interface foo {
+                f: func()
+            }
+
+            world bar {
+                export foo
+            }
+        ",
+    )?;
+
+    fs::write(
+        project.root().join("src/lib.rs"),
+        r#"
+            cargo_component_bindings::generate!();
+
+            struct Component;
+
+            impl bindings::exports::foo::bar::foo::Guest for Component {
+                fn f() {}
+            }
+        "#,
+    )?;
+
+    project.cargo_component("build").assert().success();
+
+    let dep = project.debug_wasm("foo");
+    validate_component(&dep)?;
+
+    Ok(())
+}
