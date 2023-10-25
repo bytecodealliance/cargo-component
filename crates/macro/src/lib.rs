@@ -285,6 +285,8 @@ impl Config {
                     key.push_str(&package.name.name);
                     key.push('/');
                     key.push_str(interface.name.as_ref().expect("interface must have a name"));
+                    // wit-bindgen expects to not have the package version number in
+                    // the export map, so don't append it here
                     key
                 }
             };
