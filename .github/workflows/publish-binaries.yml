@@ -19,7 +19,7 @@ jobs:
       - name: Delete old dev release
         run: gh release delete -R bytecodealliance/cargo-component dev -y || true
       - name: Create new latest release
-        run: gh release create -R bytecodealliance/cargo-component dev --notes "Published artifacts from the latest build"
+        run: gh release create -R bytecodealliance/cargo-component dev --prerelease --notes "Published artifacts from the latest build"
 
   publish_dev_release:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main' && github.repository == 'bytecodealliance/cargo-component'
@@ -49,6 +49,7 @@ jobs:
       - run: mv ./target/${{ matrix.rust-target }}/release/cargo-component ./target/${{ matrix.rust-target }}/release/cargo-component-${{ matrix.rust-target }}
         if: matrix.os != 'windows-latest'
       - name: Login GH CLI
+        shell: bash
         run: gh auth login --with-token < <(echo ${{ secrets.GITHUB_TOKEN }})
       - run: gh release upload -R bytecodealliance/cargo-component --clobber dev target/${{ matrix.rust-target }}/release/cargo-component-${{ matrix.rust-target }}
 
@@ -78,5 +79,6 @@ jobs:
       - run: mv ./target/${{ matrix.rust-target }}/release/cargo-component ./target/${{ matrix.rust-target }}/release/cargo-component-${{ matrix.rust-target }}
         if: matrix.os != 'windows-latest'
       - name: Login GH CLI
+        shell: bash
         run: gh auth login --with-token < <(echo ${{ secrets.GITHUB_TOKEN }})
       - run: gh release upload -R bytecodealliance/cargo-component --clobber ${{ github.ref_name }} target/${{ matrix.rust-target }}/release/cargo-component-${{ matrix.rust-target }}
