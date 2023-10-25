@@ -1,0 +1,66 @@
+name: "Publish binaries"
+
+on:
+  push:
+    branches: ["main"]
+    tags:
+      - "v*"
+  pull_request:
+    branches: [main]
+    
+jobs:
+  bump_dev_release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    name: Create latest release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Login GH CLI
+        run: gh auth login --with-token < <(echo ${{ secrets.GITHUB_TOKEN }})
+      - name: Delete old dev release
+        run: gh release delete -R bytecodealliance/cargo-component dev -y || true
+      - name: Create new latest release
+        run: gh release create -R bytecodealliance/cargo-component latest --notes "Published artifacts from the latest build"
+
+  publish_latest_release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    name: Publish to latest release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        rust-target: [x86_64-unknown-linux-gnu, x86_64-unknown-linux-gnu]
+    needs:
+      - bump_latest_release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        run: rustup update stable --no-self-update && rustup default stable && rustup target add ${{ matrix.rust-target }}
+      - run: cargo build --release --target ${{ matrix.rust-target }}
+      - run: mv ./target/${{ matrix.rust-target }}/release/cargo-component ./target/${{ matrix.rust-target }}/release/cargo-component-${{ matrix.rust-target }}
+      - name: Login GH CLI
+        run: gh auth login --with-token < <(echo ${{ secrets.GITHUB_TOKEN }})
+      - run: gh release upload -R bytecodealliance/cargo-component --clobber latest target/${{ matrix.rust-target }}/release/cargo-component-${{ matrix.rust-target }}
+
+  publish_tagged_release:
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    name: Publish to tagged release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+        rust-target: [x86_64-unknown-linux-gnu, x86_64-unknown-linux-gnu]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        run: rustup update stable --no-self-update && rustup default stable && rustup target add ${{ matrix.rust-target }}
+      - run: cargo build --release --target ${{ matrix.rust-target }}
+      - run: mv ./target/${{ matrix.rust-target }}/release/cargo-component ./target/${{ matrix.rust-target }}/release/cargo-component-${{ matrix.rust-target }}
+      - name: Login GH CLI
+        run: gh auth login --with-token < <(echo ${{ secrets.GITHUB_TOKEN }})
+      - run: gh release upload -R bytecodealliance/cargo-component --clobber ${{ github.ref }} target/${{ matrix.rust-target }}/release/cargo-component-${{ matrix.rust-target }}
