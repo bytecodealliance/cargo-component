@@ -27,4 +27,5 @@ jobs:
       - name: Install Rust
         run: rustup update stable --no-self-update && rustup default stable && rustup target add ${{ matrix.rust-target }}
       - run: cargo build --release --target ${{ matrix.rust-target }}
+      - run: ls ./target/${{ matrix.rust-target }}/release
       - run: mv ./target/${{ matrix.rust-target }}/release/cargo-component* ./target/${{ matrix.rust-target }}/release/cargo-component-${{ matrix.rust-target }}
