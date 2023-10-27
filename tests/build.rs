@@ -1,9 +1,10 @@
 use crate::support::*;
 use anyhow::{Context, Result};
 use assert_cmd::prelude::*;
+use cargo_component::BINDINGS_CRATE_NAME;
 use predicates::{prelude::PredicateBooleanExt, str::contains};
 use std::fs;
-use toml_edit::{value, Item, Table};
+use toml_edit::{value, Array, InlineTable, Item, Table};
 
 mod support;
 
@@ -205,7 +206,7 @@ fn it_regenerates_target_if_wit_changed() -> Result<()> {
     project
         .cargo_component("build")
         .assert()
-        .stderr(contains("Encoding target").not())
+        .stderr(contains("Generating bindings").not())
         .success();
 
     fs::write(project.root().join("wit/other.wit"), "world foo {}")?;
@@ -213,7 +214,7 @@ fn it_regenerates_target_if_wit_changed() -> Result<()> {
     project
         .cargo_component("build")
         .assert()
-        .stderr(contains("Encoding target"))
+        .stderr(contains("Generating bindings"))
         .success();
 
     Ok(())
@@ -314,14 +315,14 @@ fn it_builds_with_a_specified_implementor() -> Result<()> {
     let project = Project::new("foo")?;
     project.update_manifest(|mut doc| {
         redirect_bindings_crate(&mut doc);
+        doc["package"]["metadata"]["component"]["bindings"]["implementor"] =
+            value("CustomImplementor");
         Ok(doc)
     })?;
 
     fs::write(
         project.root().join("src/lib.rs"),
-        r#"cargo_component_bindings::generate!({
-    implementor: CustomImplementor
-});
+        r#"cargo_component_bindings::generate!();
 
 use bindings::Guest;
 
@@ -364,7 +365,7 @@ fn empty_world_with_dep_valid() -> Result<()> {
                     bar
                 }
 
-                export hello: func() -> foo
+                export hello: func() -> list<foo>
             }
         ",
     )?;
@@ -377,8 +378,8 @@ fn empty_world_with_dep_valid() -> Result<()> {
             struct Component;
 
             impl Guest for Component {
-                fn hello() -> Foo {
-                    Foo::BAR
+                fn hello() -> Vec<Foo> {
+                    vec![Foo::BAR]
                 }
             }
         ",
@@ -491,6 +492,9 @@ fn it_builds_with_resources_with_custom_implementor() -> Result<()> {
     let project = Project::new("foo")?;
     project.update_manifest(|mut doc| {
         redirect_bindings_crate(&mut doc);
+        doc["package"]["metadata"]["component"]["bindings"]["resources"] = value(
+            InlineTable::from_iter([("baz/keyed-integer", "MyKeyedInteger")]),
+        );
         Ok(doc)
     })?;
 
@@ -514,12 +518,7 @@ fn it_builds_with_resources_with_custom_implementor() -> Result<()> {
 
     fs::write(
         project.root().join("src/lib.rs"),
-        r#"
-            cargo_component_bindings::generate!({
-                resources: {
-                    "baz/keyed-integer": MyKeyedInteger
-                }
-            });
+        r#" cargo_component_bindings::generate!();
 
             use std::cell::Cell;
             use bindings::exports::baz::GuestKeyedInteger;
@@ -559,6 +558,8 @@ fn it_builds_resources_with_specified_ownership_model() -> Result<()> {
     let project = Project::new("foo")?;
     project.update_manifest(|mut doc| {
         redirect_bindings_crate(&mut doc);
+        doc["package"]["metadata"]["component"]["bindings"]["ownership"] =
+            value("borrowing-duplicate-if-necessary");
         Ok(doc)
     })?;
 
@@ -583,9 +584,7 @@ fn it_builds_resources_with_specified_ownership_model() -> Result<()> {
     fs::write(
         project.root().join("src/lib.rs"),
         r#"
-            cargo_component_bindings::generate!({
-                ownership: "borrowing-duplicate-if-necessary"
-            });
+            cargo_component_bindings::generate!();
 
             use std::cell::Cell;
 
@@ -778,10 +777,31 @@ fn it_errors_if_adapter_is_not_wasm() -> Result<()> {
 }
 
 #[test]
+fn it_warns_on_mismatched_bindings_crate_version() -> Result<()> {
+    let project = Project::new("foo")?;
+    project.update_manifest(|mut doc| {
+        doc["dependencies"][BINDINGS_CRATE_NAME] = value("0.2.0");
+        Ok(doc)
+    })?;
+
+    project
+        .cargo_component("build")
+        .assert()
+        .stderr(contains(
+            "warning: mismatched version of `cargo-component-bindings` detected in manifest",
+        ))
+        .failure();
+
+    Ok(())
+}
+
+#[test]
 fn it_adds_additional_derives() -> Result<()> {
     let project = Project::new("foo")?;
     project.update_manifest(|mut doc| {
         redirect_bindings_crate(&mut doc);
+        doc["package"]["metadata"]["component"]["bindings"]["derives"] =
+            value(Array::from_iter(["serde::Serialize", "serde::Deserialize"]));
         Ok(doc)
     })?;
 
@@ -816,9 +836,7 @@ world foo-world {
     )?;
     fs::write(
         project.root().join("src/lib.rs"),
-        r#"cargo_component_bindings::generate!({
-    additional_derives: [serde::Serialize, serde::Deserialize]
-});
+        r#"cargo_component_bindings::generate!();
 
 use bindings::Guest;
 use bindings::my::derive::foo::Bar;

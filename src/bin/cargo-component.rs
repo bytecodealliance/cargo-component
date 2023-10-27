@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{bail, Result};
 use cargo_component::{
     commands::{AddCommand, KeyCommand, NewCommand, PublishCommand, UpdateCommand},
     config::{CargoArguments, Config},
@@ -159,13 +159,19 @@ async fn main() -> Result<()> {
                 cargo_args.color.unwrap_or_default(),
             ))?;
 
-            let metadata = load_metadata(cargo_args.manifest_path.as_deref())?;
+            let metadata = load_metadata(config.terminal(), cargo_args.manifest_path.as_deref())?;
             let packages = load_component_metadata(
                 &metadata,
                 cargo_args.packages.iter(),
                 cargo_args.workspace,
             )?;
-            assert!(!packages.is_empty());
+
+            if packages.is_empty() {
+                bail!(
+                    "manifest `{path}` contains no package or the workspace has no members",
+                    path = metadata.workspace_root.join("Cargo.toml")
+                );
+            }
 
             let spawn_args: Vec<_> = std::env::args().skip(1).collect();
             if let Err(e) = run_cargo_command(

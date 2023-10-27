@@ -2,6 +2,7 @@
 
 use anyhow::{bail, Context, Result};
 use assert_cmd::prelude::OutputAssertExt;
+use cargo_component::BINDINGS_CRATE_NAME;
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -33,7 +34,7 @@ pub fn test_signing_key() -> &'static str {
 pub fn redirect_bindings_crate(doc: &mut Document) {
     const PATH_TO_BINDINGS_CRATE: &str = "../../../../../crates/bindings";
 
-    doc["dependencies"]["cargo-component-bindings"] =
+    doc["dependencies"][BINDINGS_CRATE_NAME] =
         value(InlineTable::from_iter([("path", PATH_TO_BINDINGS_CRATE)]));
 }
 

@@ -4,12 +4,12 @@
 
 use crate::target::install_wasm32_wasi;
 use anyhow::{bail, Context, Result};
-use bindings::BindingsEncoder;
+use bindings::BindingsGenerator;
 use bytes::Bytes;
 use cargo_component_core::{
     lock::{LockFile, LockFileResolver, LockedPackage, LockedPackageVersion},
     registry::create_client,
-    terminal::Colors,
+    terminal::{Colors, Terminal},
 };
 use cargo_metadata::{Metadata, MetadataCommand, Package};
 use config::{CargoArguments, CargoPackageSpec, Config};
@@ -39,6 +39,9 @@ mod lock;
 mod metadata;
 mod registry;
 mod target;
+
+/// The name of the cargo-component bindings crate.
+pub const BINDINGS_CRATE_NAME: &str = "cargo-component-bindings";
 
 fn is_wasm_target(target: &str) -> bool {
     target == "wasm32-wasi" || target == "wasm32-unknown-unknown"
@@ -78,7 +81,7 @@ pub async fn run_cargo_command(
     cargo_args: &CargoArguments,
     spawn_args: &[String],
 ) -> Result<Vec<PathBuf>> {
-    encode_targets(config, metadata, packages, cargo_args).await?;
+    generate_bindings(config, metadata, packages, cargo_args).await?;
 
     let cargo = std::env::var("CARGO")
         .map(PathBuf::from)
@@ -197,7 +200,7 @@ fn last_modified_time(path: &Path) -> Result<SystemTime> {
 }
 
 /// Loads the workspace metadata based on the given manifest path.
-pub fn load_metadata(manifest_path: Option<&Path>) -> Result<Metadata> {
+pub fn load_metadata(terminal: &Terminal, manifest_path: Option<&Path>) -> Result<Metadata> {
     let mut command = MetadataCommand::new();
     command.no_deps();
 
@@ -211,7 +214,32 @@ pub fn load_metadata(manifest_path: Option<&Path>) -> Result<Metadata> {
         log::debug!("loading metadata from current directory");
     }
 
-    command.exec().context("failed to load cargo metadata")
+    let metadata = command.exec().context("failed to load cargo metadata")?;
+
+    for package in &metadata.packages {
+        for dep in &package.dependencies {
+            if dep.rename.as_deref().unwrap_or(dep.name.as_str()) != BINDINGS_CRATE_NAME {
+                continue;
+            }
+
+            if dep
+                .req
+                .matches(&Version::parse(env!("CARGO_PKG_VERSION")).unwrap())
+            {
+                continue;
+            }
+
+            terminal.warn(
+                format!(
+                    "mismatched version of `{BINDINGS_CRATE_NAME}` detected in manifest `{path}`: please update the version in the manifest to {version}",
+                    path = package.manifest_path,
+                    version = env!("CARGO_PKG_VERSION")
+                )
+            )?;
+        }
+    }
+
+    Ok(metadata)
 }
 
 /// Loads the component metadata for the given package specs.
@@ -256,12 +284,13 @@ pub fn load_component_metadata<'a>(
         .collect::<Result<_>>()
 }
 
-async fn encode_targets(
+async fn generate_bindings(
     config: &Config,
     metadata: &Metadata,
     packages: &[PackageComponentMetadata<'_>],
     cargo_args: &CargoArguments,
 ) -> Result<()> {
+    let last_modified_exe = last_modified_time(&std::env::current_exe()?)?;
     let bindings_dir = metadata.target_directory.join("bindings");
     let file_lock = acquire_lock_file_ro(config.terminal(), metadata)?;
     let lock_file = file_lock
@@ -285,7 +314,13 @@ async fn encode_targets(
             None => continue,
         };
 
-        encode_target_world(config, resolution, bindings_dir.as_std_path()).await?;
+        generate_package_bindings(
+            config,
+            resolution,
+            bindings_dir.as_std_path(),
+            last_modified_exe,
+        )
+        .await?;
     }
 
     // Update the lock file if it exists or if the new lock file is non-empty
@@ -336,40 +371,40 @@ async fn create_resolution_map<'a>(
     Ok(map)
 }
 
-async fn encode_target_world(
+async fn generate_package_bindings(
     config: &Config,
     resolution: &PackageDependencyResolution<'_>,
     bindings_dir: &Path,
+    last_modified_exe: SystemTime,
 ) -> Result<()> {
     let output_dir = bindings_dir.join(&resolution.metadata.name);
-    let target_path = output_dir.join("target.wasm");
-    let world_path = output_dir.join("world");
+    let bindings_path = output_dir.join("bindings.rs");
 
-    let last_modified_output = target_path
+    let last_modified_output = bindings_path
         .is_file()
-        .then(|| last_modified_time(&target_path))
+        .then(|| last_modified_time(&bindings_path))
         .transpose()?
         .unwrap_or(SystemTime::UNIX_EPOCH);
 
-    let encoder = BindingsEncoder::new(resolution)?;
-    match encoder.reason(last_modified_output)? {
+    let generator = BindingsGenerator::new(resolution)?;
+    match generator.reason(last_modified_exe, last_modified_output)? {
         Some(reason) => {
             ::log::debug!(
-                "encoding target for package `{name}` at `{path}` because {reason}",
+                "generating bindings for package `{name}` at `{path}` because {reason}",
                 name = resolution.metadata.name,
-                path = target_path.display(),
+                path = bindings_path.display(),
             );
 
             config.terminal().status(
-                "Encoding",
+                "Generating",
                 format!(
-                    "target for {name} ({path})",
+                    "bindings for {name} ({path})",
                     name = resolution.metadata.name,
-                    path = target_path.display()
+                    path = bindings_path.display()
                 ),
             )?;
 
-            let encoded = encoder.encode()?;
+            let bindings = generator.generate()?;
             fs::create_dir_all(&output_dir).with_context(|| {
                 format!(
                     "failed to create output directory `{path}`",
@@ -377,27 +412,18 @@ async fn encode_target_world(
                 )
             })?;
 
-            fs::write(&target_path, encoded).with_context(|| {
+            fs::write(&bindings_path, bindings).with_context(|| {
                 format!(
-                    "failed to write target file `{path}`",
-                    path = target_path.display()
-                )
-            })?;
-
-            let world = resolution.metadata.section.target.world().unwrap_or("");
-
-            fs::write(&world_path, world).with_context(|| {
-                format!(
-                    "failed to write world name `{path}`",
-                    path = world_path.display()
+                    "failed to write bindings file `{path}`",
+                    path = bindings_path.display()
                 )
             })?;
         }
         None => {
             ::log::debug!(
-                "existing target encoding for package `{name}` at `{path}` is up-to-date",
+                "existing bindings for package `{name}` at `{path}` is up-to-date",
                 name = resolution.metadata.name,
-                path = target_path.display(),
+                path = bindings_path.display(),
             );
         }
     }

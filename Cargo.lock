@@ -507,6 +507,7 @@ dependencies = [
  "wasm-metadata",
  "wasmparser 0.115.0",
  "wat",
+ "wit-bindgen-core",
  "wit-bindgen-rust",
  "wit-component",
  "wit-parser",
@@ -550,13 +551,9 @@ dependencies = [
 name = "cargo-component-macro"
 version = "0.3.1"
 dependencies = [
- "heck",
  "proc-macro2",
  "quote",
  "syn 2.0.38",
- "wit-bindgen-core",
- "wit-bindgen-rust",
- "wit-component",
 ]
 
 [[package]]
@@ -3843,7 +3840,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c7d92ce0ca6b6074059413a9581a637550c3a740581c854f9847ec293c8aed71"
 dependencies = [
  "bitflags 2.4.1",
- "wit-bindgen-rust-macro",
 ]
 
 [[package]]
@@ -3867,21 +3863,6 @@ dependencies = [
  "heck",
  "wasm-metadata",
  "wit-bindgen-core",
- "wit-component",
-]
-
-[[package]]
-name = "wit-bindgen-rust-macro"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a91835ea4231da1fe7971679d505ba14be7826e192b6357f08465866ef482e08"
-dependencies = [
- "anyhow",
- "proc-macro2",
- "quote",
- "syn 2.0.38",
- "wit-bindgen-core",
- "wit-bindgen-rust",
  "wit-component",
 ]
 

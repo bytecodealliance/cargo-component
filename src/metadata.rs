@@ -22,6 +22,58 @@ use warg_protocol::registry::PackageId;
 /// The default directory to look for a target WIT file.
 pub const DEFAULT_WIT_DIR: &str = "wit";
 
+/// The supported ownership model for generated types.
+#[derive(Default, Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Ownership {
+    /// Generated types will be composed entirely of owning fields, regardless
+    /// of whether they are used as parameters to imports or not.
+    #[default]
+    Owning,
+    /// Generated types used as parameters to imports will be "deeply
+    /// borrowing", i.e. contain references rather than owned values when
+    /// applicable.
+    Borrowing,
+    /// Generate "duplicate" type definitions for a single WIT type, if necessary.
+    /// For example if it's used as both an import and an export, or if it's used
+    /// both as a parameter to an import and a return value from an import.
+    BorrowingDuplicateIfNecessary,
+}
+
+impl FromStr for Ownership {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "owning" => Ok(Self::Owning),
+            "borrowing" => Ok(Self::Borrowing),
+            "borrowing-duplicate-if-necessary" => Ok(Self::BorrowingDuplicateIfNecessary),
+            _ => Err(format!(
+                "unrecognized ownership: `{s}`; \
+                 expected `owning`, `borrowing`, or `borrowing-duplicate-if-necessary`"
+            )),
+        }
+    }
+}
+
+/// Configuration for bindings generation.
+#[derive(Default, Debug, Clone, Deserialize)]
+#[serde(default)]
+pub struct Bindings {
+    /// The path to the type that implements the target world.
+    ///
+    /// If `None`, a type named `Component` will be used.
+    pub implementor: Option<String>,
+    /// A map of resource names to implementing types.
+    ///
+    /// An example would be "foo:bar/baz/res" => "MyResource".
+    pub resources: HashMap<String, String>,
+    /// The ownership model for generated types.
+    pub ownership: Ownership,
+    /// Additional derives to apply to generated binding types.
+    pub derives: Vec<String>,
+}
+
 /// The target of a component.
 ///
 /// The target defines the world of the component being developed.
@@ -226,6 +278,8 @@ pub struct ComponentSection {
     pub dependencies: HashMap<PackageId, Dependency>,
     /// The registries to use for the component.
     pub registries: HashMap<String, Url>,
+    /// The configuration for bindings generation.
+    pub bindings: Bindings,
 }
 
 /// Represents cargo metadata for a WebAssembly component.
