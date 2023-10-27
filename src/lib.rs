@@ -9,7 +9,7 @@ use bytes::Bytes;
 use cargo_component_core::{
     lock::{LockFile, LockFileResolver, LockedPackage, LockedPackageVersion},
     registry::create_client,
-    terminal::Colors,
+    terminal::{Colors, Terminal},
 };
 use cargo_metadata::{Metadata, MetadataCommand, Package};
 use config::{CargoArguments, CargoPackageSpec, Config};
@@ -39,6 +39,9 @@ mod lock;
 mod metadata;
 mod registry;
 mod target;
+
+/// The name of the cargo-component bindings crate.
+pub const BINDINGS_CRATE_NAME: &str = "cargo-component-bindings";
 
 fn is_wasm_target(target: &str) -> bool {
     target == "wasm32-wasi" || target == "wasm32-unknown-unknown"
@@ -197,7 +200,7 @@ fn last_modified_time(path: &Path) -> Result<SystemTime> {
 }
 
 /// Loads the workspace metadata based on the given manifest path.
-pub fn load_metadata(manifest_path: Option<&Path>) -> Result<Metadata> {
+pub fn load_metadata(terminal: &Terminal, manifest_path: Option<&Path>) -> Result<Metadata> {
     let mut command = MetadataCommand::new();
     command.no_deps();
 
@@ -211,7 +214,32 @@ pub fn load_metadata(manifest_path: Option<&Path>) -> Result<Metadata> {
         log::debug!("loading metadata from current directory");
     }
 
-    command.exec().context("failed to load cargo metadata")
+    let metadata = command.exec().context("failed to load cargo metadata")?;
+
+    for package in &metadata.packages {
+        for dep in &package.dependencies {
+            if dep.rename.as_deref().unwrap_or(dep.name.as_str()) != BINDINGS_CRATE_NAME {
+                continue;
+            }
+
+            if dep
+                .req
+                .matches(&Version::parse(env!("CARGO_PKG_VERSION")).unwrap())
+            {
+                continue;
+            }
+
+            terminal.warn(
+                format!(
+                    "mismatched version of `{BINDINGS_CRATE_NAME}` detected in manifest `{path}`: please update the version in the manifest to {version}",
+                    path = package.manifest_path,
+                    version = env!("CARGO_PKG_VERSION")
+                )
+            )?;
+        }
+    }
+
+    Ok(metadata)
 }
 
 /// Loads the component metadata for the given package specs.

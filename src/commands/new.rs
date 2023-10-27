@@ -1,4 +1,7 @@
-use crate::{config::Config, generator::SourceGenerator, metadata, metadata::DEFAULT_WIT_DIR};
+use crate::{
+    config::Config, generator::SourceGenerator, metadata, metadata::DEFAULT_WIT_DIR,
+    BINDINGS_CRATE_NAME,
+};
 use anyhow::{bail, Context, Result};
 use cargo_component_core::{
     command::CommonOptions,
@@ -16,8 +19,6 @@ use std::{
 };
 use toml_edit::{table, value, Document, Item, Table, Value};
 use url::Url;
-
-const BINDINGS_CRATE_NAME: &str = "cargo-component-bindings";
 
 fn escape_wit(s: &str) -> Cow<str> {
     match s {

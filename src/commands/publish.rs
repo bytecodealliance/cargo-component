@@ -92,7 +92,7 @@ impl PublishCommand {
             }
         }
 
-        let metadata = load_metadata(self.manifest_path.as_deref())?;
+        let metadata = load_metadata(config.terminal(), self.manifest_path.as_deref())?;
         let packages = [PackageComponentMetadata::new(
             if let Some(spec) = &self.cargo_package {
                 metadata

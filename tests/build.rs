@@ -1,6 +1,7 @@
 use crate::support::*;
 use anyhow::{Context, Result};
 use assert_cmd::prelude::*;
+use cargo_component::BINDINGS_CRATE_NAME;
 use predicates::{prelude::PredicateBooleanExt, str::contains};
 use std::fs;
 use toml_edit::{value, Array, InlineTable, Item, Table};
@@ -770,6 +771,25 @@ fn it_errors_if_adapter_is_not_wasm() -> Result<()> {
         .cargo_component("build")
         .assert()
         .stderr(contains("error: failed to load adapter module"))
+        .failure();
+
+    Ok(())
+}
+
+#[test]
+fn it_warns_on_mismatched_bindings_crate_version() -> Result<()> {
+    let project = Project::new("foo")?;
+    project.update_manifest(|mut doc| {
+        doc["dependencies"][BINDINGS_CRATE_NAME] = value("0.2.0");
+        Ok(doc)
+    })?;
+
+    project
+        .cargo_component("build")
+        .assert()
+        .stderr(contains(
+            "warning: mismatched version of `cargo-component-bindings` detected in manifest",
+        ))
         .failure();
 
     Ok(())
