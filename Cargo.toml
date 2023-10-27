@@ -33,6 +33,7 @@ serde_json = { workspace = true }
 indexmap = { workspace = true }
 url = { workspace = true }
 wit-bindgen-rust = { workspace = true }
+wit-bindgen-core = { workspace = true }
 wit-parser = { workspace = true }
 wit-component = { workspace = true }
 wasm-metadata = { workspace = true }
@@ -97,4 +98,3 @@ quote = "1.0.33"
 syn = "2.0.38"
 wit-bindgen-rust = "0.13.0"
 wit-bindgen-core = "0.13.0"
-wit-bindgen = "0.13.0"
