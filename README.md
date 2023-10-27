@@ -35,10 +35,19 @@ may cause build errors for existing component projects.
 
 ## Installation
 
-To install the `cargo component` subcommand, run the following command:
+To install the `cargo component` subcommand from source, run the following
+command:
 
 ```
 cargo install cargo-component
+```
+
+If you have the [cargo-binstall](https://github.com/cargo-bins/cargo-binstall)
+utility installed, `cargo-component` can also be installed via a prebuilt
+release artifact, saving time on the installation:
+
+```
+cargo binstall cargo-component
 ```
 
 ## Motivation
