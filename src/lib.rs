@@ -200,7 +200,11 @@ fn last_modified_time(path: &Path) -> Result<SystemTime> {
 }
 
 /// Loads the workspace metadata based on the given manifest path.
-pub fn load_metadata(terminal: &Terminal, manifest_path: Option<&Path>) -> Result<Metadata> {
+pub fn load_metadata(
+    terminal: &Terminal,
+    manifest_path: Option<&Path>,
+    ignore_version_mismatch: bool,
+) -> Result<Metadata> {
     let mut command = MetadataCommand::new();
     command.no_deps();
 
@@ -222,9 +226,10 @@ pub fn load_metadata(terminal: &Terminal, manifest_path: Option<&Path>) -> Resul
                 continue;
             }
 
-            if dep
-                .req
-                .matches(&Version::parse(env!("CARGO_PKG_VERSION")).unwrap())
+            if ignore_version_mismatch
+                || dep
+                    .req
+                    .matches(&Version::parse(env!("CARGO_PKG_VERSION")).unwrap())
             {
                 continue;
             }

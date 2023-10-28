@@ -65,7 +65,7 @@ impl AddCommand {
     /// Executes the command
     pub async fn exec(self) -> Result<()> {
         let config = Config::new(self.common.new_terminal())?;
-        let metadata = load_metadata(config.terminal(), self.manifest_path.as_deref())?;
+        let metadata = load_metadata(config.terminal(), self.manifest_path.as_deref(), false)?;
 
         let PackageComponentMetadata { package, metadata }: PackageComponentMetadata<'_> =
             match &self.spec {
