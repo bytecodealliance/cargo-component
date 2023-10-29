@@ -48,7 +48,7 @@ jobs:
       - name: Install Rust
         run: rustup update stable --no-self-update && rustup default stable && rustup target add ${{ matrix.rust-target }}
       - name: Install libssl-dev:arm64
-        run: apt-get --assume-yes install libssl-dev:arm64
+        run: sudo apt-get --assume-yes install libssl-dev:arm64
         if: matrix.rust-target == 'aarch64-unknown-linux-gnu'
       - run: cargo build --release --target ${{ matrix.rust-target }}
         env:
@@ -89,7 +89,7 @@ jobs:
       - name: Install Rust
         run: rustup update stable --no-self-update && rustup default stable && rustup target add ${{ matrix.rust-target }}
       - name: Install libssl-dev:arm64
-        run: apt-get --assume-yes install libssl-dev:arm64
+        run: sudo apt-get --assume-yes install libssl-dev:arm64
         if: matrix.rust-target == 'aarch64-unknown-linux-gnu'
       - run: cargo build --release --target ${{ matrix.rust-target }}
         env:
