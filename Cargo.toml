@@ -52,8 +52,8 @@ bytes = { workspace = true }
 [dev-dependencies]
 assert_cmd = "2.0.12"
 predicates = "3.0.4"
-wasmparser = "0.115.0"
-wat = "1.0.77"
+wasmparser = "0.116.0"
+wat = "1.0.78"
 warg-server = "0.2.0"
 
 [workspace]
@@ -79,9 +79,9 @@ serde = { version = "1.0.189", features = ["derive"] }
 serde_json = "1.0.107"
 indexmap = "2.0.2"
 url = { version = "2.4.1", features = ["serde"] }
-wit-parser = "0.12"
-wit-component = "0.16.0"
-wasm-metadata = "0.10.9"
+wit-parser = "0.12.2"
+wit-component = "0.17.0"
+wasm-metadata = "0.10.10"
 parse_arg = "0.1.4"
 cargo_metadata = "0.18.1"
 keyring = "2.0.5"
@@ -96,5 +96,5 @@ bytes = "1.5.0"
 proc-macro2 = "1.0.69"
 quote = "1.0.33"
 syn = "2.0.38"
-wit-bindgen-rust = "0.13.0"
-wit-bindgen-core = "0.13.0"
+wit-bindgen-rust = "0.13.2"
+wit-bindgen-core = "0.13.1"
