@@ -319,10 +319,16 @@ impl Project {
         Ok(self)
     }
 
-    pub fn update_manifest(&self, f: impl FnOnce(Document) -> Result<Document>) -> Result<()> {
+    pub fn read_manifest(&self) -> Result<Document> {
         let manifest_path = self.root.join("Cargo.toml");
-        let manifest = fs::read_to_string(&manifest_path)?;
-        fs::write(manifest_path, f(manifest.parse()?)?.to_string())?;
+        let manifest_text = fs::read_to_string(manifest_path)?;
+        Ok(manifest_text.parse()?)
+    }
+
+    pub fn update_manifest(&self, f: impl FnOnce(Document) -> Result<Document>) -> Result<()> {
+        let manifest = self.read_manifest()?;
+        let manifest_path = self.root.join("Cargo.toml");
+        fs::write(manifest_path, f(manifest)?.to_string())?;
         Ok(())
     }
 

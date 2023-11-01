@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 use cargo_component::{
-    commands::{AddCommand, KeyCommand, NewCommand, PublishCommand, UpdateCommand},
+    commands::{AddCommand, KeyCommand, NewCommand, PublishCommand, UpdateCommand, UpgradeCommand},
     config::{CargoArguments, Config},
     load_component_metadata, load_metadata, run_cargo_command,
 };
@@ -23,6 +23,7 @@ const BUILTIN_COMMANDS: &[&str] = &[
     "remove",
     "rm",
     "update",
+    "upgrade",
     "vendor",
     "yank",
 ];
@@ -72,6 +73,7 @@ enum Command {
     New(NewCommand),
     // TODO: Remove(RemoveCommand),
     Update(UpdateCommand),
+    Upgrade(UpgradeCommand),
     Publish(PublishCommand),
     // TODO: Yank(YankCommand),
     // TODO: Vendor(VendorCommand),
@@ -115,6 +117,7 @@ async fn main() -> Result<()> {
                     Command::Key(cmd) => cmd.exec().await,
                     Command::New(cmd) => cmd.exec().await,
                     Command::Update(cmd) => cmd.exec().await,
+                    Command::Upgrade(cmd) => cmd.exec().await,
                     Command::Publish(cmd) => cmd.exec().await,
                 },
             } {
@@ -159,7 +162,11 @@ async fn main() -> Result<()> {
                 cargo_args.color.unwrap_or_default(),
             ))?;
 
-            let metadata = load_metadata(config.terminal(), cargo_args.manifest_path.as_deref())?;
+            let metadata = load_metadata(
+                config.terminal(),
+                cargo_args.manifest_path.as_deref(),
+                false,
+            )?;
             let packages = load_component_metadata(
                 &metadata,
                 cargo_args.packages.iter(),
