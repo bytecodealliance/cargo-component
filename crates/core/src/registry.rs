@@ -213,7 +213,9 @@ impl FromStr for RegistryPackage {
     fn from_str(s: &str) -> Result<Self> {
         Ok(Self {
             id: None,
-            version: s.parse()?,
+            version: s
+                .parse()
+                .with_context(|| format!("'{s}' is an invalid registry package version"))?,
             registry: None,
         })
     }
