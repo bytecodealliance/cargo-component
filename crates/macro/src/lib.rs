@@ -43,6 +43,7 @@ fn generate_bindings(input: proc_macro::TokenStream) -> Result<TokenStream> {
 
     Ok(quote! {
         /// Generated bindings module for this component.
+        #[allow(dead_code)]
         pub(crate) mod bindings {
             include!(#path);
         }
