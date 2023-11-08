@@ -61,7 +61,7 @@ async fn validate_the_version_exists() -> Result<()> {
     config.write_to_file(&root.join("warg-config.json"))?;
 
     let project = Project::with_root(&root, "foo", "")?;
-    project.file("foo.wit", "package foo:bar\n")?;
+    project.file("foo.wit", "package foo:bar;\n")?;
     project
         .wit("publish --init")
         .env("WIT_PUBLISH_KEY", test_signing_key())
@@ -97,7 +97,7 @@ async fn checks_for_duplicate_dependencies() -> Result<()> {
     config.write_to_file(&root.join("warg-config.json"))?;
 
     let project = Project::with_root(&root, "foo", "")?;
-    project.file("foo.wit", "package foo:bar\n")?;
+    project.file("foo.wit", "package foo:bar;\n")?;
     project
         .wit("publish --init")
         .env("WIT_PUBLISH_KEY", test_signing_key())
@@ -133,7 +133,7 @@ async fn does_not_modify_manifest_for_dry_run() -> Result<()> {
     config.write_to_file(&root.join("warg-config.json"))?;
 
     let project = Project::with_root(&root, "foo", "")?;
-    project.file("foo.wit", "package foo:bar\n")?;
+    project.file("foo.wit", "package foo:bar;\n")?;
     project
         .wit("publish --init")
         .env("WIT_PUBLISH_KEY", test_signing_key())

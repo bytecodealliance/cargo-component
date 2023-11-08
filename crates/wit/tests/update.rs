@@ -34,7 +34,7 @@ async fn update_without_changes_is_a_noop() -> Result<()> {
     config.write_to_file(&root.join("warg-config.json"))?;
 
     let project = Project::with_root(&root, "bar", "")?;
-    project.file("bar.wit", "package foo:bar\n")?;
+    project.file("bar.wit", "package foo:bar;\n")?;
     project
         .wit("publish --init")
         .env("WIT_PUBLISH_KEY", test_signing_key())
@@ -43,7 +43,7 @@ async fn update_without_changes_is_a_noop() -> Result<()> {
         .success();
 
     let project = Project::with_root(&root, "baz", "")?;
-    project.file("baz.wit", "package foo:baz\n")?;
+    project.file("baz.wit", "package foo:baz;\n")?;
     project
         .wit("add foo:bar")
         .assert()
@@ -72,7 +72,7 @@ async fn test_update_without_compatible_changes_is_a_noop() -> Result<()> {
     config.write_to_file(&root.join("warg-config.json"))?;
 
     let project = Project::with_root(&root, "bar", "")?;
-    project.file("bar.wit", "package foo:bar\n")?;
+    project.file("bar.wit", "package foo:bar;\n")?;
     project
         .wit("publish --init")
         .env("WIT_PUBLISH_KEY", test_signing_key())
@@ -81,7 +81,7 @@ async fn test_update_without_compatible_changes_is_a_noop() -> Result<()> {
         .success();
 
     let project = Project::with_root(&root, "baz", "")?;
-    project.file("baz.wit", "package foo:baz\n")?;
+    project.file("baz.wit", "package foo:baz;\n")?;
     project
         .wit("add foo:bar")
         .assert()
@@ -122,7 +122,7 @@ async fn update_with_compatible_changes() -> Result<()> {
     config.write_to_file(&root.join("warg-config.json"))?;
 
     let project = Project::with_root(&root, "bar", "")?;
-    project.file("bar.wit", "package foo:bar\n")?;
+    project.file("bar.wit", "package foo:bar;\n")?;
     project.file(
         "wit.toml",
         "version = \"1.0.0\"\n[dependencies]\n[registries]\n",
@@ -136,7 +136,7 @@ async fn update_with_compatible_changes() -> Result<()> {
         .success();
 
     let project = Project::with_root(&root, "baz", "")?;
-    project.file("baz.wit", "package foo:baz\n")?;
+    project.file("baz.wit", "package foo:baz;\n")?;
     project
         .wit("add foo:bar")
         .assert()
@@ -180,7 +180,7 @@ async fn update_with_compatible_changes_is_noop_for_dryrun() -> Result<()> {
     config.write_to_file(&root.join("warg-config.json"))?;
 
     let project = Project::with_root(&root, "bar", "")?;
-    project.file("bar.wit", "package foo:bar\n")?;
+    project.file("bar.wit", "package foo:bar;\n")?;
     project.file(
         "wit.toml",
         "version = \"1.0.0\"\n[dependencies]\n[registries]\n",
@@ -194,7 +194,7 @@ async fn update_with_compatible_changes_is_noop_for_dryrun() -> Result<()> {
         .success();
 
     let project = Project::with_root(&root, "baz", "")?;
-    project.file("baz.wit", "package foo:baz\n")?;
+    project.file("baz.wit", "package foo:baz;\n")?;
     project
         .wit("add foo:bar")
         .assert()
@@ -238,7 +238,7 @@ async fn update_with_changed_dependencies() -> Result<()> {
     config.write_to_file(&root.join("warg-config.json"))?;
 
     let project = Project::with_root(&root, "bar", "")?;
-    project.file("bar.wit", "package foo:bar\n")?;
+    project.file("bar.wit", "package foo:bar;\n")?;
     project.file(
         "wit.toml",
         "version = \"1.0.0\"\n[dependencies]\n[registries]\n",
@@ -252,7 +252,7 @@ async fn update_with_changed_dependencies() -> Result<()> {
         .success();
 
     let project = Project::with_root(&root, "baz", "")?;
-    project.file("baz.wit", "package foo:baz\n")?;
+    project.file("baz.wit", "package foo:baz;\n")?;
     project.file(
         "wit.toml",
         "version = \"1.0.0\"\n[dependencies]\n[registries]\n",
@@ -266,7 +266,7 @@ async fn update_with_changed_dependencies() -> Result<()> {
         .success();
 
     let project = Project::with_root(&root, "qux", "")?;
-    project.file("qux.wit", "package foo:qux\n")?;
+    project.file("qux.wit", "package foo:qux;\n")?;
     project
         .wit("add foo:bar")
         .assert()
