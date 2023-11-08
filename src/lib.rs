@@ -16,7 +16,7 @@ use config::{CargoArguments, CargoPackageSpec, Config};
 use lock::{acquire_lock_file_ro, acquire_lock_file_rw};
 use metadata::ComponentMetadata;
 use registry::{PackageDependencyResolution, PackageResolutionMap};
-use semver::Version;
+use semver::{Version, VersionReq};
 use std::{
     borrow::Cow,
     fs::{self, File},
@@ -220,27 +220,28 @@ pub fn load_metadata(
 
     let metadata = command.exec().context("failed to load cargo metadata")?;
 
-    for package in &metadata.packages {
-        for dep in &package.dependencies {
-            if dep.rename.as_deref().unwrap_or(dep.name.as_str()) != BINDINGS_CRATE_NAME {
-                continue;
-            }
+    if !ignore_version_mismatch {
+        for package in &metadata.packages {
+            for dep in &package.dependencies {
+                if dep.rename.as_deref().unwrap_or(dep.name.as_str()) != BINDINGS_CRATE_NAME {
+                    continue;
+                }
 
-            if ignore_version_mismatch
-                || dep
-                    .req
-                    .matches(&Version::parse(env!("CARGO_PKG_VERSION")).unwrap())
-            {
-                continue;
-            }
+                let req = VersionReq::parse(env!("CARGO_PKG_VERSION")).unwrap();
+                let v = dep.req.to_string();
+                match v.strip_prefix('^').unwrap_or(&v).parse::<Version>() {
+                    Ok(v) if req.matches(&v) => break,
+                    _ => {}
+                }
 
-            terminal.warn(
-                format!(
-                    "mismatched version of `{BINDINGS_CRATE_NAME}` detected in manifest `{path}`: please update the version in the manifest to {version}",
-                    path = package.manifest_path,
-                    version = env!("CARGO_PKG_VERSION")
-                )
-            )?;
+                terminal.warn(
+                    format!(
+                        "mismatched version of `{BINDINGS_CRATE_NAME}` detected in manifest `{path}` (expected a version compatible with {version}); use `cargo component upgrade --no-install` to update",
+                        path = package.manifest_path,
+                        version = env!("CARGO_PKG_VERSION")
+                    )
+                )?;
+            }
         }
     }
 

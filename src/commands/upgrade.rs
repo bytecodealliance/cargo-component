@@ -3,6 +3,7 @@ use anyhow::{Context, Result};
 use cargo_component_core::command::CommonOptions;
 use cargo_metadata::Metadata;
 use clap::Args;
+use semver::Version;
 use std::{fs, path::PathBuf};
 use toml_edit::{value, Document};
 
@@ -51,7 +52,6 @@ impl UpgradeCommand {
             //
             // Skip this in tests, but still delegate to a new instance of `cargo-component`
             // so that we can exercise as much of the flow as practicable.
-            #[cfg(not(test))]
             upgrade_self()?;
             run_cargo_component_and_exit();
         }
@@ -65,7 +65,6 @@ impl UpgradeCommand {
     }
 }
 
-#[cfg(not(test))]
 fn upgrade_self() -> Result<()> {
     log::debug!("running self-upgrade using cargo-install");
 
@@ -124,21 +123,27 @@ async fn upgrade_bindings(config: &Config, metadata: &Metadata, dry_run: bool) -
             .find(|dep| dep.name == "cargo-component-bindings")
         else {
             log::debug!(
-                "Workspace package {} doesn't depend on cargo-component-bindings",
-                package.name
+                "workspace package `{name}` doesn't depend on cargo-component-bindings",
+                name = package.name
             );
             continue;
         };
 
-        if bindings_dep.req == self_version {
-            config.terminal().status(
-                "Skipping",
-                format!(
-                    "package `{}` as it already uses the current bindings crate version",
-                    package.name
-                ),
-            )?;
-            continue;
+        // Treat the dependency req as a specific version
+        let version = bindings_dep.req.to_string();
+        let version = version.strip_prefix('^').unwrap_or(&version);
+        match version.parse::<Version>() {
+            Ok(v) if self_version.matches(&v) => {
+                config.terminal().status(
+                    "Skipping",
+                    format!(
+                        "package `{name}` as it already uses a compatible bindings crate version",
+                        name = package.name
+                    ),
+                )?;
+                continue;
+            }
+            _ => {}
         }
 
         let manifest_path = package.manifest_path.as_std_path();
@@ -167,7 +172,7 @@ async fn upgrade_bindings(config: &Config, metadata: &Metadata, dry_run: bool) -
                 format!(
                     "{path} from {from} to {to}",
                     path = manifest_path.display(),
-                    from = bindings_dep.req,
+                    from = version,
                     to = env!("CARGO_PKG_VERSION")
                 ),
             )?;
@@ -186,7 +191,7 @@ async fn upgrade_bindings(config: &Config, metadata: &Metadata, dry_run: bool) -
             format!(
                 "{path} from {from} to {to}",
                 path = manifest_path.display(),
-                from = bindings_dep.req,
+                from = version,
                 to = env!("CARGO_PKG_VERSION")
             ),
         )?;

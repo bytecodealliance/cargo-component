@@ -25,11 +25,11 @@ fn upgrade_single_crate_already_current_is_no_op() -> Result<()> {
     let project = Project::with_root(&root, "component", "")?;
 
     project
-        .cargo_component("upgrade")
+        .cargo_component("upgrade --no-install")
         .assert()
         .success()
         .stderr(contains(
-            "Skipping package `component` as it already uses the current bindings crate version",
+            "Skipping package `component` as it already uses a compatible bindings crate version",
         ));
 
     Ok(())
@@ -60,12 +60,12 @@ fn upgrade_single_crate_upgrades_bindings_dep() -> Result<()> {
     );
 
     project
-        .cargo_component("upgrade")
+        .cargo_component("upgrade --no-install")
         .assert()
         .success()
         .stderr(contains("Updated "))
         .stderr(contains(format!(
-            "from ^0.1 to {}",
+            "from 0.1 to {}",
             env!("CARGO_PKG_VERSION")
         )));
 
@@ -82,11 +82,11 @@ fn upgrade_single_crate_upgrades_bindings_dep() -> Result<()> {
 
     // A repeated upgrade should recognize that there is no change required.
     project
-        .cargo_component("upgrade")
+        .cargo_component("upgrade --no-install")
         .assert()
         .success()
         .stderr(contains(
-            "Skipping package `component` as it already uses the current bindings crate version",
+            "Skipping package `component` as it already uses a compatible bindings crate version",
         ));
 
     Ok(())
@@ -117,13 +117,13 @@ fn upgrade_dry_run_does_not_alter_manifest() -> Result<()> {
     );
 
     project
-        .cargo_component("upgrade --dry-run")
+        .cargo_component("upgrade --no-install --dry-run")
         .assert()
         .success()
         .stderr(contains("Would update "))
         .stderr(contains("Updated ").not())
         .stderr(contains(format!(
-            "from ^0.1 to {}",
+            "from 0.1 to {}",
             env!("CARGO_PKG_VERSION")
         )));
 
