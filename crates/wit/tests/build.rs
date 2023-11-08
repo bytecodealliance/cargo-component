@@ -32,14 +32,14 @@ fn it_builds() -> Result<()> {
     let project = Project::new("foo")?;
     project.file(
         "bar.wit",
-        r#"package foo:bar
+        r#"package foo:bar;
 interface bar {}
 world bar-world {}
 "#,
     )?;
     project.file(
         "baz.wit",
-        r#"package foo:bar
+        r#"package foo:bar;
 interface baz {}
 world baz-world {}
 "#,
@@ -71,7 +71,7 @@ world baz-world {}
 #[test]
 fn it_adds_a_producers_field() -> Result<()> {
     let project = Project::new("foo")?;
-    project.file("producers.wit", "package test:producers")?;
+    project.file("producers.wit", "package test:producers;")?;
 
     project
         .wit("build")

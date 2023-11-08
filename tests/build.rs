@@ -240,20 +240,20 @@ fn it_builds_with_local_wit_deps() -> Result<()> {
     fs::create_dir_all(project.root().join("wit/deps/foo-bar/deps/baz-qux"))?;
     fs::write(
         project.root().join("wit/deps/foo-bar/deps/baz-qux/qux.wit"),
-        "package baz:qux
+        "package baz:qux;
 
 interface qux {
-    type ty = u32
+    type ty = u32;
 }",
     )?;
 
     fs::write(
         project.root().join("wit/deps/foo-bar/bar.wit"),
-        "package foo:bar
+        "package foo:bar;
 
 interface baz {
-    use baz:qux/qux.{ty}
-    baz: func() -> ty
+    use baz:qux/qux.{ty};
+    baz: func() -> ty;
 }",
     )?;
 
@@ -261,20 +261,20 @@ interface baz {
 
     fs::write(
         project.root().join("wit/deps/bar-baz/qux.wit"),
-        "package bar:baz
+        "package bar:baz;
 interface qux {
-    use baz:qux/qux.{ty}
-    qux: func()
+    use baz:qux/qux.{ty};
+    qux: func();
 }",
     )?;
 
     fs::write(
         project.root().join("wit/world.wit"),
-        "package component:foo
+        "package component:foo;
 
 world example {
-    export foo:bar/baz
-    export bar:baz/qux
+    export foo:bar/baz;
+    export bar:baz/qux;
 }",
     )?;
 
@@ -358,14 +358,14 @@ fn empty_world_with_dep_valid() -> Result<()> {
     fs::write(
         project.root().join("wit/world.wit"),
         "
-            package foo:bar
+            package foo:bar;
 
             world the-world {
                 flags foo {
                     bar
                 }
 
-                export hello: func() -> list<foo>
+                export hello: func() -> list<foo>;
             }
         ",
     )?;
@@ -435,15 +435,15 @@ fn it_builds_with_resources() -> Result<()> {
     fs::write(
         project.root().join("wit/world.wit"),
         "
-            package foo:bar
+            package foo:bar;
 
             world bar {
                 export baz: interface {
                     resource keyed-integer {
-                        constructor(x: u32)
-                        get: func() -> u32
-                        set: func(x: u32)
-                        key: static func() -> string
+                        constructor(x: u32);
+                        get: func() -> u32;
+                        set: func(x: u32);
+                        key: static func() -> string;
                     }
                 }
             }
@@ -501,15 +501,15 @@ fn it_builds_with_resources_with_custom_implementor() -> Result<()> {
     fs::write(
         project.root().join("wit/world.wit"),
         "
-            package foo:bar
+            package foo:bar;
 
             world bar {
                 export baz: interface {
                     resource keyed-integer {
-                        constructor(x: u32)
-                        get: func() -> u32
-                        set: func(x: u32)
-                        key: static func() -> string
+                        constructor(x: u32);
+                        get: func() -> u32;
+                        set: func(x: u32);
+                        key: static func() -> string;
                     }
                 }
             }
@@ -566,15 +566,15 @@ fn it_builds_resources_with_specified_ownership_model() -> Result<()> {
     fs::write(
         project.root().join("wit/world.wit"),
         "
-            package foo:bar
+            package foo:bar;
 
             world bar {
                 export baz: interface {
                     resource keyed-integer {
-                        constructor(x: u32)
-                        get: func() -> u32
-                        set: func(x: u32)
-                        key: static func() -> string
+                        constructor(x: u32);
+                        get: func() -> u32;
+                        set: func(x: u32);
+                        key: static func() -> string;
                     }
                 }
             }
@@ -631,7 +631,7 @@ fn it_builds_with_a_component_dependency() -> Result<()> {
     fs::write(
         comp1.root().join("wit/world.wit"),
         "
-package my:comp1
+package my:comp1;
 
 interface types {
     record seed {
@@ -640,8 +640,8 @@ interface types {
 }
 
 world random-generator {
-    use types.{seed}
-    export rand: func(seed: seed) -> u32
+    use types.{seed};
+    export rand: func(seed: seed) -> u32;
 }
 ",
     )?;
@@ -683,10 +683,10 @@ impl Guest for Component {
     fs::write(
         comp2.root().join("wit/world.wit"),
         "
-package my:comp2
+package my:comp2;
 
 world random-generator {
-    export rand: func() -> u32
+    export rand: func() -> u32;
 }
 ",
     )?;
@@ -819,7 +819,7 @@ fn it_adds_additional_derives() -> Result<()> {
     fs::write(
         project.root().join("wit/world.wit"),
         "
-package my:derive
+package my:derive;
 
 interface foo {
     record bar {
@@ -828,9 +828,9 @@ interface foo {
 }
 
 world foo-world {
-    use foo.{bar}
+    use foo.{bar};
 
-    export baz: func(thing: bar) -> list<u8>
+    export baz: func(thing: bar) -> list<u8>;
 }
 ",
     )?;
@@ -876,14 +876,14 @@ fn it_builds_with_versioned_wit() -> Result<()> {
     fs::write(
         project.root().join("wit/world.wit"),
         "
-            package foo:bar@1.2.3
+            package foo:bar@1.2.3;
 
             interface foo {
-                f: func()
+                f: func();
             }
 
             world bar {
-                export foo
+                export foo;
             }
         ",
     )?;

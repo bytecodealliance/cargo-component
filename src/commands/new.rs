@@ -409,11 +409,11 @@ impl Guest for Component {
         fs::write(
             &path,
             format!(
-                r#"package {ns}:{pkg}
+                r#"package {ns}:{pkg};
 
 /// An example world for the component to target.
 world example {{
-    export hello-world: func() -> string
+    export hello-world: func() -> string;
 }}
 "#,
                 ns = escape_wit(&name.namespace),

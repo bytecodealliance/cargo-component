@@ -40,7 +40,7 @@ async fn it_publishes_a_wit_package() -> Result<()> {
     config.write_to_file(&root.join("warg-config.json"))?;
 
     let project = Project::with_root(&root, "foo", "")?;
-    project.file("baz.wit", "package baz:qux\n")?;
+    project.file("baz.wit", "package baz:qux;\n")?;
     project
         .wit("publish --init")
         .env("WIT_PUBLISH_KEY", test_signing_key())
@@ -58,7 +58,7 @@ async fn it_does_a_dry_run_publish() -> Result<()> {
     config.write_to_file(&root.join("warg-config.json"))?;
 
     let project = Project::with_root(&root, "foo", "")?;
-    project.file("baz.wit", "package baz:qux\n")?;
+    project.file("baz.wit", "package baz:qux;\n")?;
     project
         .wit("publish --init --dry-run")
         .env("WIT_PUBLISH_KEY", test_signing_key())
@@ -95,7 +95,7 @@ async fn it_publishes_with_registry_metadata() -> Result<()> {
     let repository = "https://example.com/repo";
 
     let project = Project::with_root(&root, "foo", "")?;
-    project.file("baz.wit", "package baz:qux\n")?;
+    project.file("baz.wit", "package baz:qux;\n")?;
 
     project.update_manifest(|mut doc| {
         doc["authors"] = value(Array::from_iter(authors));

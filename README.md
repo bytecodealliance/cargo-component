@@ -212,11 +212,11 @@ This will create a `wit/world.wit` file describing the world that the
 component will target:
 
 ```wit
-package my-org:my-component
+package my-org:my-component;
 
 /// An example world for the component to target.
 world example {
-    export hello-world: func() -> string
+    export hello-world: func() -> string;
 }
 ```
 
