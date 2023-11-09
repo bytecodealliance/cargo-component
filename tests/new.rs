@@ -139,14 +139,14 @@ async fn it_targets_a_world() -> Result<()> {
         &config,
         "foo:bar",
         "1.2.3",
-        r#"package foo:bar@1.2.3
+        r#"package foo:bar@1.2.3;
 world foo {
     resource file {
-        open: static func(path: string) -> file
-        path: func() -> string
+        open: static func(path: string) -> file;
+        path: func() -> string;
     }
-    import foo: func() -> file
-    export bar: func(file: borrow<file>) -> file
+    import foo: func() -> file;
+    export bar: func(file: borrow<file>) -> file;
 }"#,
         true,
     )

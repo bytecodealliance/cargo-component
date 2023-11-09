@@ -29,10 +29,10 @@ async fn update_without_changes_is_a_noop() -> Result<()> {
         &config,
         "foo:bar",
         "1.0.0",
-        r#"package foo:bar@1.0.0
+        r#"package foo:bar@1.0.0;
 world foo {
-    import foo: func() -> string
-    export bar: func() -> string
+    import foo: func() -> string;
+    export bar: func() -> string;
 }"#,
         true,
     )
@@ -70,10 +70,10 @@ async fn update_without_compatible_changes_is_a_noop() -> Result<()> {
         &config,
         "foo:bar",
         "1.0.0",
-        r#"package foo:bar@1.0.0
+        r#"package foo:bar@1.0.0;
 world foo {
-    import foo: func() -> string
-    export bar: func() -> string
+    import foo: func() -> string;
+    export bar: func() -> string;
 }"#,
         true,
     )
@@ -96,9 +96,9 @@ world foo {
         &config,
         "foo:bar",
         "2.0.0",
-        r#"package foo:bar@2.0.0
+        r#"package foo:bar@2.0.0;
 world foo {
-    export bar: func() -> string
+    export bar: func() -> string;
 }"#,
         false,
     )
@@ -130,10 +130,10 @@ async fn update_with_compatible_changes() -> Result<()> {
         &config,
         "foo:bar",
         "1.0.0",
-        r#"package foo:bar@1.0.0
+        r#"package foo:bar@1.0.0;
 world foo {
-    import foo: func() -> string
-    export bar: func() -> string
+    import foo: func() -> string;
+    export bar: func() -> string;
 }"#,
         true,
     )
@@ -156,11 +156,11 @@ world foo {
         &config,
         "foo:bar",
         "1.1.0",
-        r#"package foo:bar@1.1.0
+        r#"package foo:bar@1.1.0;
 world foo {
-    import foo: func() -> string
-    import baz: func() -> string
-    export bar: func() -> string
+    import foo: func() -> string;
+    import baz: func() -> string;
+    export bar: func() -> string;
 }"#,
         false,
     )
@@ -204,10 +204,10 @@ async fn update_with_compatible_changes_is_noop_for_dryrun() -> Result<()> {
         &config,
         "foo:bar",
         "1.0.0",
-        r#"package foo:bar@1.0.0
+        r#"package foo:bar@1.0.0;
 world foo {
-    import foo: func() -> string
-    export bar: func() -> string
+    import foo: func() -> string;
+    export bar: func() -> string;
 }"#,
         true,
     )
@@ -230,11 +230,11 @@ world foo {
         &config,
         "foo:bar",
         "1.1.0",
-        r#"package foo:bar@1.1.0
+        r#"package foo:bar@1.1.0;
 world foo {
-    import foo: func() -> string
-    import baz: func() -> string
-    export bar: func() -> string
+    import foo: func() -> string;
+    import baz: func() -> string;
+    export bar: func() -> string;
 }"#,
         false,
     )
