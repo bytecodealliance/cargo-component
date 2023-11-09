@@ -41,7 +41,7 @@ fn upgrade_single_crate_upgrades_bindings_dep() -> Result<()> {
     let project = Project::with_root(&root, "component", "")?;
     project.update_manifest(|mut doc| {
         // Set arbitrary old version of bindings crate.
-        doc["dependencies"][BINDINGS_CRATE_NAME] = value("0.1");
+        doc["dependencies"][BINDINGS_CRATE_NAME] = value("0.1.0");
         Ok(doc)
     })?;
 
@@ -52,7 +52,7 @@ fn upgrade_single_crate_upgrades_bindings_dep() -> Result<()> {
     let manifest = project.read_manifest()?;
     assert_eq!(
         manifest["dependencies"][BINDINGS_CRATE_NAME].as_str(),
-        Some("0.1")
+        Some("0.1.0")
     );
     assert_ne!(
         manifest["dependencies"][BINDINGS_CRATE_NAME].as_str(),
@@ -65,7 +65,7 @@ fn upgrade_single_crate_upgrades_bindings_dep() -> Result<()> {
         .success()
         .stderr(contains("Updated "))
         .stderr(contains(format!(
-            "from 0.1 to {}",
+            "from 0.1.0 to {}",
             env!("CARGO_PKG_VERSION")
         )));
 
@@ -73,7 +73,7 @@ fn upgrade_single_crate_upgrades_bindings_dep() -> Result<()> {
     let manifest = project.read_manifest()?;
     assert_ne!(
         manifest["dependencies"][BINDINGS_CRATE_NAME].as_str(),
-        Some("0.1")
+        Some("0.1.0")
     );
     assert_eq!(
         manifest["dependencies"][BINDINGS_CRATE_NAME].as_str(),
@@ -93,12 +93,41 @@ fn upgrade_single_crate_upgrades_bindings_dep() -> Result<()> {
 }
 
 #[test]
+fn skip_packages_newer_than_cargo_component() -> Result<()> {
+    let root = create_root()?;
+    let project = Project::with_root(&root, "component", "")?;
+    project.update_manifest(|mut doc| {
+        // Set arbitrary future version of cargo-component
+        doc["dependencies"][BINDINGS_CRATE_NAME] = value("1000.0.0");
+        Ok(doc)
+    })?;
+
+    project
+        .cargo_component("upgrade --no-install")
+        .assert()
+        .success()
+        .stderr(contains("Skipping "))
+        .stderr(contains(
+            "using bindings crate version 1000.0.0 which is newer than cargo-component",
+        ));
+
+    // It should have not updated the manifest
+    let manifest = project.read_manifest()?;
+    assert_eq!(
+        manifest["dependencies"][BINDINGS_CRATE_NAME].as_str(),
+        Some("1000.0.0")
+    );
+
+    Ok(())
+}
+
+#[test]
 fn upgrade_dry_run_does_not_alter_manifest() -> Result<()> {
     let root = create_root()?;
     let project = Project::with_root(&root, "component", "")?;
     project.update_manifest(|mut doc| {
         // Set arbitrary old version of bindings crate.
-        doc["dependencies"][BINDINGS_CRATE_NAME] = value("0.1");
+        doc["dependencies"][BINDINGS_CRATE_NAME] = value("0.1.0");
         Ok(doc)
     })?;
 
@@ -109,7 +138,7 @@ fn upgrade_dry_run_does_not_alter_manifest() -> Result<()> {
     let manifest = project.read_manifest()?;
     assert_eq!(
         manifest["dependencies"][BINDINGS_CRATE_NAME].as_str(),
-        Some("0.1")
+        Some("0.1.0")
     );
     assert_ne!(
         manifest["dependencies"][BINDINGS_CRATE_NAME].as_str(),
@@ -123,7 +152,7 @@ fn upgrade_dry_run_does_not_alter_manifest() -> Result<()> {
         .stderr(contains("Would update "))
         .stderr(contains("Updated ").not())
         .stderr(contains(format!(
-            "from 0.1 to {}",
+            "from 0.1.0 to {}",
             env!("CARGO_PKG_VERSION")
         )));
 
@@ -131,7 +160,7 @@ fn upgrade_dry_run_does_not_alter_manifest() -> Result<()> {
     let manifest = project.read_manifest()?;
     assert_eq!(
         manifest["dependencies"][BINDINGS_CRATE_NAME].as_str(),
-        Some("0.1")
+        Some("0.1.0")
     );
     assert_ne!(
         manifest["dependencies"][BINDINGS_CRATE_NAME].as_str(),

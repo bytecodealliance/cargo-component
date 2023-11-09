@@ -16,7 +16,7 @@ use config::{CargoArguments, CargoPackageSpec, Config};
 use lock::{acquire_lock_file_ro, acquire_lock_file_rw};
 use metadata::ComponentMetadata;
 use registry::{PackageDependencyResolution, PackageResolutionMap};
-use semver::{Version, VersionReq};
+use semver::Version;
 use std::{
     borrow::Cow,
     fs::{self, File},
@@ -221,26 +221,36 @@ pub fn load_metadata(
     let metadata = command.exec().context("failed to load cargo metadata")?;
 
     if !ignore_version_mismatch {
+        let this_version = Version::parse(env!("CARGO_PKG_VERSION")).unwrap();
         for package in &metadata.packages {
-            for dep in &package.dependencies {
-                if dep.rename.as_deref().unwrap_or(dep.name.as_str()) != BINDINGS_CRATE_NAME {
-                    continue;
-                }
+            match package.dependencies.iter().find(|dep| {
+                dep.rename.as_deref().unwrap_or(dep.name.as_str()) == BINDINGS_CRATE_NAME
+            }) {
+                Some(bindings_crate) => {
+                    let s = bindings_crate.req.to_string();
+                    match s.strip_prefix('^').unwrap_or(&s).parse::<Version>() {
+                        Ok(v) => {
+                            if this_version.major == v.major
+                                && (this_version.major > 0 || this_version.minor == v.minor)
+                            {
+                                // Version should be compatible
+                                continue;
+                            }
 
-                let req = VersionReq::parse(env!("CARGO_PKG_VERSION")).unwrap();
-                let v = dep.req.to_string();
-                match v.strip_prefix('^').unwrap_or(&v).parse::<Version>() {
-                    Ok(v) if req.matches(&v) => break,
-                    _ => {}
+                            if this_version.major > v.major
+                                || (this_version.major == v.major && this_version.minor > v.minor)
+                            {
+                                // cargo-component is newer, so warn about upgrading `Cargo.toml`
+                                terminal.warn(format!("manifest `{path}` uses an older version of `{BINDINGS_CRATE_NAME}` ({v}) than cargo-component ({this_version}); use `cargo component upgrade --no-install` to update the manifest", path = package.manifest_path))?;
+                            } else {
+                                // cargo-component itself is out of date; warn to upgrade
+                                terminal.warn(format!("manifest `{path}` uses a newer version of `{BINDINGS_CRATE_NAME}` ({v}) than cargo-component ({this_version}); use `cargo component upgrade` to upgrade to the latest version", path = package.manifest_path))?;
+                            };
+                        }
+                        _ => continue,
+                    }
                 }
-
-                terminal.warn(
-                    format!(
-                        "mismatched version of `{BINDINGS_CRATE_NAME}` detected in manifest `{path}` (expected a version compatible with {version}); use `cargo component upgrade --no-install` to update",
-                        path = package.manifest_path,
-                        version = env!("CARGO_PKG_VERSION")
-                    )
-                )?;
+                None => continue,
             }
         }
     }

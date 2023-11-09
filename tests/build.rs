@@ -777,7 +777,7 @@ fn it_errors_if_adapter_is_not_wasm() -> Result<()> {
 }
 
 #[test]
-fn it_warns_on_mismatched_bindings_crate_version() -> Result<()> {
+fn it_warns_on_outdated_bindings_crate_version() -> Result<()> {
     let project = Project::new("foo")?;
     project.update_manifest(|mut doc| {
         doc["dependencies"][BINDINGS_CRATE_NAME] = value("0.2.0");
@@ -787,9 +787,28 @@ fn it_warns_on_mismatched_bindings_crate_version() -> Result<()> {
     project
         .cargo_component("build")
         .assert()
-        .stderr(contains(
-            "warning: mismatched version of `cargo-component-bindings` detected in manifest",
-        ))
+        .stderr(contains(format!(
+            "uses an older version of `{BINDINGS_CRATE_NAME}` (0.2.0) than cargo-component"
+        )))
+        .failure();
+
+    Ok(())
+}
+
+#[test]
+fn it_warns_on_outdated_cargo_component_version() -> Result<()> {
+    let project = Project::new("foo")?;
+    project.update_manifest(|mut doc| {
+        doc["dependencies"][BINDINGS_CRATE_NAME] = value("1000.0.0");
+        Ok(doc)
+    })?;
+
+    project
+        .cargo_component("build")
+        .assert()
+        .stderr(contains(format!(
+            "uses a newer version of `{BINDINGS_CRATE_NAME}` (1000.0.0) than cargo-component"
+        )))
         .failure();
 
     Ok(())

@@ -1,6 +1,6 @@
 use crate::{load_metadata, Config, BINDINGS_CRATE_NAME};
 use anyhow::{Context, Result};
-use cargo_component_core::command::CommonOptions;
+use cargo_component_core::{command::CommonOptions, terminal::Colors};
 use cargo_metadata::Metadata;
 use clap::Args;
 use semver::Version;
@@ -49,9 +49,6 @@ impl UpgradeCommand {
             //
             // (We can't tell whether or not cargo-install actually installed anything
             // without scraping its output; it considers "already installed" as success.)
-            //
-            // Skip this in tests, but still delegate to a new instance of `cargo-component`
-            // so that we can exercise as much of the flow as practicable.
             upgrade_self()?;
             run_cargo_component_and_exit();
         }
@@ -113,7 +110,7 @@ fn run_cargo_component_and_exit() -> ! {
 }
 
 async fn upgrade_bindings(config: &Config, metadata: &Metadata, dry_run: bool) -> Result<()> {
-    let self_version = semver::VersionReq::parse(env!("CARGO_PKG_VERSION"))
+    let this_version = Version::parse(env!("CARGO_PKG_VERSION"))
         .context("Failed to parse current cargo-component version")?;
 
     for package in metadata.workspace_packages() {
@@ -129,22 +126,42 @@ async fn upgrade_bindings(config: &Config, metadata: &Metadata, dry_run: bool) -
             continue;
         };
 
-        // Treat the dependency req as a specific version
-        let version = bindings_dep.req.to_string();
-        let version = version.strip_prefix('^').unwrap_or(&version);
-        match version.parse::<Version>() {
-            Ok(v) if self_version.matches(&v) => {
-                config.terminal().status(
-                    "Skipping",
-                    format!(
-                        "package `{name}` as it already uses a compatible bindings crate version",
-                        name = package.name
-                    ),
-                )?;
-                continue;
+        let s = bindings_dep.req.to_string();
+        let version = match s.strip_prefix('^').unwrap_or(&s).parse::<Version>() {
+            Ok(v) => {
+                if this_version.major == v.major
+                    && (this_version.major > 0 || this_version.minor == v.minor)
+                {
+                    config.terminal().status(
+                        "Skipping",
+                        format!(
+                            "package `{name}` as it already uses a compatible bindings crate version",
+                            name = package.name
+                        ),
+                    )?;
+                    continue;
+                }
+
+                if this_version.major > v.major
+                    || (this_version.major == v.major && this_version.minor > v.minor)
+                {
+                    // cargo-component is newer, fall through to upgrade the project.
+                    v
+                } else {
+                    // cargo-component is older, warn about it
+                    config.terminal().status_with_color(
+                        "Skipping",
+                        format!(
+                            "package `{name}` is using bindings crate version {v} which is newer than cargo-component ({this_version})",
+                            name = package.name
+                        ),
+                        Colors::Yellow,
+                    )?;
+                    continue;
+                }
             }
-            _ => {}
-        }
+            _ => continue,
+        };
 
         let manifest_path = package.manifest_path.as_std_path();
         let manifest = fs::read_to_string(manifest_path).with_context(|| {
