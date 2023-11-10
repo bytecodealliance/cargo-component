@@ -31,10 +31,10 @@ async fn it_publishes_a_component() -> Result<()> {
         &config,
         "my:world",
         "1.0.0",
-        r#"package my:%world@1.0.0
+        r#"package my:%world@1.0.0;
 world foo {
-    import foo: func() -> string
-    export bar: func() -> string
+    import foo: func() -> string;
+    export bar: func() -> string;
 }"#,
         true,
     )
@@ -78,10 +78,10 @@ async fn it_fails_if_package_does_not_exist() -> Result<()> {
         &config,
         "my:world",
         "1.0.0",
-        r#"package my:%world@1.0.0
+        r#"package my:%world@1.0.0;
 world foo {
-    import foo: func() -> string
-    export bar: func() -> string
+    import foo: func() -> string;
+    export bar: func() -> string;
 }"#,
         true,
     )
@@ -113,9 +113,9 @@ async fn it_publishes_a_dependency() -> Result<()> {
         &config,
         "my:world",
         "1.0.0",
-        r#"package my:%world@1.0.0
+        r#"package my:%world@1.0.0;
 world foo {
-    export bar: func() -> string
+    export bar: func() -> string;
 }"#,
         true,
     )
