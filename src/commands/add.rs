@@ -81,13 +81,6 @@ impl AddCommand {
                 )?,
             };
 
-        let metadata = metadata.with_context(|| {
-            format!(
-                "manifest `{path}` is not a WebAssembly component package",
-                path = package.manifest_path
-            )
-        })?;
-
         let id = match &self.id {
             Some(id) => id,
             None => &self.package.id,

@@ -300,8 +300,8 @@ pub struct ComponentMetadata {
 impl ComponentMetadata {
     /// Creates a new component metadata for the given cargo package.
     ///
-    /// Returns `Ok(None)` if the package does not have a `component` section.
-    pub fn from_package(package: &Package) -> Result<Option<Self>> {
+    /// Uses `ComponentSection::default()` if the component metadata is not defined.
+    pub fn from_package(package: &Package) -> Result<Self> {
         log::debug!(
             "searching for component metadata in manifest `{path}`",
             path = package.manifest_path
@@ -361,13 +361,13 @@ impl ComponentMetadata {
             *adapter = manifest_dir.join(adapter.as_path());
         }
 
-        Ok(Some(Self {
+        Ok(Self {
             name: package.name.clone(),
             version: package.version.clone(),
             manifest_path: package.manifest_path.clone().into(),
             modified_at,
             section,
-        }))
+        })
     }
 
     /// Gets the path to a local target.

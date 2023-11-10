@@ -52,9 +52,7 @@ pub struct PackageComponentMetadata<'a> {
     /// The associated package.
     pub package: &'a Package,
     /// The associated component metadata.
-    ///
-    /// This is `None` if the package is not a component.
-    pub metadata: Option<ComponentMetadata>,
+    pub metadata: ComponentMetadata,
 }
 
 impl<'a> PackageComponentMetadata<'a> {
@@ -149,11 +147,6 @@ pub async fn run_cargo_command(
                 });
 
             for PackageComponentMetadata { package, metadata } in packages {
-                let metadata = match metadata {
-                    Some(metadata) => metadata,
-                    None => continue,
-                };
-
                 let is_bin = package.targets.iter().any(|t| t.is_bin());
 
                 // First try for <name>.wasm
@@ -362,15 +355,9 @@ async fn create_resolution_map<'a>(
     let mut map = PackageResolutionMap::default();
 
     for PackageComponentMetadata { package, metadata } in packages {
-        match metadata {
-            Some(metadata) => {
-                let resolution =
-                    PackageDependencyResolution::new(config, metadata, lock_file, network_allowed)
-                        .await?;
-                map.insert(package.id.clone(), resolution);
-            }
-            None => continue,
-        }
+        let resolution =
+            PackageDependencyResolution::new(config, metadata, lock_file, network_allowed).await?;
+        map.insert(package.id.clone(), resolution);
     }
 
     Ok(map)

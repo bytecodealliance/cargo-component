@@ -116,13 +116,7 @@ impl PublishCommand {
         )?];
 
         let package = packages[0].package;
-        let component_metadata = packages[0].metadata.as_ref().with_context(|| {
-            format!(
-                "package `{name}` is missing component metadata in manifest `{path}`",
-                name = package.name,
-                path = package.manifest_path
-            )
-        })?;
+        let component_metadata = &packages[0].metadata;
 
         let id = component_metadata.section.package.as_ref().with_context(|| {
             format!(
