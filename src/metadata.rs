@@ -307,7 +307,7 @@ impl ComponentMetadata {
             path = package.manifest_path
         );
 
-        let mut section: ComponentSection = match package.metadata.get("component").cloned() {
+        let mut section = match package.metadata.get("component").cloned() {
             Some(component) => from_value(component).with_context(|| {
                 format!(
                     "failed to deserialize component metadata from `{path}`",
@@ -319,7 +319,7 @@ impl ComponentMetadata {
                     "manifest `{path}` has no component metadata",
                     path = package.manifest_path
                 );
-                return Ok(None);
+                ComponentSection::default()
             }
         };
 
