@@ -220,27 +220,38 @@ pub fn load_metadata(
 
     let metadata = command.exec().context("failed to load cargo metadata")?;
 
-    for package in &metadata.packages {
-        for dep in &package.dependencies {
-            if dep.rename.as_deref().unwrap_or(dep.name.as_str()) != BINDINGS_CRATE_NAME {
-                continue;
-            }
+    if !ignore_version_mismatch {
+        let this_version = Version::parse(env!("CARGO_PKG_VERSION")).unwrap();
+        for package in &metadata.packages {
+            match package.dependencies.iter().find(|dep| {
+                dep.rename.as_deref().unwrap_or(dep.name.as_str()) == BINDINGS_CRATE_NAME
+            }) {
+                Some(bindings_crate) => {
+                    let s = bindings_crate.req.to_string();
+                    match s.strip_prefix('^').unwrap_or(&s).parse::<Version>() {
+                        Ok(v) => {
+                            if this_version.major == v.major
+                                && (this_version.major > 0 || this_version.minor == v.minor)
+                            {
+                                // Version should be compatible
+                                continue;
+                            }
 
-            if ignore_version_mismatch
-                || dep
-                    .req
-                    .matches(&Version::parse(env!("CARGO_PKG_VERSION")).unwrap())
-            {
-                continue;
+                            if this_version.major > v.major
+                                || (this_version.major == v.major && this_version.minor > v.minor)
+                            {
+                                // cargo-component is newer, so warn about upgrading `Cargo.toml`
+                                terminal.warn(format!("manifest `{path}` uses an older version of `{BINDINGS_CRATE_NAME}` ({v}) than cargo-component ({this_version}); use `cargo component upgrade --no-install` to update the manifest", path = package.manifest_path))?;
+                            } else {
+                                // cargo-component itself is out of date; warn to upgrade
+                                terminal.warn(format!("manifest `{path}` uses a newer version of `{BINDINGS_CRATE_NAME}` ({v}) than cargo-component ({this_version}); use `cargo component upgrade` to upgrade to the latest version", path = package.manifest_path))?;
+                            };
+                        }
+                        _ => continue,
+                    }
+                }
+                None => continue,
             }
-
-            terminal.warn(
-                format!(
-                    "mismatched version of `{BINDINGS_CRATE_NAME}` detected in manifest `{path}`: please update the version in the manifest to {version}",
-                    path = package.manifest_path,
-                    version = env!("CARGO_PKG_VERSION")
-                )
-            )?;
         }
     }
 
