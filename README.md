@@ -176,12 +176,17 @@ by setting the `adapter` setting in the `[package.metadata.component]` table in
 To build the adapter module, clone the [Wasmtime repository](https://github.com/bytecodealliance/wasmtime)
 and run the following commands:
 
-```
+```bash
+# Add the wasm32-unknown-unknown target if you haven't already
+rustup target add wasm32-unknown-unknown
+
 git checkout $REV
+
+git submodule update --init
 
 cargo build -p wasi-preview1-component-adapter --target wasm32-unknown-unknown --release
 
-cp wasm32-unknown-unknown/release/wasi_snapshot_preview1.wasm $PROJECT
+cp target/wasm32-unknown-unknown/release/wasi_snapshot_preview1.wasm $PROJECT
 ```
 
 where `$REV` is the Wasmtime commit hash you want to use and `$PROJECT` is the 
