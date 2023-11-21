@@ -10,7 +10,7 @@ checksum = "327762f6e5a765692301e5bb513e0d9fef63be86bbc14528052b1cd3e6f03e07"
 
 [[package]]
 name = "cargo-component-bindings"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "cargo-component-macro",
  "wit-bindgen",
@@ -18,7 +18,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-component-macro"
-version = "0.4.1"
+version = "0.5.0"
 dependencies = [
  "proc-macro2",
  "quote",
