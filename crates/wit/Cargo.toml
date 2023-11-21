@@ -40,4 +40,4 @@ assert_cmd = "2.0.12"
 predicates = "3.0.4"
 warg-server = "0.2.0"
 tokio-util = { workspace = true }
-wasmparser = "0.116.1"
+wasmparser = "0.118.0"
