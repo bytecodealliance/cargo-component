@@ -289,7 +289,7 @@ information, rust-analyzer must be configured to use `cargo component check` as
 the check command.
 
 To configure rust-analyzer to use the `cargo-component` executable, set the
-`rust-analyzer.server.extraEnv` setting to the following:
+`rust-analyzer.check.overrideCommand` setting to the following:
 
 ```json
 "rust-analyzer.check.overrideCommand": ["cargo", "component", "check", "--message-format=json"]
