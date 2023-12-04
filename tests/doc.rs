@@ -15,7 +15,7 @@ fn it_documents() -> Result<()> {
     })?;
 
     project
-        .cargo_component("doc --color=never")
+        .cargo_component("doc")
         .assert()
         .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
         .success();
