@@ -354,6 +354,8 @@ pub struct CargoArguments {
     pub targets: Vec<String>,
     /// The --manifest-path argument.
     pub manifest_path: Option<PathBuf>,
+    /// The `--message-format`` argument.
+    pub message_format: Option<String>,
     /// The --frozen argument.
     pub frozen: bool,
     /// The --locked argument.
@@ -392,6 +394,7 @@ impl CargoArguments {
         let mut args = Args::default()
             .single("--color", "WHEN", Some('c'))
             .single("--manifest-path", "PATH", None)
+            .single("--message-format", "FMT", None)
             .multiple("--package", "SPEC", Some('p'))
             .multiple("--target", "TRIPLE", None)
             .flag("--release", Some('r'))
@@ -438,6 +441,7 @@ impl CargoArguments {
                 .unwrap()
                 .take_single()
                 .map(PathBuf::from),
+            message_format: args.get_mut("--message-format").unwrap().take_single(),
             targets: args.get_mut("--target").unwrap().take_multiple(),
             frozen: args.get("--frozen").unwrap().count() > 0,
             locked: args.get("--locked").unwrap().count() > 0,
@@ -756,6 +760,7 @@ mod test {
                 quiet: false,
                 targets: Vec::new(),
                 manifest_path: None,
+                message_format: None,
                 release: false,
                 frozen: false,
                 locked: false,
@@ -773,6 +778,8 @@ mod test {
                 "--color=auto",
                 "--manifest-path",
                 "Cargo.toml",
+                "--message-format",
+                "json-render-diagnostics",
                 "--release",
                 "--package",
                 "package1",
@@ -798,6 +805,7 @@ mod test {
                 quiet: true,
                 targets: vec!["foo".to_string(), "bar".to_string()],
                 manifest_path: Some("Cargo.toml".into()),
+                message_format: Some("json-render-diagnostics".into()),
                 release: true,
                 frozen: true,
                 locked: true,

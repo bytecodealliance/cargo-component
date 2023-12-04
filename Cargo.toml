@@ -39,6 +39,7 @@ wit-component = { workspace = true }
 wasm-metadata = { workspace = true }
 parse_arg = { workspace = true }
 cargo_metadata = { workspace = true }
+cargo-config2 = { workspace = true }
 libc = { workspace = true }
 warg-protocol = { workspace = true }
 warg-crypto = { workspace = true }
@@ -48,6 +49,7 @@ rand_core = { workspace = true }
 rpassword = { workspace = true }
 futures = { workspace = true }
 bytes = { workspace = true }
+which = { workspace = true }
 
 [dev-dependencies]
 assert_cmd = "2.0.12"
@@ -78,12 +80,13 @@ semver = "1.0.20"
 serde = { version = "1.0.193", features = ["derive"] }
 serde_json = "1.0.108"
 indexmap = "2.1.0"
-url = { version = "2.4.1", features = ["serde"] }
+url = { version = "2.5.0", features = ["serde"] }
 wit-parser = "0.13.0"
 wit-component = "0.18.2"
 wasm-metadata = "0.10.13"
 parse_arg = "0.1.4"
 cargo_metadata = "0.18.1"
+cargo-config2 = "0.1.16"
 keyring = "2.0.5"
 libc = "0.2.150"
 owo-colors = "3.5.0"
@@ -96,5 +99,6 @@ bytes = "1.5.0"
 proc-macro2 = "1.0.69"
 quote = "1.0.33"
 syn = "2.0.39"
+which = "5.0.0"
 wit-bindgen-rust = "0.14.0"
 wit-bindgen-core = "0.14.0"

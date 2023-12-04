@@ -22,8 +22,17 @@ jobs:
     - name: Run sccache-cache
       uses: mozilla-actions/sccache-action@v0.0.3
     - name: Install Rust
-      run: rustup update stable --no-self-update && rustup default stable && rustup target add wasm32-wasi && rustup target add wasm32-unknown-unknown
+      run: |
+        rustup set profile minimal
+        rustup update stable --no-self-update
+        rustup update nightly --no-self-update
+        rustup default stable
+        rustup target add wasm32-wasi
+        rustup target add wasm32-wasi --toolchain nightly
+        rustup target add wasm32-unknown-unknown
       shell: bash
+    - name: Install Wasmtime
+      run: cargo install wasmtime-cli --locked --features="component-model" --version 15.0.0
     - name: Run all tests
       run: cargo test --all
 

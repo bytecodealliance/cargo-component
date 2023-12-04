@@ -154,6 +154,7 @@ impl PublishCommand {
             quiet: self.common.quiet,
             targets: self.target.clone().into_iter().collect(),
             manifest_path: self.manifest_path.clone(),
+            message_format: None,
             frozen: self.frozen,
             locked: self.locked,
             release: true,

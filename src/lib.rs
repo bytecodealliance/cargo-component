@@ -11,7 +11,8 @@ use cargo_component_core::{
     registry::create_client,
     terminal::{Colors, Terminal},
 };
-use cargo_metadata::{Metadata, MetadataCommand, Package};
+use cargo_config2::{PathAndArgs, TargetTripleRef};
+use cargo_metadata::{Message, Metadata, MetadataCommand, Package};
 use config::{CargoArguments, CargoPackageSpec, Config};
 use lock::{acquire_lock_file_ro, acquire_lock_file_rw};
 use metadata::ComponentMetadata;
@@ -19,10 +20,10 @@ use registry::{PackageDependencyResolution, PackageResolutionMap};
 use semver::Version;
 use std::{
     borrow::Cow,
-    fs::{self, File},
-    io::Read,
+    env, fs,
+    io::{BufRead, BufReader},
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
     time::{Duration, SystemTime},
 };
 use warg_client::storage::{ContentStorage, PublishEntry, PublishInfo};
@@ -67,6 +68,18 @@ impl<'a> PackageComponentMetadata<'a> {
     }
 }
 
+/// Represents a cargo build artifact.
+struct BuildArtifact {
+    /// The path to the artifact.
+    path: PathBuf,
+    /// The package that this artifact was compiled for.
+    package: String,
+    /// The target that this artifact was compiled for.
+    target: String,
+    /// Whether or not this artifact was `fresh` during this build.
+    fresh: bool,
+}
+
 /// Runs the cargo command as specified in the configuration.
 ///
 /// Note: if the command returns a non-zero status, this
@@ -88,7 +101,17 @@ pub async fn run_cargo_command(
         .ok()
         .unwrap_or_else(|| PathBuf::from("cargo"));
 
-    let mut args = spawn_args.iter().peekable();
+    let is_build = matches!(subcommand, Some("b") | Some("build") | Some("rustc"));
+    let is_run = matches!(subcommand, Some("r") | Some("run"));
+    let is_test = matches!(subcommand, Some("t") | Some("test") | Some("bench"));
+
+    let (build_args, runtime_args) = match spawn_args.iter().position(|a| a == "--") {
+        Some(position) => spawn_args.split_at(position),
+        None => (spawn_args, &[] as &[String]),
+    };
+    let needs_runner = !build_args.iter().any(|a| a == "--no-run");
+
+    let mut args = build_args.iter().peekable();
     if let Some(arg) = args.peek() {
         if *arg == "component" {
             args.next().unwrap();
@@ -103,78 +126,260 @@ pub async fn run_cargo_command(
     );
 
     let mut cmd = Command::new(&cargo);
+    if is_run {
+        cmd.arg("build");
+        if let Some(arg) = args.peek() {
+            if Some((*arg).as_str()) == subcommand {
+                args.next().unwrap();
+            }
+        }
+    }
     cmd.args(args);
 
-    let is_build = matches!(subcommand, Some("b") | Some("build") | Some("rustc"));
+    // TODO: consider targets from .cargo/config.toml
 
-    // Handle the target for build commands
-    if is_build {
+    // Handle the target for build, run and test commands
+    if is_build || is_run || is_test {
         install_wasm32_wasi(config)?;
 
         // Add an implicit wasm32-wasi target if there isn't a wasm target present
         if !cargo_args.targets.iter().any(|t| is_wasm_target(t)) {
             cmd.arg("--target").arg("wasm32-wasi");
         }
-    }
 
-    match cmd.status() {
-        Ok(status) => {
-            if !status.success() {
-                std::process::exit(status.code().unwrap_or(1));
+        if let Some(format) = &cargo_args.message_format {
+            if format != "json-render-diagnostics" {
+                bail!("unsupported cargo message format `{format}`");
             }
         }
-        Err(e) => {
-            bail!("failed to spawn `{cargo}`: {e}", cargo = cargo.display());
+
+        // It will output the message as json so we can extract the wasm files
+        // that will be componentized
+        cmd.arg("--message-format").arg("json-render-diagnostics");
+        cmd.stdout(Stdio::piped());
+    } else {
+        cmd.stdout(Stdio::inherit());
+    }
+
+    if needs_runner && is_test {
+        // Only build for the test target; running will be handled
+        // after the componentization
+        cmd.arg("--no-run");
+    }
+
+    let mut runner: Option<PathAndArgs> = None;
+    if needs_runner && (is_run || is_test) {
+        let cargo_config = cargo_config2::Config::load()?;
+
+        // We check here before we actually build that a runtime is present.
+        // We first check the runner for `wasm32-wasi` in the order from
+        // cargo's convention for a user-supplied runtime (path or executable)
+        // and use the default, namely `wasmtime`, if it is not set.
+        let (r, using_default) = cargo_config
+            .runner(TargetTripleRef::from("wasm32-wasi"))
+            .unwrap_or_default()
+            .map(|runner_override| (runner_override, false))
+            .unwrap_or_else(|| {
+                (
+                    PathAndArgs::new("wasmtime")
+                        .args(vec![
+                            "-W",
+                            "component-model",
+                            "-S",
+                            "preview2",
+                            "-S",
+                            "common",
+                        ])
+                        .to_owned(),
+                    true,
+                )
+            });
+        runner = Some(r.clone());
+
+        // Treat the runner object as an executable with list of arguments it
+        // that was extracted by splitting each whitespace. This allows the user
+        // to provide arguments which are passed to wasmtime without having to
+        // add more command-line argument parsing to this crate.
+        let wasi_runner = r.path.to_string_lossy().into_owned();
+
+        if !using_default {
+            // check if the override runner exists
+            if !(r.path.exists() || which::which(r.path).is_ok()) {
+                bail!(
+                    "failed to find `{wasi_runner}` specified by either the `CARGO_TARGET_WASM32_WASI_RUNNER`\
+                    environment variable or as the `wasm32-wasi` runner in `.cargo/config.toml`"
+                );
+            }
+        } else if which::which(r.path).is_err() {
+            bail!(
+                "failed to find `{wasi_runner}` on PATH\n\n\
+                 ensure Wasmtime is installed before running this command\n\n\
+                 {msg}:\n\n  {instructions}",
+                msg = if cfg!(unix) {
+                    "Wasmtime can be installed via a shell script"
+                } else {
+                    "Wasmtime can be installed via the GitHub releases page"
+                },
+                instructions = if cfg!(unix) {
+                    "curl https://wasmtime.dev/install.sh -sSf | bash"
+                } else {
+                    "https://github.com/bytecodealliance/wasmtime/releases"
+                },
+            );
         }
     }
 
     let mut outputs = Vec::new();
-    if is_build {
-        log::debug!("searching for WebAssembly modules to componentize");
-        let targets = cargo_args
-            .targets
-            .iter()
-            .map(String::as_str)
-            .filter(|t| is_wasm_target(t))
-            .chain(cargo_args.targets.is_empty().then_some("wasm32-wasi"));
+    log::debug!("spawning command {:?}", cmd);
 
-        for target in targets {
-            let out_dir = metadata
-                .target_directory
-                .join(target)
-                .join(if cargo_args.release {
-                    "release"
-                } else {
-                    "debug"
-                });
+    let mut child = cmd.spawn().context(format!(
+        "failed to spawn `{cargo}`",
+        cargo = cargo.display()
+    ))?;
 
+    let mut artifacts = Vec::new();
+
+    if is_build || is_run || is_test {
+        let stdout = child.stdout.take().expect("no stdout");
+        let reader = BufReader::new(stdout);
+        for line in reader.lines() {
+            let line = line.context("failed to read output from `cargo`")?;
+
+            // If the command line arguments also had `--message-format`, echo the line
+            if cargo_args.message_format.is_some() {
+                println!("{line}");
+            }
+
+            if line.is_empty() {
+                continue;
+            }
+
+            for message in Message::parse_stream(line.as_bytes()) {
+                if let Message::CompilerArtifact(artifact) =
+                    message.context("unexpected JSON message from cargo")?
+                {
+                    for path in artifact.filenames {
+                        let path = PathBuf::from(path);
+                        if path.extension().and_then(|s| s.to_str()) == Some("wasm") {
+                            log::debug!(
+                                "found WebAssembly build artifact `{path}`",
+                                path = path.display()
+                            );
+                            artifacts.push(BuildArtifact {
+                                path,
+                                package: artifact.package_id.to_string(),
+                                target: artifact.target.name.clone(),
+                                fresh: artifact.fresh,
+                            });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let status = child.wait().context(format!(
+        "failed to wait for `{cargo}` to finish",
+        cargo = cargo.display()
+    ))?;
+
+    if !status.success() {
+        std::process::exit(status.code().unwrap_or(1));
+    }
+
+    for artifact in &artifacts {
+        if artifact.path.exists() {
             for PackageComponentMetadata { package, metadata } in packages {
-                let metadata = match metadata {
-                    Some(metadata) => metadata,
-                    None => continue,
-                };
+                // When passing `--bin` the target name will be the binary being executed,
+                // but the package id still points to the package the binary is part of.
+                if artifact.target == package.name || artifact.package.starts_with(&package.name) {
+                    if let Some(metadata) = &metadata {
+                        let is_bin = is_test || package.targets.iter().any(|t| t.is_bin());
+                        let bytes = &mut fs::read(&artifact.path).with_context(|| {
+                            format!(
+                                "failed to read output module `{path}`",
+                                path = artifact.path.display()
+                            )
+                        })?;
 
-                let is_bin = package.targets.iter().any(|t| t.is_bin());
+                        // If the compilation output is not a WebAssembly module, then do nothing
+                        // Note: due to the way cargo currently works on macOS, it will overwrite
+                        // a previously generated component on an up-to-date build.
+                        //
+                        // Thus we always componentize the artifact on macOS, but we only print
+                        // the status message if the artifact was not fresh.
+                        //
+                        // See: https://github.com/rust-lang/cargo/blob/99ad42deb4b0be0cdb062d333d5e63460a94c33c/crates/cargo-util/src/paths.rs#L542-L550
+                        if bytes.len() < 8 || bytes[0..4] != [0x0, b'a', b's', b'm'] {
+                            bail!(
+                                "expected `{path}` to be a WebAssembly module or component",
+                                path = artifact.path.display()
+                            );
+                        }
 
-                // First try for <name>.wasm
-                let path = out_dir.join(&package.name).with_extension("wasm");
-                if path.exists() {
-                    create_component(config, metadata, path.as_std_path(), is_bin)?;
-                    outputs.push(path.to_path_buf().into_std_path_buf());
-                    continue;
+                        // Check for the module header version
+                        if bytes[4..8] == [0x01, 0x00, 0x00, 0x00] {
+                            create_component(
+                                config,
+                                metadata,
+                                &artifact.path,
+                                is_bin,
+                                artifact.fresh,
+                            )?;
+                        } else {
+                            log::debug!(
+                                "output file `{path}` is already a WebAssembly component",
+                                path = artifact.path.display()
+                            );
+                        }
+                    }
+
+                    outputs.push(artifact.path.clone());
                 }
+            }
+        }
+    }
 
-                // Next, try replacing `-` with `_`
-                let path = out_dir
-                    .join(package.name.replace('-', "_"))
-                    .with_extension("wasm");
-                if path.exists() {
-                    create_component(config, metadata, path.as_std_path(), is_bin)?;
-                    outputs.push(path.to_path_buf().into_std_path_buf());
-                    continue;
-                }
+    for PackageComponentMetadata {
+        package,
+        metadata: _,
+    } in packages
+    {
+        if !artifacts.iter().any(
+            |BuildArtifact {
+                 package: output, ..
+             }| output.starts_with(&package.name),
+        ) {
+            log::warn!(
+                "no build output found for package `{name}`",
+                name = package.name
+            );
+        }
+    }
 
-                log::debug!("no output found for package `{name}`", name = package.name);
+    if let Some(runner) = runner {
+        for run in outputs.iter() {
+            let mut cmd = Command::new(&runner.path);
+            cmd.args(&runner.args)
+                .arg("--")
+                .arg(run)
+                .args(runtime_args.iter().skip(1))
+                .stdout(Stdio::inherit())
+                .stderr(Stdio::inherit());
+            log::debug!("spawning command {:?}", cmd);
+
+            let mut child = cmd.spawn().context(format!(
+                "failed to spawn `{runner}`",
+                runner = runner.path.display()
+            ))?;
+
+            let status = child.wait().context(format!(
+                "failed to wait for `{runner}` to finish",
+                runner = runner.path.display()
+            ))?;
+
+            if !status.success() {
+                std::process::exit(status.code().unwrap_or(1));
             }
         }
     }
@@ -447,31 +652,6 @@ async fn generate_package_bindings(
     Ok(())
 }
 
-fn is_wasm_module(path: impl AsRef<Path>) -> Result<bool> {
-    let path = path.as_ref();
-
-    let mut file = File::open(path)
-        .with_context(|| format!("failed to open `{path}` for read", path = path.display()))?;
-
-    let mut bytes = [0u8; 8];
-    file.read(&mut bytes).with_context(|| {
-        format!(
-            "failed to read file header for `{path}`",
-            path = path.display()
-        )
-    })?;
-
-    if bytes[0..4] != [0x0, b'a', b's', b'm'] {
-        bail!(
-            "expected `{path}` to be a WebAssembly module",
-            path = path.display()
-        );
-    }
-
-    // Check for the module header version
-    Ok(bytes[4..] == [0x01, 0x00, 0x00, 0x00])
-}
-
 fn adapter_bytes(metadata: &ComponentMetadata, binary: bool) -> Result<Cow<[u8]>> {
     if let Some(adapter) = &metadata.section.adapter {
         return Ok(fs::read(adapter)
@@ -504,25 +684,10 @@ fn create_component(
     metadata: &ComponentMetadata,
     path: &Path,
     binary: bool,
+    fresh: bool,
 ) -> Result<()> {
-    // If the compilation output is not a WebAssembly module, then do nothing
-    // Note: due to the way cargo currently works on macOS, it will overwrite
-    // a previously generated component on an up-to-date build.
-    //
-    // As a result, users on macOS will see a "creating component" message
-    // even if the build is up-to-date.
-    //
-    // See: https://github.com/rust-lang/cargo/blob/99ad42deb4b0be0cdb062d333d5e63460a94c33c/crates/cargo-util/src/paths.rs#L542-L550
-    if !is_wasm_module(path)? {
-        ::log::debug!(
-            "output file `{path}` is already a WebAssembly component",
-            path = path.display()
-        );
-        return Ok(());
-    }
-
     ::log::debug!(
-        "componentizing WebAssembly module `{path}` as a {kind} component",
+        "componentizing WebAssembly module `{path}` as a {kind} component (fresh = {fresh})",
         path = path.display(),
         kind = if binary { "command" } else { "reactor" },
     );
@@ -534,10 +699,13 @@ fn create_component(
         )
     })?;
 
-    config.terminal().status(
-        "Creating",
-        format!("component {path}", path = path.display()),
-    )?;
+    // Only print the message if the artifact was not fresh
+    if !fresh {
+        config.terminal().status(
+            "Creating",
+            format!("component {path}", path = path.display()),
+        )?;
+    }
 
     let encoder = ComponentEncoder::default()
         .module(&module)?
