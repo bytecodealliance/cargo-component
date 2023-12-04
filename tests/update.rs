@@ -45,7 +45,7 @@ world foo {
     })?;
 
     project
-        .cargo_component("build --color never")
+        .cargo_component("build")
         .assert()
         .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
         .success();
@@ -86,7 +86,7 @@ world foo {
     })?;
 
     project
-        .cargo_component("build --color never")
+        .cargo_component("build")
         .assert()
         .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
         .success();
@@ -111,7 +111,7 @@ world foo {
         .stderr(contains("foo:bar").not());
 
     project
-        .cargo_component("build --color never")
+        .cargo_component("build")
         .assert()
         .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
         .success();
@@ -146,7 +146,7 @@ world foo {
     })?;
 
     project
-        .cargo_component("build --color never")
+        .cargo_component("build")
         .assert()
         .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
         .success();
@@ -185,7 +185,7 @@ impl Guest for Component {
     fs::write(project.root().join("src/lib.rs"), source)?;
 
     project
-        .cargo_component("build --color never")
+        .cargo_component("build")
         .assert()
         .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
         .success();
@@ -220,7 +220,7 @@ world foo {
     })?;
 
     project
-        .cargo_component("build --color never")
+        .cargo_component("build")
         .assert()
         .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
         .success();
@@ -249,7 +249,7 @@ world foo {
         ));
 
     project
-        .cargo_component("build --color never")
+        .cargo_component("build")
         .assert()
         .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
         .success();
@@ -275,7 +275,7 @@ async fn update_with_changed_dependencies() -> Result<()> {
     })?;
 
     project
-        .cargo_component("build --color never")
+        .cargo_component("build")
         .assert()
         .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
         .success();
@@ -289,7 +289,7 @@ async fn update_with_changed_dependencies() -> Result<()> {
         .success();
 
     project
-        .cargo_component("build --color never")
+        .cargo_component("build")
         .assert()
         .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
         .success();
@@ -313,7 +313,7 @@ async fn update_with_changed_dependencies() -> Result<()> {
         .success();
 
     project
-        .cargo_component("build --color never")
+        .cargo_component("build")
         .assert()
         .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
         .success();

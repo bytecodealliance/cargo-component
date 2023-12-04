@@ -21,15 +21,15 @@ fn it_runs_bench_with_basic_component() -> Result<()> {
     fs::write(
         project.root().join("wit/world.wit"),
         "
-package my:fibonacci
+package my:fibonacci;
 
 interface types {
-    type size = u32
+    type size = u32;
 }
 
 world generator {
-    use types.{size}
-    export fibonacci: func(input: size) -> u32
+    use types.{size};
+    export fibonacci: func(input: size) -> u32;
 }",
     )?;
 

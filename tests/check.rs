@@ -15,7 +15,7 @@ fn it_checks_a_new_project() -> Result<()> {
     })?;
 
     project
-        .cargo_component("check --color never")
+        .cargo_component("check")
         .assert()
         .stderr(contains("Checking foo v0.1.0"))
         .success();
@@ -39,10 +39,7 @@ fn it_finds_errors() -> Result<()> {
     project
         .cargo_component("check")
         .assert()
-        .stderr(
-            contains("Checking\u{1b}[0m foo v0.1.0")
-                .and(contains("expected `String`, found `&str`")),
-        )
+        .stderr(contains("Checking foo v0.1.0").and(contains("expected `String`, found `&str`")))
         .failure();
 
     Ok(())
@@ -97,9 +94,7 @@ edition = "2021"
     project
         .cargo_component("check")
         .assert()
-        .stderr(contains(
-            "Finished\u{1b}[0m dev [unoptimized + debuginfo] target(s)",
-        ))
+        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
         .success();
 
     Ok(())

@@ -3,7 +3,6 @@ use anyhow::Result;
 use assert_cmd::prelude::*;
 use predicates::str::contains;
 use std::fs;
-use toml_edit::{value, Item, Table};
 
 mod support;
 
@@ -47,8 +46,7 @@ interface types {
 
 world generator {
     use types.{seed};
-    export rand: func(seed: seed) -> u32;
-    export wasi:cli/run;
+    import get-seed: func() -> seed;
 }",
     )?;
 
@@ -77,8 +75,8 @@ pub fn test_random_component() {
     project
         .cargo_component("test")
         .assert()
-        .stdout(contains("test test_random_component ..."))
-        .stdout(contains("test result: FAILED."))
+        .stdout(contains("test test_random_component ... ok"))
+        .stdout(contains("test result: ok."))
         .success();
 
     Ok(())
@@ -89,30 +87,13 @@ fn it_runs_test_with_reactor_component() -> Result<()> {
     let project = Project::new("foo-bar")?;
     project.update_manifest(|mut doc| {
         redirect_bindings_crate(&mut doc);
-        let mut dependencies = Table::new();
-        dependencies["wasi:cli"]["path"] = value("wit/deps/cli");
-
-        let target =
-            doc["package"]["metadata"]["component"]["target"].or_insert(Item::Table(Table::new()));
-        target["dependencies"] = Item::Table(dependencies);
         Ok(doc)
     })?;
-
-    fs::create_dir_all(project.root().join("wit/deps/cli"))?;
-    fs::write(
-        project.root().join("wit/deps/cli/run.wit"),
-        "
-    package wasi:cli
-
-    interface run {
-        run: func() -> result
-    }",
-    )?;
 
     fs::write(
         project.root().join("wit/world.wit"),
         "
-package my:random
+package my:random;
 
 interface types {
     record seed {
@@ -121,9 +102,8 @@ interface types {
 }
 
 world generator {
-    use types.{seed}
-    import get-seed: func() -> seed
-    export wasi:cli/run
+    use types.{seed};
+    import get-seed: func() -> seed;
 }",
     )?;
 
@@ -132,19 +112,12 @@ world generator {
         r#"
 cargo_component_bindings::generate!();
 
-use bindings::exports::wasi::cli::run::Guest as Run;
 use bindings::{Seed};
 
 struct Component;
 
 fn rand(seed: Seed) -> u32 {
     seed.value + 1
-}
-
-impl Run for Component {
-    fn run() -> Result<(), ()> {
-        Ok(())
-    }
 }
 
 #[test]
@@ -157,7 +130,7 @@ pub fn test_random_component() {
     project
         .cargo_component("test")
         .assert()
-        .stdout(contains("test test_random_component ..."))
+        .stdout(contains("test test_random_component ... ok"))
         .stdout(contains("test result: ok."))
         .success();
 

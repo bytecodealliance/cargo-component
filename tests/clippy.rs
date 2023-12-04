@@ -15,7 +15,7 @@ fn it_checks_a_new_project() -> Result<()> {
     })?;
 
     project
-        .cargo_component("clippy --color never")
+        .cargo_component("clippy")
         .assert()
         .stderr(contains("Checking foo v0.1.0"))
         .success();
@@ -39,10 +39,7 @@ fn it_finds_errors() -> Result<()> {
     project
         .cargo_component("clippy")
         .assert()
-        .stderr(
-            contains("Checking\u{1b}[0m foo v0.1.0")
-                .and(contains("expected `String`, found `&str`")),
-        )
+        .stderr(contains("Checking foo v0.1.0").and(contains("expected `String`, found `&str`")))
         .failure();
 
     Ok(())
@@ -67,7 +64,7 @@ fn it_finds_clippy_warnings() -> Result<()> {
     project
         .cargo_component("clippy")
         .assert()
-        .stderr(contains("Checking\u{1b}[0m foo v0.1.0").and(contains("clippy::needless_return")))
+        .stderr(contains("Checking foo v0.1.0").and(contains("clippy::needless_return")))
         .success();
 
     Ok(())
@@ -122,9 +119,7 @@ edition = "2021"
     project
         .cargo_component("clippy")
         .assert()
-        .stderr(
-            contains("Checking\u{1b}[0m foo v0.1.0").and(contains("Checking\u{1b}[0m bar v0.1.0")),
-        )
+        .stderr(contains("Checking foo v0.1.0").and(contains("Checking bar v0.1.0")))
         .success();
 
     Ok(())

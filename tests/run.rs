@@ -12,47 +12,16 @@ fn it_runs_with_command_component() -> Result<()> {
     let project = Project::new_bin("bar")?;
     project.update_manifest(|mut doc| {
         redirect_bindings_crate(&mut doc);
-        let mut dependencies = Table::new();
-        dependencies["wasi:cli"]["path"] = value("wit/deps/cli");
-
-        let target =
-            doc["package"]["metadata"]["component"]["target"].or_insert(Item::Table(Table::new()));
-        target["dependencies"] = Item::Table(dependencies);
         Ok(doc)
     })?;
-
-    fs::create_dir_all(project.root().join("wit/deps/cli"))?;
-    fs::write(
-        project.root().join("wit/deps/cli/run.wit"),
-        "
-package wasi:cli
-
-interface environment {
-    get-environment: func() -> list<tuple<string, string>>
-    get-arguments: func() -> list<string>
-    initial-cwd: func() -> option<string>  
-}",
-    )?;
-
-    fs::write(
-        project.root().join("wit/world.wit"),
-        "
-package my:command
-
-world generator {
-    import wasi:cli/environment
-}",
-    )?;
 
     fs::write(
         project.root().join("src/main.rs"),
         r#"
 cargo_component_bindings::generate!();
 
-use bindings::wasi::cli::environment::get_arguments;
-
 fn main() {
-    if get_arguments().iter().any(|v| v == "--verbose") {
+    if std::env::args().any(|v| v == "--verbose") {
         println!("[guest] running component 'my:command'");
     }
 }"#,
@@ -89,20 +58,20 @@ fn it_runs_with_reactor_component() -> Result<()> {
     fs::write(
         project.root().join("wit/deps/cli/run.wit"),
         "
-package wasi:cli
+package wasi:cli@0.2.0-rc-2023-11-10;
 
 interface run {
-    run: func() -> result
+    run: func() -> result;
 }",
     )?;
 
     fs::write(
         project.root().join("wit/world.wit"),
         "
-package my:reactor
+package my:reactor;
 
 world generator {
-    export wasi:cli/run
+    export wasi:cli/run@0.2.0-rc-2023-11-10;
 }",
     )?;
 
