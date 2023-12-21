@@ -11,4 +11,4 @@ repository = { workspace = true }
 
 [dependencies]
 cargo-component-macro = { workspace = true }
-wit-bindgen = { version = "0.14.0", default-features = false, features = ["realloc"]}
+wit-bindgen = { version = "0.16.0", default-features = false, features = ["realloc"]}
