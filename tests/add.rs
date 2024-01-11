@@ -1,5 +1,5 @@
 use crate::support::*;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use assert_cmd::prelude::*;
 use predicates::{prelude::*, str::contains};
 use std::{fs, rc::Rc};
@@ -151,10 +151,7 @@ async fn prints_modified_manifest_for_dry_run() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn validate_add_from_path() -> Result<()> {
-    let project = Project::new("foo")?;
-
+fn validate_add_from_path(project: &Project) -> Result<()> {
     project
         .cargo_component("add --path foo/baz foo:baz")
         .assert()
@@ -168,6 +165,37 @@ fn validate_add_from_path() -> Result<()> {
     let manifest = fs::read_to_string(project.root().join("Cargo.toml"))?;
     assert!(contains(r#""foo:baz" = { path = "foo/baz" }"#).eval(&manifest));
     assert!(contains(r#""foo:qux" = { path = "foo/qux" }"#).eval(&manifest));
+    Ok(())
+}
 
+#[test]
+fn test_validate_add_from_path() -> Result<()> {
+    let project = Project::new("foo")?;
+    validate_add_from_path(&project)?;
+    Ok(())
+}
+
+#[test]
+fn two_projects_in_one_workspace_validate_add_from_path() -> Result<()> {
+    let temp_dir = Rc::new(TempDir::new()?);
+    let cargo_workspace = temp_dir.path().join("Cargo.toml");
+    fs::write(
+        &cargo_workspace,
+        r#"
+[workspace]
+resolver = "2"
+"#,
+    )
+    .with_context(|| {
+        format!(
+            "failed to write `{cargo_workspace}`",
+            cargo_workspace = cargo_workspace.display()
+        )
+    })?;
+    let p1 = Project::with_dir(temp_dir.clone(), "foo", "")?;
+    let p2 = Project::with_dir(temp_dir.clone(), "bar", "")?;
+
+    validate_add_from_path(&p1)?;
+    validate_add_from_path(&p2)?;
     Ok(())
 }
