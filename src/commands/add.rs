@@ -10,7 +10,7 @@ use cargo_component_core::{
     registry::{Dependency, DependencyResolution, DependencyResolver, RegistryPackage},
     VersionedPackageId,
 };
-use cargo_metadata::Package;
+use cargo_metadata::{Metadata, Package};
 use clap::Args;
 use semver::VersionReq;
 use std::{
@@ -62,13 +62,33 @@ pub struct AddCommand {
 }
 
 impl AddCommand {
+    fn find_current_package_spec(metadata: &Metadata) -> Option<CargoPackageSpec> {
+        let current_manifest = fs::read_to_string("Cargo.toml").ok()?;
+        let document: Document = current_manifest.parse().ok()?; // TODO do not parse the manifest twice
+        let name = document["package"]["name"].as_str()?;
+        let version = metadata
+            .packages
+            .iter()
+            .find(|found| found.name == name)
+            .map(|found| found.version.clone());
+        Some(CargoPackageSpec {
+            name: name.to_string(),
+            version: version,
+        })
+    }
+
     /// Executes the command
     pub async fn exec(self) -> Result<()> {
         let config = Config::new(self.common.new_terminal())?;
         let metadata = load_metadata(config.terminal(), self.manifest_path.as_deref(), false)?;
 
+        let spec = match &self.spec {
+            Some(spec) => Some(spec.clone()),
+            None => Self::find_current_package_spec(&metadata),
+        };
+
         let PackageComponentMetadata { package, metadata }: PackageComponentMetadata<'_> =
-            match &self.spec {
+            match &spec {
                 Some(spec) => {
                     let pkgs = load_component_metadata(&metadata, std::iter::once(spec), false)?;
                     assert!(pkgs.len() == 1, "one package should be present");

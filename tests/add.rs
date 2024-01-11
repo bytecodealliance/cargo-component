@@ -150,10 +150,7 @@ async fn prints_modified_manifest_for_dry_run() -> Result<()> {
     Ok(())
 }
 
-#[test]
-fn validate_add_from_path() -> Result<()> {
-    let project = Project::new("foo")?;
-
+fn validate_add_from_path(project: &Project) -> Result<()> {
     project
         .cargo_component("add --path foo/baz foo:baz")
         .assert()
@@ -167,6 +164,22 @@ fn validate_add_from_path() -> Result<()> {
     let manifest = fs::read_to_string(project.root().join("Cargo.toml"))?;
     assert!(contains(r#""foo:baz" = { path = "foo/baz" }"#).eval(&manifest));
     assert!(contains(r#""foo:qux" = { path = "foo/qux" }"#).eval(&manifest));
+    Ok(())
+}
 
+#[test]
+fn test_validate_add_from_path() -> Result<()> {
+    let project = Project::new("foo")?;
+    validate_add_from_path(&project)?;
+    Ok(())
+}
+
+#[test]
+fn two_projects_in_one_workspace_validate_add_from_path() -> Result<()> {
+    let root = create_root()?;
+    let foo = Project::with_root(&root, "foo", "")?;
+    let bar = Project::with_root(&root, "bar", "")?;
+    validate_add_from_path(&foo)?;
+    validate_add_from_path(&bar)?;
     Ok(())
 }

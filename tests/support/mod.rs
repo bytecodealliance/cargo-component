@@ -50,24 +50,19 @@ pub fn root() -> Result<PathBuf> {
     path.pop(); // remove `debug` or `release`
     path.push("tests");
     path.push("cargo-component");
-    fs::create_dir_all(&path)?;
+    let root = path.join(format!("t{id}"));
+    fs::create_dir_all(&root)?;
+    exclude_test_directories(&root)?;
 
-    exclude_test_directories()?;
-
-    Ok(path.join(format!("t{id}")))
+    Ok(root)
 }
 
 // This works around an apparent bug in cargo where
 // a directory is explicitly excluded from a workspace,
 // but `cargo new` still detects `workspace.package` settings
 // and sets them to be inherited in the new project.
-fn exclude_test_directories() -> Result<()> {
-    let mut path = env::current_exe()?;
-    path.pop(); // remove test exe name
-    path.pop(); // remove `deps`
-    path.pop(); // remove `debug` or `release`
-    path.push("tests");
-    path.push("Cargo.toml");
+fn exclude_test_directories(root: &PathBuf) -> Result<()> {
+    let path = root.join("Cargo.toml");
 
     if !path.exists() {
         fs::write(
@@ -84,10 +79,8 @@ fn exclude_test_directories() -> Result<()> {
 }
 
 pub fn create_root() -> Result<PathBuf> {
-    let root = root()?;
-    drop(fs::remove_dir_all(&root));
-    fs::create_dir_all(&root)?;
-    Ok(root)
+    drop(fs::remove_dir_all(&root()?));
+    root()
 }
 
 pub fn cargo_component(args: &str) -> Command {
@@ -276,16 +269,7 @@ impl ProjectBuilder {
 
 impl Project {
     pub fn new(name: &str) -> Result<Self> {
-        let root = create_root()?;
-
-        cargo_component(&format!("new --reactor {name}"))
-            .current_dir(&root)
-            .assert()
-            .try_success()?;
-
-        Ok(Self {
-            root: root.join(name),
-        })
+        Self::with_root(&create_root()?, name, "")
     }
 
     pub fn new_bin(name: &str) -> Result<Self> {
