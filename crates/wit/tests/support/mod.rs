@@ -6,9 +6,10 @@ use std::{
     env, fs,
     path::{Path, PathBuf},
     process::Command,
-    sync::atomic::{AtomicUsize, Ordering::SeqCst},
+    rc::Rc,
     time::Duration,
 };
+use tempfile::TempDir;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use toml_edit::Document;
@@ -22,25 +23,6 @@ pub fn test_operator_key() -> &'static str {
 
 pub fn test_signing_key() -> &'static str {
     "ecdsa-p256:2CV1EpLaSYEn4In4OAEDAj5O4Hzu8AFAxgHXuG310Ew="
-}
-
-pub fn root() -> Result<PathBuf> {
-    static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
-    std::thread_local! {
-        static TEST_ID: usize = NEXT_ID.fetch_add(1, SeqCst);
-    }
-    let id = TEST_ID.with(|n| *n);
-    let mut path = env::current_exe()?;
-    path.pop(); // remove test exe name
-    path.pop(); // remove `deps`
-    path.pop(); // remove `debug` or `release`
-    path.push("tests");
-    path.push("wit");
-    fs::create_dir_all(&path)?;
-
-    exclude_test_directories()?;
-
-    Ok(path.join(format!("t{id}")))
 }
 
 // This works around an apparent bug in cargo where
@@ -69,13 +51,6 @@ fn exclude_test_directories() -> Result<()> {
     Ok(())
 }
 
-pub fn create_root() -> Result<PathBuf> {
-    let root = root()?;
-    drop(fs::remove_dir_all(&root));
-    fs::create_dir_all(&root)?;
-    Ok(root)
-}
-
 pub fn wit(args: &str) -> Command {
     let mut exe = std::env::current_exe().unwrap();
     exe.pop(); // remove test exe name
@@ -89,10 +64,6 @@ pub fn wit(args: &str) -> Command {
     }
 
     cmd
-}
-
-pub fn project() -> Result<ProjectBuilder> {
-    Ok(ProjectBuilder::new(create_root()?))
 }
 
 pub struct ServerInstance {
@@ -143,61 +114,36 @@ pub async fn spawn_server(root: &Path) -> Result<(ServerInstance, warg_client::C
 }
 
 pub struct Project {
+    dir: Rc<TempDir>,
     root: PathBuf,
-}
-
-pub struct ProjectBuilder {
-    project: Project,
-}
-
-impl ProjectBuilder {
-    pub fn new(root: PathBuf) -> Self {
-        Self {
-            project: Project { root },
-        }
-    }
-
-    pub fn root(&self) -> &Path {
-        self.project.root()
-    }
-
-    pub fn file<B: AsRef<Path>>(&mut self, path: B, body: &str) -> Result<&mut Self> {
-        let path = self.root().join(path);
-        fs::create_dir_all(path.parent().unwrap())?;
-        fs::write(self.root().join(path), body)?;
-        Ok(self)
-    }
-
-    pub fn build(&mut self) -> Project {
-        Project {
-            root: self.project.root.clone(),
-        }
-    }
 }
 
 impl Project {
     pub fn new(name: &str) -> Result<Self> {
-        let root = create_root()?;
+        let dir = TempDir::new()?;
 
         wit(&format!("init {name}"))
-            .current_dir(&root)
+            .current_dir(&dir)
             .assert()
             .try_success()?;
 
+        let root = dir.path().join(name);
+
         Ok(Self {
-            root: root.join(name),
+            dir: Rc::new(dir),
+            root,
         })
     }
 
-    pub fn with_root(root: &Path, name: &str, args: &str) -> Result<Self> {
+    pub fn with_dir(dir: Rc<TempDir>, name: &str, args: &str) -> Result<Self> {
         wit(&format!("init {name} {args}"))
-            .current_dir(root)
+            .current_dir(dir.as_ref())
             .assert()
             .try_success()?;
 
-        Ok(Self {
-            root: root.join(name),
-        })
+        let root = dir.path().join(name);
+
+        Ok(Self { dir, root })
     }
 
     pub fn file<B: AsRef<Path>>(&self, path: B, body: &str) -> Result<&Self> {
@@ -209,6 +155,10 @@ impl Project {
 
     pub fn root(&self) -> &Path {
         &self.root
+    }
+
+    pub fn dir(&self) -> &Rc<TempDir> {
+        &self.dir
     }
 
     pub fn wit(&self, cmd: &str) -> Command {

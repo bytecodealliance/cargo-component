@@ -2,7 +2,8 @@ use crate::support::*;
 use anyhow::Result;
 use assert_cmd::prelude::*;
 use predicates::{prelude::*, str::contains};
-use std::fs;
+use std::{fs, rc::Rc};
+use tempfile::TempDir;
 use toml_edit::value;
 
 mod support;
@@ -27,11 +28,11 @@ fn requires_package() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn validate_the_package_exists() -> Result<()> {
-    let root = create_root()?;
-    let (_server, config) = spawn_server(&root).await?;
-    config.write_to_file(&root.join("warg-config.json"))?;
+    let dir = Rc::new(TempDir::new()?);
+    let (_server, config) = spawn_server(dir.path()).await?;
+    config.write_to_file(&dir.path().join("warg-config.json"))?;
 
-    let project = Project::with_root(&root, "foo", "")?;
+    let project = Project::with_dir(dir.clone(), "foo", "")?;
 
     project
         .cargo_component("add foo:bar")
@@ -44,13 +45,13 @@ async fn validate_the_package_exists() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn validate_the_version_exists() -> Result<()> {
-    let root = create_root()?;
-    let (_server, config) = spawn_server(&root).await?;
-    config.write_to_file(&root.join("warg-config.json"))?;
+    let dir = Rc::new(TempDir::new()?);
+    let (_server, config) = spawn_server(dir.path()).await?;
+    config.write_to_file(&dir.path().join("warg-config.json"))?;
 
     publish_component(&config, "foo:bar", "1.1.0", "(component)", true).await?;
 
-    let project = Project::with_root(&root, "foo", "")?;
+    let project = Project::with_dir(dir.clone(), "foo", "")?;
 
     project
         .cargo_component("add foo:bar")
@@ -74,13 +75,13 @@ async fn validate_the_version_exists() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn adds_dependencies_to_target_component() -> Result<()> {
-    let root = create_root()?;
-    let (_server, config) = spawn_server(&root).await?;
-    config.write_to_file(&root.join("warg-config.json"))?;
+    let dir = Rc::new(TempDir::new()?);
+    let (_server, config) = spawn_server(dir.path()).await?;
+    config.write_to_file(&dir.path().join("warg-config.json"))?;
 
     publish_component(&config, "foo:bar", "1.1.0", "(component)", true).await?;
 
-    let project = Project::with_root(&root, "foo_target", "")?;
+    let project = Project::with_dir(dir.clone(), "foo_target", "")?;
 
     let manifest = fs::read_to_string(project.root().join("Cargo.toml"))?;
     assert!(!contains("package.metadata.component.target.dependencies").eval(&manifest));
@@ -126,13 +127,13 @@ fn checks_for_duplicate_dependencies() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn prints_modified_manifest_for_dry_run() -> Result<()> {
-    let root = create_root()?;
-    let (_server, config) = spawn_server(&root).await?;
-    config.write_to_file(&root.join("warg-config.json"))?;
+    let dir = Rc::new(TempDir::new()?);
+    let (_server, config) = spawn_server(dir.path()).await?;
+    config.write_to_file(&dir.path().join("warg-config.json"))?;
 
     publish_component(&config, "foo:bar", "1.2.3", "(component)", true).await?;
 
-    let project = Project::with_root(&root, "foo", "")?;
+    let project = Project::with_dir(dir.clone(), "foo", "")?;
 
     project
         .cargo_component("add --dry-run foo:bar")

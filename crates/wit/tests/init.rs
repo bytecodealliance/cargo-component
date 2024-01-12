@@ -3,6 +3,7 @@ use anyhow::Result;
 use assert_cmd::prelude::*;
 use predicates::str::contains;
 use std::{fs, path::Path};
+use tempfile::TempDir;
 
 mod support;
 
@@ -18,10 +19,10 @@ fn help() {
 
 #[test]
 fn it_creates_the_expected_files() -> Result<()> {
-    let root = create_root()?;
+    let dir = TempDir::new()?;
 
     wit("init foo")
-        .current_dir(&root)
+        .current_dir(dir.path())
         .assert()
         .stderr(contains(format!(
             "Created configuration file `{path}`",
@@ -29,7 +30,7 @@ fn it_creates_the_expected_files() -> Result<()> {
         )))
         .success();
 
-    let proj_dir = root.join("foo");
+    let proj_dir = dir.path().join("foo");
     assert!(proj_dir.join("wit.toml").is_file());
 
     Ok(())
@@ -37,10 +38,10 @@ fn it_creates_the_expected_files() -> Result<()> {
 
 #[test]
 fn it_supports_registry_option() -> Result<()> {
-    let root = create_root()?;
+    let dir = TempDir::new()?;
 
     wit("init bar --registry https://example.com")
-        .current_dir(&root)
+        .current_dir(dir.path())
         .assert()
         .stderr(contains(format!(
             "Created configuration file `{path}`",
@@ -48,7 +49,7 @@ fn it_supports_registry_option() -> Result<()> {
         )))
         .success();
 
-    let proj_dir = root.join("bar");
+    let proj_dir = dir.path().join("bar");
     assert!(fs::read_to_string(proj_dir.join("wit.toml"))?
         .contains("default = \"https://example.com/\""));
 

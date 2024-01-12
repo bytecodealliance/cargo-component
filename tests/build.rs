@@ -3,7 +3,8 @@ use anyhow::{Context, Result};
 use assert_cmd::prelude::*;
 use cargo_component::BINDINGS_CRATE_NAME;
 use predicates::{prelude::PredicateBooleanExt, str::contains};
-use std::fs;
+use std::{fs, rc::Rc};
+use tempfile::TempDir;
 use toml_edit::{value, Array, InlineTable, Item, Table};
 
 mod support;
@@ -52,25 +53,31 @@ fn it_builds_a_bin_project() -> Result<()> {
 
 #[test]
 fn it_builds_a_workspace() -> Result<()> {
-    let project = project()?
-        .file(
-            "Cargo.toml",
-            r#"[workspace]
+    let dir = Rc::new(TempDir::new()?);
+    let project = Project {
+        dir: dir.clone(),
+        root: dir.path().to_owned(),
+    };
+
+    project.file(
+        "Cargo.toml",
+        r#"[workspace]
 members = ["foo", "bar", "baz"]
 "#,
-        )?
-        .file(
-            "baz/Cargo.toml",
-            r#"[package]
+    )?;
+
+    project.file(
+        "baz/Cargo.toml",
+        r#"[package]
 name = "baz"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
 "#,
-        )?
-        .file("baz/src/lib.rs", "")?
-        .build();
+    )?;
+
+    project.file("baz/src/lib.rs", "")?;
 
     project
         .cargo_component("new --reactor foo")
@@ -78,7 +85,10 @@ edition = "2021"
         .stderr(contains("Updated manifest of package `foo`"))
         .success();
 
-    let member = ProjectBuilder::new(project.root().join("foo")).build();
+    let member = Project {
+        dir: dir.clone(),
+        root: project.root().join("foo"),
+    };
     member.update_manifest(|mut doc| {
         redirect_bindings_crate(&mut doc);
         Ok(doc)
@@ -90,7 +100,10 @@ edition = "2021"
         .stderr(contains("Updated manifest of package `bar`"))
         .success();
 
-    let member = ProjectBuilder::new(project.root().join("bar")).build();
+    let member = Project {
+        dir: dir.clone(),
+        root: project.root().join("bar"),
+    };
     member.update_manifest(|mut doc| {
         redirect_bindings_crate(&mut doc);
         Ok(doc)
@@ -390,7 +403,7 @@ fn empty_world_with_dep_valid() -> Result<()> {
     let dep = project.debug_wasm("dep");
     validate_component(&dep)?;
 
-    let project = Project::with_root(project.root().parent().unwrap(), "main", "")?;
+    let project = Project::with_dir(project.dir().clone(), "main", "")?;
     project.update_manifest(|mut doc| {
         redirect_bindings_crate(&mut doc);
         let table = doc["package"]["metadata"]["component"]
@@ -620,9 +633,8 @@ fn it_builds_resources_with_specified_ownership_model() -> Result<()> {
 
 #[test]
 fn it_builds_with_a_component_dependency() -> Result<()> {
-    let root = create_root()?;
-
-    let comp1 = Project::with_root(&root, "comp1", "")?;
+    let dir = Rc::new(TempDir::new()?);
+    let comp1 = Project::with_dir(dir.clone(), "comp1", "")?;
     comp1.update_manifest(|mut doc| {
         redirect_bindings_crate(&mut doc);
         Ok(doc)
@@ -672,7 +684,7 @@ impl Guest for Component {
     let dep = comp1.release_wasm("comp1");
     validate_component(&dep)?;
 
-    let comp2 = Project::with_root(&root, "comp2", "")?;
+    let comp2 = Project::with_dir(dir.clone(), "comp2", "")?;
     comp2.update_manifest(|mut doc| {
         redirect_bindings_crate(&mut doc);
         doc["package"]["metadata"]["component"]["dependencies"]["my:comp1"]["path"] =
@@ -738,10 +750,8 @@ fn it_builds_with_adapter() -> Result<()> {
     let project = Project::new("foo")?;
     project.update_manifest(|mut doc| {
         redirect_bindings_crate(&mut doc);
-        doc["package"]["metadata"]["component"]["adapter"] = value(format!(
-            "../../../../../adapters/{version}/wasi_snapshot_preview1.reactor.wasm",
-            version = env!("WASI_ADAPTER_VERSION")
-        ));
+        doc["package"]["metadata"]["component"]["adapter"] =
+            value(adapter_path().to_str().unwrap());
         Ok(doc)
     })?;
 

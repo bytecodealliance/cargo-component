@@ -36,8 +36,9 @@ tokio = { workspace = true }
 pretty_env_logger = { workspace = true }
 
 [dev-dependencies]
-assert_cmd = "2.0.12"
-predicates = "3.0.4"
-warg-server = "0.2.0"
+assert_cmd = { workspace = true }
+predicates = { workspace = true }
+warg-server = { workspace = true }
 tokio-util = { workspace = true }
-wasmparser = "0.118.1"
+wasmparser = { workspace = true }
+tempfile = { workspace = true }
