@@ -47,13 +47,6 @@ fn it_checks_a_workspace() -> Result<()> {
     };
 
     project.file(
-        "Cargo.toml",
-        r#"[workspace]
-members = ["foo", "bar", "baz"]
-"#,
-    )?;
-
-    project.file(
         "baz/Cargo.toml",
         r#"[package]
 name = "baz"
@@ -77,6 +70,14 @@ edition = "2021"
         .assert()
         .stderr(contains("Updated manifest of package `bar`"))
         .success();
+
+    // Add the workspace after all of the packages have been created.
+    project.file(
+        "Cargo.toml",
+        r#"[workspace]
+    members = ["foo", "bar", "baz"]
+    "#,
+    )?;
 
     project
         .cargo_component("check")
