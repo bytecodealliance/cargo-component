@@ -93,27 +93,29 @@ impl PublishCommand {
         }
 
         let metadata = load_metadata(config.terminal(), self.manifest_path.as_deref(), false)?;
-        let packages = [PackageComponentMetadata::new(
-            if let Some(spec) = &self.cargo_package {
-                metadata
-                    .packages
-                    .iter()
-                    .find(|p| {
-                        p.name == spec.name
-                            && match spec.version.as_ref() {
-                                Some(v) => &p.version == v,
-                                None => true,
-                            }
-                    })
-                    .with_context(|| {
-                        format!("package ID specification `{spec}` did not match any packages")
-                    })?
-            } else {
-                metadata
-                    .root_package()
-                    .context("no root package found in manifest")?
-            },
-        )?];
+        let spec = match &self.cargo_package {
+            Some(spec) => Some(spec.clone()),
+            None => CargoPackageSpec::find_current_package_spec(&metadata),
+        };
+        let packages = [PackageComponentMetadata::new(if let Some(spec) = &spec {
+            metadata
+                .packages
+                .iter()
+                .find(|p| {
+                    p.name == spec.name
+                        && match spec.version.as_ref() {
+                            Some(v) => &p.version == v,
+                            None => true,
+                        }
+                })
+                .with_context(|| {
+                    format!("package ID specification `{spec}` did not match any packages")
+                })?
+        } else {
+            metadata
+                .root_package()
+                .context("no root package found in manifest")?
+        })?];
 
         let package = packages[0].package;
         let component_metadata = packages[0].metadata.as_ref().with_context(|| {
