@@ -2,7 +2,8 @@ use crate::support::*;
 use anyhow::{Context, Result};
 use assert_cmd::prelude::*;
 use predicates::{prelude::PredicateBooleanExt, str::contains};
-use std::fs;
+use std::{fs, rc::Rc};
+use tempfile::TempDir;
 use toml_edit::value;
 
 mod support;
@@ -21,9 +22,9 @@ fn help() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn update_without_changes_is_a_noop() -> Result<()> {
-    let root = create_root()?;
-    let (_server, config) = spawn_server(&root).await?;
-    config.write_to_file(&root.join("warg-config.json"))?;
+    let dir = Rc::new(TempDir::new()?);
+    let (_server, config) = spawn_server(dir.path()).await?;
+    config.write_to_file(&dir.path().join("warg-config.json"))?;
 
     publish_wit(
         &config,
@@ -38,7 +39,7 @@ world foo {
     )
     .await?;
 
-    let project = Project::with_root(&root, "component", "--target foo:bar@1.0.0")?;
+    let project = Project::with_dir(dir.clone(), "component", "--target foo:bar@1.0.0")?;
     project.update_manifest(|mut doc| {
         redirect_bindings_crate(&mut doc);
         Ok(doc)
@@ -62,9 +63,9 @@ world foo {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn update_without_compatible_changes_is_a_noop() -> Result<()> {
-    let root = create_root()?;
-    let (_server, config) = spawn_server(&root).await?;
-    config.write_to_file(&root.join("warg-config.json"))?;
+    let dir = Rc::new(TempDir::new()?);
+    let (_server, config) = spawn_server(dir.path()).await?;
+    config.write_to_file(&dir.path().join("warg-config.json"))?;
 
     publish_wit(
         &config,
@@ -79,7 +80,7 @@ world foo {
     )
     .await?;
 
-    let project = Project::with_root(&root, "component", "--target foo:bar@1.0.0")?;
+    let project = Project::with_dir(dir.clone(), "component", "--target foo:bar@1.0.0")?;
     project.update_manifest(|mut doc| {
         redirect_bindings_crate(&mut doc);
         Ok(doc)
@@ -122,9 +123,9 @@ world foo {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn update_with_compatible_changes() -> Result<()> {
-    let root = create_root()?;
-    let (_server, config) = spawn_server(&root).await?;
-    config.write_to_file(&root.join("warg-config.json"))?;
+    let dir = Rc::new(TempDir::new()?);
+    let (_server, config) = spawn_server(dir.path()).await?;
+    config.write_to_file(&dir.path().join("warg-config.json"))?;
 
     publish_wit(
         &config,
@@ -139,7 +140,7 @@ world foo {
     )
     .await?;
 
-    let project = Project::with_root(&root, "component", "--target foo:bar@1.0.0")?;
+    let project = Project::with_dir(dir.clone(), "component", "--target foo:bar@1.0.0")?;
     project.update_manifest(|mut doc| {
         redirect_bindings_crate(&mut doc);
         Ok(doc)
@@ -196,9 +197,9 @@ impl Guest for Component {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn update_with_compatible_changes_is_noop_for_dryrun() -> Result<()> {
-    let root = create_root()?;
-    let (_server, config) = spawn_server(&root).await?;
-    config.write_to_file(&root.join("warg-config.json"))?;
+    let dir = Rc::new(TempDir::new()?);
+    let (_server, config) = spawn_server(dir.path()).await?;
+    config.write_to_file(&dir.path().join("warg-config.json"))?;
 
     publish_wit(
         &config,
@@ -213,7 +214,7 @@ world foo {
     )
     .await?;
 
-    let project = Project::with_root(&root, "component", "--target foo:bar@1.0.0")?;
+    let project = Project::with_dir(dir.clone(), "component", "--target foo:bar@1.0.0")?;
     project.update_manifest(|mut doc| {
         redirect_bindings_crate(&mut doc);
         Ok(doc)
@@ -261,14 +262,14 @@ world foo {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn update_with_changed_dependencies() -> Result<()> {
-    let root = create_root()?;
-    let (_server, config) = spawn_server(&root).await?;
-    config.write_to_file(&root.join("warg-config.json"))?;
+    let dir = Rc::new(TempDir::new()?);
+    let (_server, config) = spawn_server(dir.path()).await?;
+    config.write_to_file(&dir.path().join("warg-config.json"))?;
 
     publish_component(&config, "foo:bar", "1.0.0", "(component)", true).await?;
     publish_component(&config, "foo:baz", "1.0.0", "(component)", true).await?;
 
-    let project = Project::with_root(&root, "foo", "")?;
+    let project = Project::with_dir(dir.clone(), "foo", "")?;
     project.update_manifest(|mut doc| {
         redirect_bindings_crate(&mut doc);
         Ok(doc)

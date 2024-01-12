@@ -1,10 +1,11 @@
-use std::fs;
+use std::{fs, rc::Rc};
 
 use crate::support::*;
 use anyhow::{Context, Result};
 use assert_cmd::prelude::*;
 use predicates::str::contains;
 use semver::Version;
+use tempfile::TempDir;
 use toml_edit::{value, Array};
 use warg_client::{Client, FileSystemClient};
 use warg_protocol::registry::PackageId;
@@ -35,11 +36,11 @@ fn it_fails_with_missing_toml_file() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_publishes_a_wit_package() -> Result<()> {
-    let root = create_root()?;
-    let (_server, config) = spawn_server(&root).await?;
-    config.write_to_file(&root.join("warg-config.json"))?;
+    let dir = Rc::new(TempDir::new()?);
+    let (_server, config) = spawn_server(dir.path()).await?;
+    config.write_to_file(&dir.path().join("warg-config.json"))?;
 
-    let project = Project::with_root(&root, "foo", "")?;
+    let project = Project::with_dir(dir.clone(), "foo", "")?;
     project.file("baz.wit", "package baz:qux;\n")?;
     project
         .wit("publish --init")
@@ -53,11 +54,11 @@ async fn it_publishes_a_wit_package() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_does_a_dry_run_publish() -> Result<()> {
-    let root = create_root()?;
-    let (_server, config) = spawn_server(&root).await?;
-    config.write_to_file(&root.join("warg-config.json"))?;
+    let dir = Rc::new(TempDir::new()?);
+    let (_server, config) = spawn_server(dir.path()).await?;
+    config.write_to_file(&dir.path().join("warg-config.json"))?;
 
-    let project = Project::with_root(&root, "foo", "")?;
+    let project = Project::with_dir(dir.clone(), "foo", "")?;
     project.file("baz.wit", "package baz:qux;\n")?;
     project
         .wit("publish --init --dry-run")
@@ -82,9 +83,9 @@ async fn it_does_a_dry_run_publish() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_publishes_with_registry_metadata() -> Result<()> {
-    let root = create_root()?;
-    let (_server, config) = spawn_server(&root).await?;
-    config.write_to_file(&root.join("warg-config.json"))?;
+    let dir = Rc::new(TempDir::new()?);
+    let (_server, config) = spawn_server(dir.path()).await?;
+    config.write_to_file(&dir.path().join("warg-config.json"))?;
 
     let authors = ["Jane Doe <jane@example.com>"];
     let categories = ["wasm"];
@@ -94,7 +95,7 @@ async fn it_publishes_with_registry_metadata() -> Result<()> {
     let homepage = "https://example.com/home";
     let repository = "https://example.com/repo";
 
-    let project = Project::with_root(&root, "foo", "")?;
+    let project = Project::with_dir(dir.clone(), "foo", "")?;
     project.file("baz.wit", "package baz:qux;\n")?;
 
     project.update_manifest(|mut doc| {

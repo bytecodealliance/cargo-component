@@ -2,7 +2,8 @@ use crate::support::*;
 use anyhow::Result;
 use assert_cmd::prelude::*;
 use predicates::{str::contains, Predicate};
-use std::fs;
+use std::{fs, rc::Rc};
+use tempfile::TempDir;
 
 mod support;
 
@@ -20,15 +21,15 @@ fn help() {
 
 #[test]
 fn it_creates_the_expected_files_for_bin() -> Result<()> {
-    let root = create_root()?;
+    let dir = TempDir::new()?;
 
     cargo_component("new --command foo")
-        .current_dir(&root)
+        .current_dir(dir.path())
         .assert()
         .stderr(contains("Updated manifest of package `foo"))
         .success();
 
-    let proj_dir = root.join("foo");
+    let proj_dir = dir.path().join("foo");
 
     assert!(proj_dir.join("Cargo.toml").is_file());
     assert!(!proj_dir.join("wit/world.wit").is_file());
@@ -41,15 +42,15 @@ fn it_creates_the_expected_files_for_bin() -> Result<()> {
 
 #[test]
 fn it_creates_the_expected_files() -> Result<()> {
-    let root = create_root()?;
+    let dir = TempDir::new()?;
 
     cargo_component("new --reactor foo")
-        .current_dir(&root)
+        .current_dir(dir.path())
         .assert()
         .stderr(contains("Updated manifest of package `foo`"))
         .success();
 
-    let proj_dir = root.join("foo");
+    let proj_dir = dir.path().join("foo");
 
     assert!(proj_dir.join("Cargo.toml").is_file());
     assert!(proj_dir.join("wit/world.wit").is_file());
@@ -62,15 +63,15 @@ fn it_creates_the_expected_files() -> Result<()> {
 
 #[test]
 fn it_supports_editor_option() -> Result<()> {
-    let root = create_root()?;
+    let dir = TempDir::new()?;
 
     cargo_component("new --reactor foo --editor none")
-        .current_dir(&root)
+        .current_dir(dir.path())
         .assert()
         .stderr(contains("Updated manifest of package `foo"))
         .success();
 
-    let proj_dir = root.join("foo");
+    let proj_dir = dir.path().join("foo");
 
     assert!(proj_dir.join("Cargo.toml").is_file());
     assert!(proj_dir.join("wit/world.wit").is_file());
@@ -82,15 +83,15 @@ fn it_supports_editor_option() -> Result<()> {
 
 #[test]
 fn it_supports_edition_option() -> Result<()> {
-    let root = create_root()?;
+    let dir = TempDir::new()?;
 
     cargo_component("new --reactor foo --edition 2018")
-        .current_dir(&root)
+        .current_dir(dir.path())
         .assert()
         .stderr(contains("Updated manifest of package `foo"))
         .success();
 
-    let proj_dir = root.join("foo");
+    let proj_dir = dir.path().join("foo");
 
     assert!(fs::read_to_string(proj_dir.join("Cargo.toml"))?.contains("edition = \"2018\""));
 
@@ -99,15 +100,15 @@ fn it_supports_edition_option() -> Result<()> {
 
 #[test]
 fn it_supports_name_option() -> Result<()> {
-    let root = create_root()?;
+    let dir = TempDir::new()?;
 
     cargo_component("new --reactor foo --name bar")
-        .current_dir(&root)
+        .current_dir(dir.path())
         .assert()
         .stderr(contains("Updated manifest of package `bar`"))
         .success();
 
-    let proj_dir = root.join("foo");
+    let proj_dir = dir.path().join("foo");
 
     assert!(fs::read_to_string(proj_dir.join("Cargo.toml"))?.contains("name = \"bar\""));
 
@@ -116,10 +117,10 @@ fn it_supports_name_option() -> Result<()> {
 
 #[test]
 fn it_rejects_rust_keywords() -> Result<()> {
-    let root = create_root()?;
+    let dir = TempDir::new()?;
 
     cargo_component("new --reactor foo --name fn")
-        .current_dir(&root)
+        .current_dir(dir.path())
         .assert()
         .stderr(contains(
             "the name `fn` cannot be used as a package name, it is a Rust keyword",
@@ -131,9 +132,9 @@ fn it_rejects_rust_keywords() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_targets_a_world() -> Result<()> {
-    let root = create_root()?;
-    let (_server, config) = spawn_server(&root).await?;
-    config.write_to_file(&root.join("warg-config.json"))?;
+    let dir = Rc::new(TempDir::new()?);
+    let (_server, config) = spawn_server(dir.path()).await?;
+    config.write_to_file(&dir.path().join("warg-config.json"))?;
 
     publish_wit(
         &config,
@@ -152,7 +153,7 @@ world foo {
     )
     .await?;
 
-    let project = Project::with_root(&root, "component", "--target foo:bar@1.0.0")?;
+    let project = Project::with_dir(dir.clone(), "component", "--target foo:bar@1.0.0")?;
     project.update_manifest(|mut doc| {
         redirect_bindings_crate(&mut doc);
         Ok(doc)
@@ -170,11 +171,11 @@ world foo {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_errors_if_target_does_not_exist() -> Result<()> {
-    let root = create_root()?;
-    let (_server, config) = spawn_server(&root).await?;
-    config.write_to_file(&root.join("warg-config.json"))?;
+    let dir = Rc::new(TempDir::new()?);
+    let (_server, config) = spawn_server(dir.path()).await?;
+    config.write_to_file(&dir.path().join("warg-config.json"))?;
 
-    match Project::with_root(&root, "component", "--target foo:bar@1.0.0") {
+    match Project::with_dir(dir.clone(), "component", "--target foo:bar@1.0.0") {
         Ok(_) => panic!("expected error"),
         Err(e) => assert!(contains("package `foo:bar` does not exist").eval(&e.to_string())),
     }

@@ -2,7 +2,8 @@ use crate::support::*;
 use anyhow::Result;
 use assert_cmd::prelude::*;
 use predicates::{boolean::PredicateBooleanExt, str::contains};
-use std::{fmt::Write, fs};
+use std::{fmt::Write, fs, rc::Rc};
+use tempfile::TempDir;
 
 mod support;
 
@@ -47,25 +48,31 @@ fn it_finds_errors() -> Result<()> {
 
 #[test]
 fn it_checks_a_workspace() -> Result<()> {
-    let project = project()?
-        .file(
-            "Cargo.toml",
-            r#"[workspace]
+    let dir = Rc::new(TempDir::new()?);
+    let project = Project {
+        dir: dir.clone(),
+        root: dir.path().to_owned(),
+    };
+
+    project.file(
+        "Cargo.toml",
+        r#"[workspace]
 members = ["foo", "bar", "baz"]
 "#,
-        )?
-        .file(
-            "baz/Cargo.toml",
-            r#"[package]
+    )?;
+
+    project.file(
+        "baz/Cargo.toml",
+        r#"[package]
 name = "baz"
 version = "0.1.0"
 edition = "2021"
     
 [dependencies]
 "#,
-        )?
-        .file("baz/src/lib.rs", "")?
-        .build();
+    )?;
+
+    project.file("baz/src/lib.rs", "")?;
 
     project
         .cargo_component("new --reactor foo")
@@ -73,7 +80,10 @@ edition = "2021"
         .stderr(contains("Updated manifest of package `foo`"))
         .success();
 
-    let member = ProjectBuilder::new(project.root().join("foo")).build();
+    let member = Project {
+        dir: dir.clone(),
+        root: project.root().join("foo"),
+    };
     member.update_manifest(|mut doc| {
         redirect_bindings_crate(&mut doc);
         Ok(doc)
@@ -85,7 +95,10 @@ edition = "2021"
         .stderr(contains("Updated manifest of package `bar`"))
         .success();
 
-    let member = ProjectBuilder::new(project.root().join("bar")).build();
+    let member = Project {
+        dir: dir.clone(),
+        root: project.root().join("bar"),
+    };
     member.update_manifest(|mut doc| {
         redirect_bindings_crate(&mut doc);
         Ok(doc)

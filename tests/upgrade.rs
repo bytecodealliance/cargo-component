@@ -21,8 +21,7 @@ fn help() {
 
 #[test]
 fn upgrade_single_crate_already_current_is_no_op() -> Result<()> {
-    let root = create_root()?;
-    let project = Project::with_root(&root, "component", "")?;
+    let project = Project::new("component")?;
 
     project
         .cargo_component("upgrade --no-install")
@@ -37,8 +36,7 @@ fn upgrade_single_crate_already_current_is_no_op() -> Result<()> {
 
 #[test]
 fn upgrade_single_crate_upgrades_bindings_dep() -> Result<()> {
-    let root = create_root()?;
-    let project = Project::with_root(&root, "component", "")?;
+    let project = Project::new("component")?;
     project.update_manifest(|mut doc| {
         // Set arbitrary old version of bindings crate.
         doc["dependencies"][BINDINGS_CRATE_NAME] = value("0.1.0");
@@ -94,8 +92,7 @@ fn upgrade_single_crate_upgrades_bindings_dep() -> Result<()> {
 
 #[test]
 fn skip_packages_newer_than_cargo_component() -> Result<()> {
-    let root = create_root()?;
-    let project = Project::with_root(&root, "component", "")?;
+    let project = Project::new("component")?;
     project.update_manifest(|mut doc| {
         // Set arbitrary future version of cargo-component
         doc["dependencies"][BINDINGS_CRATE_NAME] = value("1000.0.0");
@@ -123,8 +120,7 @@ fn skip_packages_newer_than_cargo_component() -> Result<()> {
 
 #[test]
 fn upgrade_dry_run_does_not_alter_manifest() -> Result<()> {
-    let root = create_root()?;
-    let project = Project::with_root(&root, "component", "")?;
+    let project = Project::new("component")?;
     project.update_manifest(|mut doc| {
         // Set arbitrary old version of bindings crate.
         doc["dependencies"][BINDINGS_CRATE_NAME] = value("0.1.0");

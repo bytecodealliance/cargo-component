@@ -2,7 +2,8 @@ use crate::support::*;
 use anyhow::Result;
 use assert_cmd::prelude::*;
 use predicates::{prelude::PredicateBooleanExt, str::contains, Predicate};
-use std::fs;
+use std::{fs, rc::Rc};
+use tempfile::TempDir;
 
 mod support;
 
@@ -29,11 +30,11 @@ fn it_fails_with_missing_toml_file() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn update_without_changes_is_a_noop() -> Result<()> {
-    let root = create_root()?;
-    let (_server, config) = spawn_server(&root).await?;
-    config.write_to_file(&root.join("warg-config.json"))?;
+    let dir = Rc::new(TempDir::new()?);
+    let (_server, config) = spawn_server(dir.path()).await?;
+    config.write_to_file(&dir.path().join("warg-config.json"))?;
 
-    let project = Project::with_root(&root, "bar", "")?;
+    let project = Project::with_dir(dir.clone(), "bar", "")?;
     project.file("bar.wit", "package foo:bar;\n")?;
     project
         .wit("publish --init")
@@ -42,7 +43,7 @@ async fn update_without_changes_is_a_noop() -> Result<()> {
         .stderr(contains("Published package `foo:bar` v0.1.0"))
         .success();
 
-    let project = Project::with_root(&root, "baz", "")?;
+    let project = Project::with_dir(dir.clone(), "baz", "")?;
     project.file("baz.wit", "package foo:baz;\n")?;
     project
         .wit("add foo:bar")
@@ -67,11 +68,11 @@ async fn update_without_changes_is_a_noop() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_update_without_compatible_changes_is_a_noop() -> Result<()> {
-    let root = create_root()?;
-    let (_server, config) = spawn_server(&root).await?;
-    config.write_to_file(&root.join("warg-config.json"))?;
+    let dir = Rc::new(TempDir::new()?);
+    let (_server, config) = spawn_server(dir.path()).await?;
+    config.write_to_file(&dir.path().join("warg-config.json"))?;
 
-    let project = Project::with_root(&root, "bar", "")?;
+    let project = Project::with_dir(dir.clone(), "bar", "")?;
     project.file("bar.wit", "package foo:bar;\n")?;
     project
         .wit("publish --init")
@@ -80,7 +81,7 @@ async fn test_update_without_compatible_changes_is_a_noop() -> Result<()> {
         .stderr(contains("Published package `foo:bar` v0.1.0"))
         .success();
 
-    let project = Project::with_root(&root, "baz", "")?;
+    let project = Project::with_dir(dir.clone(), "baz", "")?;
     project.file("baz.wit", "package foo:baz;\n")?;
     project
         .wit("add foo:bar")
@@ -95,13 +96,13 @@ async fn test_update_without_compatible_changes_is_a_noop() -> Result<()> {
         .stderr(contains("Created package `baz.wasm`"));
 
     fs::write(
-        root.join("bar/wit.toml"),
+        dir.path().join("bar/wit.toml"),
         "version = \"1.0.0\"\n[dependencies]\n[registries]\n",
     )?;
 
     wit("publish")
         .env("WIT_PUBLISH_KEY", test_signing_key())
-        .current_dir(root.join("bar"))
+        .current_dir(dir.path().join("bar"))
         .assert()
         .stderr(contains("Published package `foo:bar` v1.0.0"))
         .success();
@@ -117,11 +118,11 @@ async fn test_update_without_compatible_changes_is_a_noop() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn update_with_compatible_changes() -> Result<()> {
-    let root = create_root()?;
-    let (_server, config) = spawn_server(&root).await?;
-    config.write_to_file(&root.join("warg-config.json"))?;
+    let dir = Rc::new(TempDir::new()?);
+    let (_server, config) = spawn_server(dir.path()).await?;
+    config.write_to_file(&dir.path().join("warg-config.json"))?;
 
-    let project = Project::with_root(&root, "bar", "")?;
+    let project = Project::with_dir(dir.clone(), "bar", "")?;
     project.file("bar.wit", "package foo:bar;\n")?;
     project.file(
         "wit.toml",
@@ -135,7 +136,7 @@ async fn update_with_compatible_changes() -> Result<()> {
         .stderr(contains("Published package `foo:bar` v1.0.0"))
         .success();
 
-    let project = Project::with_root(&root, "baz", "")?;
+    let project = Project::with_dir(dir.clone(), "baz", "")?;
     project.file("baz.wit", "package foo:baz;\n")?;
     project
         .wit("add foo:bar")
@@ -150,13 +151,13 @@ async fn update_with_compatible_changes() -> Result<()> {
         .stderr(contains("Created package `baz.wasm`"));
 
     fs::write(
-        root.join("bar/wit.toml"),
+        dir.path().join("bar/wit.toml"),
         "version = \"1.1.0\"\n[dependencies]\n[registries]\n",
     )?;
 
     wit("publish")
         .env("WIT_PUBLISH_KEY", test_signing_key())
-        .current_dir(root.join("bar"))
+        .current_dir(dir.path().join("bar"))
         .assert()
         .stderr(contains("Published package `foo:bar` v1.1.0"))
         .success();
@@ -175,11 +176,11 @@ async fn update_with_compatible_changes() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn update_with_compatible_changes_is_noop_for_dryrun() -> Result<()> {
-    let root = create_root()?;
-    let (_server, config) = spawn_server(&root).await?;
-    config.write_to_file(&root.join("warg-config.json"))?;
+    let dir = Rc::new(TempDir::new()?);
+    let (_server, config) = spawn_server(dir.path()).await?;
+    config.write_to_file(&dir.path().join("warg-config.json"))?;
 
-    let project = Project::with_root(&root, "bar", "")?;
+    let project = Project::with_dir(dir.clone(), "bar", "")?;
     project.file("bar.wit", "package foo:bar;\n")?;
     project.file(
         "wit.toml",
@@ -193,7 +194,7 @@ async fn update_with_compatible_changes_is_noop_for_dryrun() -> Result<()> {
         .stderr(contains("Published package `foo:bar` v1.0.0"))
         .success();
 
-    let project = Project::with_root(&root, "baz", "")?;
+    let project = Project::with_dir(dir.clone(), "baz", "")?;
     project.file("baz.wit", "package foo:baz;\n")?;
     project
         .wit("add foo:bar")
@@ -208,13 +209,13 @@ async fn update_with_compatible_changes_is_noop_for_dryrun() -> Result<()> {
         .stderr(contains("Created package `baz.wasm`"));
 
     fs::write(
-        root.join("bar/wit.toml"),
+        dir.path().join("bar/wit.toml"),
         "version = \"1.1.0\"\n[dependencies]\n[registries]\n",
     )?;
 
     wit("publish")
         .env("WIT_PUBLISH_KEY", test_signing_key())
-        .current_dir(root.join("bar"))
+        .current_dir(dir.path().join("bar"))
         .assert()
         .stderr(contains("Published package `foo:bar` v1.1.0"))
         .success();
@@ -233,11 +234,11 @@ async fn update_with_compatible_changes_is_noop_for_dryrun() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn update_with_changed_dependencies() -> Result<()> {
-    let root = create_root()?;
-    let (_server, config) = spawn_server(&root).await?;
-    config.write_to_file(&root.join("warg-config.json"))?;
+    let dir = Rc::new(TempDir::new()?);
+    let (_server, config) = spawn_server(dir.path()).await?;
+    config.write_to_file(&dir.path().join("warg-config.json"))?;
 
-    let project = Project::with_root(&root, "bar", "")?;
+    let project = Project::with_dir(dir.clone(), "bar", "")?;
     project.file("bar.wit", "package foo:bar;\n")?;
     project.file(
         "wit.toml",
@@ -251,7 +252,7 @@ async fn update_with_changed_dependencies() -> Result<()> {
         .stderr(contains("Published package `foo:bar` v1.0.0"))
         .success();
 
-    let project = Project::with_root(&root, "baz", "")?;
+    let project = Project::with_dir(dir.clone(), "baz", "")?;
     project.file("baz.wit", "package foo:baz;\n")?;
     project.file(
         "wit.toml",
@@ -265,7 +266,7 @@ async fn update_with_changed_dependencies() -> Result<()> {
         .stderr(contains("Published package `foo:baz` v1.0.0"))
         .success();
 
-    let project = Project::with_root(&root, "qux", "")?;
+    let project = Project::with_dir(dir.clone(), "qux", "")?;
     project.file("qux.wit", "package foo:qux;\n")?;
     project
         .wit("add foo:bar")

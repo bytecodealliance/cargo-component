@@ -2,7 +2,8 @@ use crate::support::*;
 use anyhow::Result;
 use assert_cmd::prelude::*;
 use predicates::{prelude::*, str::contains};
-use std::fs;
+use std::{fs, rc::Rc};
+use tempfile::TempDir;
 
 mod support;
 
@@ -39,11 +40,11 @@ fn requires_package() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn validate_the_package_exists() -> Result<()> {
-    let root = create_root()?;
-    let (_server, config) = spawn_server(&root).await?;
-    config.write_to_file(&root.join("warg-config.json"))?;
+    let dir = Rc::new(TempDir::new()?);
+    let (_server, config) = spawn_server(dir.path()).await?;
+    config.write_to_file(&dir.path().join("warg-config.json"))?;
 
-    let project = Project::with_root(&root, "foo", "")?;
+    let project = Project::with_dir(dir.clone(), "foo", "")?;
 
     project
         .wit("add foo:bar")
@@ -56,11 +57,11 @@ async fn validate_the_package_exists() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn validate_the_version_exists() -> Result<()> {
-    let root = create_root()?;
-    let (_server, config) = spawn_server(&root).await?;
-    config.write_to_file(&root.join("warg-config.json"))?;
+    let dir = Rc::new(TempDir::new()?);
+    let (_server, config) = spawn_server(dir.path()).await?;
+    config.write_to_file(&dir.path().join("warg-config.json"))?;
 
-    let project = Project::with_root(&root, "foo", "")?;
+    let project = Project::with_dir(dir.clone(), "foo", "")?;
     project.file("foo.wit", "package foo:bar;\n")?;
     project
         .wit("publish --init")
@@ -69,7 +70,7 @@ async fn validate_the_version_exists() -> Result<()> {
         .stderr(contains("Published package `foo:bar` v0.1.0"))
         .success();
 
-    let project = Project::with_root(&root, "bar", "")?;
+    let project = Project::with_dir(dir.clone(), "bar", "")?;
     project
         .wit("add foo:bar")
         .assert()
@@ -92,11 +93,11 @@ async fn validate_the_version_exists() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn checks_for_duplicate_dependencies() -> Result<()> {
-    let root = create_root()?;
-    let (_server, config) = spawn_server(&root).await?;
-    config.write_to_file(&root.join("warg-config.json"))?;
+    let dir = Rc::new(TempDir::new()?);
+    let (_server, config) = spawn_server(dir.path()).await?;
+    config.write_to_file(&dir.path().join("warg-config.json"))?;
 
-    let project = Project::with_root(&root, "foo", "")?;
+    let project = Project::with_dir(dir.clone(), "foo", "")?;
     project.file("foo.wit", "package foo:bar;\n")?;
     project
         .wit("publish --init")
@@ -105,7 +106,7 @@ async fn checks_for_duplicate_dependencies() -> Result<()> {
         .stderr(contains("foo"))
         .success();
 
-    let project = Project::with_root(&root, "bar", "")?;
+    let project = Project::with_dir(dir.clone(), "bar", "")?;
     project
         .wit("add foo:bar")
         .assert()
@@ -128,11 +129,11 @@ async fn checks_for_duplicate_dependencies() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn does_not_modify_manifest_for_dry_run() -> Result<()> {
-    let root = create_root()?;
-    let (_server, config) = spawn_server(&root).await?;
-    config.write_to_file(&root.join("warg-config.json"))?;
+    let dir = Rc::new(TempDir::new()?);
+    let (_server, config) = spawn_server(dir.path()).await?;
+    config.write_to_file(&dir.path().join("warg-config.json"))?;
 
-    let project = Project::with_root(&root, "foo", "")?;
+    let project = Project::with_dir(dir.clone(), "foo", "")?;
     project.file("foo.wit", "package foo:bar;\n")?;
     project
         .wit("publish --init")
@@ -141,7 +142,7 @@ async fn does_not_modify_manifest_for_dry_run() -> Result<()> {
         .stderr(contains("foo"))
         .success();
 
-    let project = Project::with_root(&root, "bar", "")?;
+    let project = Project::with_dir(dir.clone(), "bar", "")?;
     project
         .wit("add foo:bar --dry-run")
         .assert()
