@@ -439,7 +439,14 @@ world example {{
                 fs::write(
                     &settings_path,
                     r#"{
-    "rust-analyzer.check.overrideCommand": ["cargo", "component", "check", "--message-format=json"]
+    "rust-analyzer.check.overrideCommand": [
+        "cargo",
+        "component",
+        "check",
+        "--workspace",
+        "--all-targets",
+        "--message-format=json"
+    ],
 }
 "#,
                 )
@@ -466,6 +473,8 @@ world example {{
               (lsp-rust-analyzer-cargo-override-command . ["cargo"
                                                            (\, "component")
                                                            (\, "check")
+                                                           (\, "--workspace")
+                                                           (\, "--all-targets")
                                                            (\, "--message-format=json")]))))
 "#,
                 )
