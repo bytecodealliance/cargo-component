@@ -206,11 +206,12 @@ support in `cargo component` for adapting a _preview1_ module will be removed.
 
 ## Getting Started
 
-Use `cargo component new --reactor <name>` to create a new reactor component.
+Use `cargo component new --lib <name>` to create a new library (reactor) 
+component.
 
-A reactor component doesn't have a `run` (i.e. `main` in Rust) function
+A library component doesn't have a `run` (i.e. `main` in Rust) function
 exported and is meant to be used as a library rather than a command that runs
-and exits. Without the `--reactor` flag, `cargo component` defaults to creating
+and exits. Without the `--lib` flag, `cargo component` defaults to creating
 a command component.
 
 This will create a `wit/world.wit` file describing the world that the

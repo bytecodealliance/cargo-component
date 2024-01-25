@@ -69,7 +69,7 @@ edition = "2021"
     project.file("baz/src/lib.rs", "")?;
 
     project
-        .cargo_component("new --reactor foo")
+        .cargo_component("new --lib foo")
         .assert()
         .stderr(contains("Updated manifest of package `foo`"))
         .success();
@@ -84,7 +84,7 @@ edition = "2021"
     })?;
 
     project
-        .cargo_component("new --reactor bar")
+        .cargo_component("new --lib bar")
         .assert()
         .stderr(contains("Updated manifest of package `bar`"))
         .success();
