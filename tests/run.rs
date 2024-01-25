@@ -10,15 +10,11 @@ mod support;
 #[test]
 fn it_runs_with_command_component() -> Result<()> {
     let project = Project::new_bin("bar")?;
-    project.update_manifest(|mut doc| {
-        redirect_bindings_crate(&mut doc);
-        Ok(doc)
-    })?;
 
     fs::write(
         project.root().join("src/main.rs"),
         r#"
-cargo_component_bindings::generate!();
+mod bindings;
 
 fn main() {
     if std::env::args().any(|v| v == "--verbose") {
@@ -44,7 +40,6 @@ fn main() {
 fn it_runs_with_reactor_component() -> Result<()> {
     let project = Project::new("baz")?;
     project.update_manifest(|mut doc| {
-        redirect_bindings_crate(&mut doc);
         let mut dependencies = Table::new();
         dependencies["wasi:cli"]["path"] = value("wit/deps/cli");
 
@@ -78,7 +73,7 @@ world generator {
     fs::write(
         project.root().join("src/lib.rs"),
         r#"
-cargo_component_bindings::generate!();
+mod bindings;
 
 use bindings::exports::wasi::cli::run::Guest;
 

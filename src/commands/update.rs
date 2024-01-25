@@ -38,7 +38,7 @@ impl UpdateCommand {
     pub async fn exec(self) -> Result<()> {
         log::debug!("executing update command");
         let config = Config::new(self.common.new_terminal())?;
-        let metadata = load_metadata(config.terminal(), self.manifest_path.as_deref(), false)?;
+        let metadata = load_metadata(self.manifest_path.as_deref())?;
         let packages = load_component_metadata(&metadata, [].iter(), true)?;
 
         let network_allowed = !self.frozen && !self.offline;

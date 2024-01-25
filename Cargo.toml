@@ -60,11 +60,10 @@ warg-server = { workspace = true }
 tempfile = { workspace = true }
 
 [workspace]
-members = ["crates/bindings", "crates/macro", "crates/core", "crates/wit"]
+members = ["crates/core", "crates/wit"]
 
 [workspace.dependencies]
 cargo-component-core = { path = "crates/core", version = "0.6.0" }
-cargo-component-macro = { path = "crates/macro", version = "0.6.0" }
 warg-protocol = "0.2.0"
 warg-crypto = "0.2.0"
 warg-client = "0.2.0"
@@ -96,9 +95,6 @@ rand_core = "0.6.4"
 rpassword = "7.3.1"
 futures = "0.3.30"
 bytes = "1.5.0"
-proc-macro2 = "1.0.76"
-quote = "1.0.35"
-syn = "2.0.48"
 which = "5.0.0"
 wit-bindgen-rust = "0.16.0"
 wit-bindgen-core = "0.16.0"

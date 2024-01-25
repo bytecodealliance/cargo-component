@@ -10,10 +10,6 @@ mod support;
 #[test]
 fn it_checks_a_new_project() -> Result<()> {
     let project = Project::new("foo")?;
-    project.update_manifest(|mut doc| {
-        redirect_bindings_crate(&mut doc);
-        Ok(doc)
-    })?;
 
     project
         .cargo_component("check")
@@ -27,10 +23,6 @@ fn it_checks_a_new_project() -> Result<()> {
 #[test]
 fn it_finds_errors() -> Result<()> {
     let project = Project::new("foo")?;
-    project.update_manifest(|mut doc| {
-        redirect_bindings_crate(&mut doc);
-        Ok(doc)
-    })?;
 
     let mut src = fs::read_to_string(project.root().join("src/lib.rs"))?;
     write!(&mut src, "\n\nfn foo() -> String {{\n  \"foo\"\n}}\n")?;
@@ -80,29 +72,11 @@ edition = "2021"
         .stderr(contains("Updated manifest of package `foo`"))
         .success();
 
-    let member = Project {
-        dir: dir.clone(),
-        root: project.root().join("foo"),
-    };
-    member.update_manifest(|mut doc| {
-        redirect_bindings_crate(&mut doc);
-        Ok(doc)
-    })?;
-
     project
         .cargo_component("new --lib bar")
         .assert()
         .stderr(contains("Updated manifest of package `bar`"))
         .success();
-
-    let member = Project {
-        dir: dir.clone(),
-        root: project.root().join("bar"),
-    };
-    member.update_manifest(|mut doc| {
-        redirect_bindings_crate(&mut doc);
-        Ok(doc)
-    })?;
 
     project
         .cargo_component("check")

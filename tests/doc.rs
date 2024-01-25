@@ -9,10 +9,6 @@ mod support;
 #[test]
 fn it_documents() -> Result<()> {
     let project = Project::new("foo")?;
-    project.update_manifest(|mut doc| {
-        redirect_bindings_crate(&mut doc);
-        Ok(doc)
-    })?;
 
     project
         .cargo_component("doc")

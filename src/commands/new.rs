@@ -1,7 +1,4 @@
-use crate::{
-    config::Config, generator::SourceGenerator, metadata, metadata::DEFAULT_WIT_DIR,
-    BINDINGS_CRATE_NAME,
-};
+use crate::{config::Config, generator::SourceGenerator, metadata, metadata::DEFAULT_WIT_DIR};
 use anyhow::{bail, Context, Result};
 use cargo_component_core::{
     command::CommonOptions,
@@ -17,8 +14,11 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
-use toml_edit::{table, value, Document, Item, Table, Value};
+use toml_edit::{table, value, Array, Document, InlineTable, Item, Table, Value};
 use url::Url;
+
+const WIT_BINDGEN_CRATE: &str = "wit-bindgen";
+const WIT_BINDGEN_VERSION: &str = "0.16.0";
 
 fn escape_wit(s: &str) -> Cow<str> {
     match s {
@@ -284,7 +284,11 @@ impl NewCommand {
         metadata["component"] = Item::Table(component);
 
         doc["package"]["metadata"] = Item::Table(metadata);
-        doc["dependencies"][BINDINGS_CRATE_NAME] = value(env!("CARGO_PKG_VERSION"));
+        doc["dependencies"][WIT_BINDGEN_CRATE] = value(InlineTable::from_iter([
+            ("version", Value::from(WIT_BINDGEN_VERSION)),
+            ("default-features", Value::from(false)),
+            ("features", Value::from(Array::from_iter(["realloc"]))),
+        ]));
 
         fs::write(&manifest_path, doc.to_string()).with_context(|| {
             format!(
@@ -317,7 +321,7 @@ impl NewCommand {
             }
             None => {
                 if self.is_command() {
-                    Ok(r#"cargo_component_bindings::generate!();
+                    Ok(r#"mod bindings;
 
 fn main() {
     println!("Hello, world!");
@@ -325,7 +329,7 @@ fn main() {
 "#
                     .into())
                 } else {
-                    Ok(r#"cargo_component_bindings::generate!();
+                    Ok(r#"mod bindings;
 
 use bindings::Guest;
 
