@@ -47,13 +47,13 @@ pub struct NewCommand {
     #[clap(long = "vcs", value_name = "VCS", value_parser = ["git", "hg", "pijul", "fossil", "none"])]
     pub vcs: Option<String>,
 
-    /// Create a command component [default]
-    #[clap(long = "command", conflicts_with("reactor"))]
+    /// Create a CLI command component [default]
+    #[clap(long = "command", conflicts_with("lib"))]
     pub command: bool,
 
-    /// Create a reactor component
-    #[clap(long = "reactor")]
-    pub reactor: bool,
+    /// Create a library (reactor) component
+    #[clap(long = "lib", alias = "reactor")]
+    pub lib: bool,
 
     /// Edition to set for the generated crate
     #[clap(long = "edition", value_name = "YEAR", value_parser = ["2015", "2018", "2021"])]
@@ -76,12 +76,7 @@ pub struct NewCommand {
     pub editor: Option<String>,
 
     /// Use the specified target world from a WIT package.
-    #[clap(
-        long = "target",
-        short = 't',
-        value_name = "TARGET",
-        requires = "reactor"
-    )]
+    #[clap(long = "target", short = 't', value_name = "TARGET", requires = "lib")]
     pub target: Option<String>,
 
     /// Use the specified default registry when generating the package.
@@ -307,7 +302,7 @@ impl NewCommand {
     }
 
     fn is_command(&self) -> bool {
-        self.command || !self.reactor
+        self.command || !self.lib
     }
 
     fn generate_source(

@@ -214,7 +214,7 @@ impl Project {
     pub fn new(name: &str) -> Result<Self> {
         let dir = TempDir::new()?;
 
-        cargo_component(&format!("new --reactor {name}"))
+        cargo_component(&format!("new --lib {name}"))
             .current_dir(dir.path())
             .assert()
             .try_success()?;
@@ -244,7 +244,7 @@ impl Project {
     }
 
     pub fn with_dir(dir: Rc<TempDir>, name: &str, args: &str) -> Result<Self> {
-        cargo_component(&format!("new --reactor {name} {args}"))
+        cargo_component(&format!("new --lib {name} {args}"))
             .current_dir(dir.path())
             .assert()
             .try_success()?;

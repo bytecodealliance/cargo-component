@@ -44,7 +44,7 @@ fn it_creates_the_expected_files_for_bin() -> Result<()> {
 fn it_creates_the_expected_files() -> Result<()> {
     let dir = TempDir::new()?;
 
-    cargo_component("new --reactor foo")
+    cargo_component("new --lib foo")
         .current_dir(dir.path())
         .assert()
         .stderr(contains("Updated manifest of package `foo`"))
@@ -65,7 +65,7 @@ fn it_creates_the_expected_files() -> Result<()> {
 fn it_supports_editor_option() -> Result<()> {
     let dir = TempDir::new()?;
 
-    cargo_component("new --reactor foo --editor none")
+    cargo_component("new --lib foo --editor none")
         .current_dir(dir.path())
         .assert()
         .stderr(contains("Updated manifest of package `foo"))
@@ -85,7 +85,7 @@ fn it_supports_editor_option() -> Result<()> {
 fn it_supports_edition_option() -> Result<()> {
     let dir = TempDir::new()?;
 
-    cargo_component("new --reactor foo --edition 2018")
+    cargo_component("new --lib foo --edition 2018")
         .current_dir(dir.path())
         .assert()
         .stderr(contains("Updated manifest of package `foo"))
@@ -102,7 +102,7 @@ fn it_supports_edition_option() -> Result<()> {
 fn it_supports_name_option() -> Result<()> {
     let dir = TempDir::new()?;
 
-    cargo_component("new --reactor foo --name bar")
+    cargo_component("new --lib foo --name bar")
         .current_dir(dir.path())
         .assert()
         .stderr(contains("Updated manifest of package `bar`"))
@@ -119,7 +119,7 @@ fn it_supports_name_option() -> Result<()> {
 fn it_rejects_rust_keywords() -> Result<()> {
     let dir = TempDir::new()?;
 
-    cargo_component("new --reactor foo --name fn")
+    cargo_component("new --lib foo --name fn")
         .current_dir(dir.path())
         .assert()
         .stderr(contains(
@@ -179,6 +179,18 @@ async fn it_errors_if_target_does_not_exist() -> Result<()> {
         Ok(_) => panic!("expected error"),
         Err(e) => assert!(contains("package `foo:bar` does not exist").eval(&e.to_string())),
     }
+
+    Ok(())
+}
+
+#[test]
+fn it_supports_the_reactor_option() -> Result<()> {
+    let dir = TempDir::new()?;
+
+    cargo_component("new --reactor foo")
+        .current_dir(dir.path())
+        .assert()
+        .try_success()?;
 
     Ok(())
 }
