@@ -13,10 +13,6 @@ mod support;
 )]
 fn it_runs_bench_with_basic_component() -> Result<()> {
     let project = Project::new("foo")?;
-    project.update_manifest(|mut doc| {
-        redirect_bindings_crate(&mut doc);
-        Ok(doc)
-    })?;
 
     fs::write(
         project.root().join("wit/world.wit"),
@@ -38,7 +34,7 @@ world generator {
         r#"
 #![feature(test)]
 
-cargo_component_bindings::generate!();
+mod bindings;
 
 extern crate test;
 

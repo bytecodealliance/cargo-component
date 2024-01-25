@@ -14,8 +14,6 @@ use std::time::Duration;
 
 // note that this list must be topologically sorted by dependencies
 const CRATES_TO_PUBLISH: &[&str] = &[
-    "cargo-component-macro",
-    "cargo-component-bindings",
     "cargo-component-core",
     "wit",
     "cargo-component",
@@ -26,8 +24,6 @@ const CRATES_TO_PUBLISH: &[&str] = &[
 // releases since everything not mentioned here is just an organizational detail
 // that no one else should rely on.
 const PUBLIC_CRATES: &[&str] = &[
-    "cargo-component-macro",
-    "cargo-component-bindings",
     "cargo-component-core",
     "wit",
     "cargo-component",

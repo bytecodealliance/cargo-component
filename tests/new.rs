@@ -154,10 +154,6 @@ world foo {
     .await?;
 
     let project = Project::with_dir(dir.clone(), "component", "--target foo:bar@1.0.0")?;
-    project.update_manifest(|mut doc| {
-        redirect_bindings_crate(&mut doc);
-        Ok(doc)
-    })?;
 
     project
         .cargo_component("build")

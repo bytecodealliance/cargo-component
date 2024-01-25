@@ -9,10 +9,6 @@ mod support;
 #[test]
 fn it_runs_test_with_command_component() -> Result<()> {
     let project = Project::new_bin("foo-bar")?;
-    project.update_manifest(|mut doc| {
-        redirect_bindings_crate(&mut doc);
-        Ok(doc)
-    })?;
 
     fs::create_dir_all(project.root().join(".cargo"))?;
     fs::write(
@@ -53,7 +49,7 @@ world generator {
     fs::write(
         project.root().join("src/main.rs"),
         r#"
-cargo_component_bindings::generate!();
+mod bindings;
 
 use bindings::{Seed};
 
@@ -85,10 +81,6 @@ pub fn test_random_component() {
 #[test]
 fn it_runs_test_with_reactor_component() -> Result<()> {
     let project = Project::new("foo-bar")?;
-    project.update_manifest(|mut doc| {
-        redirect_bindings_crate(&mut doc);
-        Ok(doc)
-    })?;
 
     fs::write(
         project.root().join("wit/world.wit"),
@@ -110,7 +102,7 @@ world generator {
     fs::write(
         project.root().join("src/lib.rs"),
         r#"
-cargo_component_bindings::generate!();
+mod bindings;
 
 use bindings::{Seed};
 

@@ -11,10 +11,6 @@ mod support;
 #[test]
 fn it_prints_metadata() -> Result<()> {
     let project = Project::new("foo")?;
-    project.update_manifest(|mut doc| {
-        redirect_bindings_crate(&mut doc);
-        Ok(doc)
-    })?;
 
     project
         .cargo_component("metadata --format-version 1")
@@ -74,29 +70,11 @@ edition = "2021"
         .stderr(contains("Updated manifest of package `foo`"))
         .success();
 
-    let member = Project {
-        dir: dir.clone(),
-        root: project.root().join("foo"),
-    };
-    member.update_manifest(|mut doc| {
-        redirect_bindings_crate(&mut doc);
-        Ok(doc)
-    })?;
-
     project
         .cargo_component("new --lib bar")
         .assert()
         .stderr(contains("Updated manifest of package `bar`"))
         .success();
-
-    let member = Project {
-        dir: dir.clone(),
-        root: project.root().join("bar"),
-    };
-    member.update_manifest(|mut doc| {
-        redirect_bindings_crate(&mut doc);
-        Ok(doc)
-    })?;
 
     project
         .cargo_component("metadata --format-version 1")

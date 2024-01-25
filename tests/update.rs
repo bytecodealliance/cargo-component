@@ -40,10 +40,6 @@ world foo {
     .await?;
 
     let project = Project::with_dir(dir.clone(), "component", "--target foo:bar@1.0.0")?;
-    project.update_manifest(|mut doc| {
-        redirect_bindings_crate(&mut doc);
-        Ok(doc)
-    })?;
 
     project
         .cargo_component("build")
@@ -81,10 +77,6 @@ world foo {
     .await?;
 
     let project = Project::with_dir(dir.clone(), "component", "--target foo:bar@1.0.0")?;
-    project.update_manifest(|mut doc| {
-        redirect_bindings_crate(&mut doc);
-        Ok(doc)
-    })?;
 
     project
         .cargo_component("build")
@@ -141,10 +133,6 @@ world foo {
     .await?;
 
     let project = Project::with_dir(dir.clone(), "component", "--target foo:bar@1.0.0")?;
-    project.update_manifest(|mut doc| {
-        redirect_bindings_crate(&mut doc);
-        Ok(doc)
-    })?;
 
     project
         .cargo_component("build")
@@ -173,7 +161,8 @@ world foo {
         .success()
         .stderr(contains("`foo:bar` v1.0.0 -> v1.1.0"));
 
-    let source = r#"cargo_component_bindings::generate!();
+    let source = r#"
+mod bindings;
 use bindings::{baz, Guest};
 struct Component;
 impl Guest for Component {
@@ -215,10 +204,6 @@ world foo {
     .await?;
 
     let project = Project::with_dir(dir.clone(), "component", "--target foo:bar@1.0.0")?;
-    project.update_manifest(|mut doc| {
-        redirect_bindings_crate(&mut doc);
-        Ok(doc)
-    })?;
 
     project
         .cargo_component("build")
@@ -270,10 +255,6 @@ async fn update_with_changed_dependencies() -> Result<()> {
     publish_component(&config, "foo:baz", "1.0.0", "(component)", true).await?;
 
     let project = Project::with_dir(dir.clone(), "foo", "")?;
-    project.update_manifest(|mut doc| {
-        redirect_bindings_crate(&mut doc);
-        Ok(doc)
-    })?;
 
     project
         .cargo_component("build")

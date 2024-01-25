@@ -7,7 +7,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-cargo-component-bindings = { path = "../crates/bindings" }
+wit-bindgen = { version = "0.16.0", default-features = false, features = ["realloc"]}
 
 [package.metadata.component]
 package = "example:component"

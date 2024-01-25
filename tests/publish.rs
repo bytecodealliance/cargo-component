@@ -42,10 +42,6 @@ world foo {
     .await?;
 
     let project = Project::with_dir(dir.clone(), "foo", "--namespace test --target my:world")?;
-    project.update_manifest(|mut doc| {
-        redirect_bindings_crate(&mut doc);
-        Ok(doc)
-    })?;
 
     // Ensure there's a using declaration in the generated source
     let source = fs::read_to_string(project.root().join("src/lib.rs"))?;
@@ -89,10 +85,6 @@ world foo {
     .await?;
 
     let project = Project::with_dir(dir.clone(), "foo", "--namespace test --target my:world")?;
-    project.update_manifest(|mut doc| {
-        redirect_bindings_crate(&mut doc);
-        Ok(doc)
-    })?;
 
     project
         .cargo_component("publish")
@@ -123,10 +115,6 @@ world foo {
     .await?;
 
     let project = Project::with_dir(dir.clone(), "foo", "--namespace test --target my:world/foo")?;
-    project.update_manifest(|mut doc| {
-        redirect_bindings_crate(&mut doc);
-        Ok(doc)
-    })?;
 
     project
         .cargo_component("publish --init")
@@ -138,10 +126,6 @@ world foo {
     validate_component(&project.release_wasm("foo"))?;
 
     let project = Project::with_dir(dir.clone(), "bar", "--namespace test --target my:world")?;
-    project.update_manifest(|mut doc| {
-        redirect_bindings_crate(&mut doc);
-        Ok(doc)
-    })?;
 
     project
         .cargo_component("add test:foo")
@@ -149,7 +133,8 @@ world foo {
         .stderr(contains("Added dependency `test:foo` with version `0.1.0`"))
         .success();
 
-    let source = r#"cargo_component_bindings::generate!();
+    let source = r#"
+mod bindings;
 use bindings::Guest;
 struct Component;
 impl Guest for Component {
@@ -189,8 +174,6 @@ async fn it_publishes_with_registry_metadata() -> Result<()> {
 
     let project = Project::with_dir(dir.clone(), "foo", "")?;
     project.update_manifest(|mut doc| {
-        redirect_bindings_crate(&mut doc);
-
         let package = &mut doc["package"];
         package["authors"] = value(Array::from_iter(authors));
         package["categories"] = value(Array::from_iter(categories));

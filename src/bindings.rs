@@ -39,7 +39,6 @@ fn named_world_key<'a>(resolve: &'a Resolve, orig: &'a WorldKey, prefix: &str) -
 /// A generator for bindings.
 ///
 /// This type is responsible for generating the bindings
-/// that the `generate!` macro will ultimately include
 /// in user component projects.
 pub struct BindingsGenerator<'a> {
     resolution: &'a PackageDependencyResolution<'a>,
@@ -199,8 +198,6 @@ impl<'a> BindingsGenerator<'a> {
                     }
                 }
             },
-            runtime_path: Some("::cargo_component_bindings::rt".to_string()),
-            bitflags_path: Some("::cargo_component_bindings::bitflags".to_string()),
             additional_derive_attributes: settings.derives.clone(),
             ..Default::default()
         };

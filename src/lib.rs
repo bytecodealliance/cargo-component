@@ -9,7 +9,7 @@ use bytes::Bytes;
 use cargo_component_core::{
     lock::{LockFile, LockFileResolver, LockedPackage, LockedPackageVersion},
     registry::create_client,
-    terminal::{Colors, Terminal},
+    terminal::Colors,
 };
 use cargo_config2::{PathAndArgs, TargetTripleRef};
 use cargo_metadata::{Message, Metadata, MetadataCommand, Package};
@@ -40,9 +40,6 @@ mod lock;
 mod metadata;
 mod registry;
 mod target;
-
-/// The name of the cargo-component bindings crate.
-pub const BINDINGS_CRATE_NAME: &str = "cargo-component-bindings";
 
 fn is_wasm_target(target: &str) -> bool {
     target == "wasm32-wasi" || target == "wasm32-unknown-unknown"
@@ -405,11 +402,7 @@ fn last_modified_time(path: &Path) -> Result<SystemTime> {
 }
 
 /// Loads the workspace metadata based on the given manifest path.
-pub fn load_metadata(
-    terminal: &Terminal,
-    manifest_path: Option<&Path>,
-    ignore_version_mismatch: bool,
-) -> Result<Metadata> {
+pub fn load_metadata(manifest_path: Option<&Path>) -> Result<Metadata> {
     let mut command = MetadataCommand::new();
     command.no_deps();
 
@@ -423,44 +416,7 @@ pub fn load_metadata(
         log::debug!("loading metadata from current directory");
     }
 
-    let metadata = command.exec().context("failed to load cargo metadata")?;
-
-    if !ignore_version_mismatch {
-        let this_version = Version::parse(env!("CARGO_PKG_VERSION")).unwrap();
-        for package in &metadata.packages {
-            match package.dependencies.iter().find(|dep| {
-                dep.rename.as_deref().unwrap_or(dep.name.as_str()) == BINDINGS_CRATE_NAME
-            }) {
-                Some(bindings_crate) => {
-                    let s = bindings_crate.req.to_string();
-                    match s.strip_prefix('^').unwrap_or(&s).parse::<Version>() {
-                        Ok(v) => {
-                            if this_version.major == v.major
-                                && (this_version.major > 0 || this_version.minor == v.minor)
-                            {
-                                // Version should be compatible
-                                continue;
-                            }
-
-                            if this_version.major > v.major
-                                || (this_version.major == v.major && this_version.minor > v.minor)
-                            {
-                                // cargo-component is newer, so warn about upgrading `Cargo.toml`
-                                terminal.warn(format!("manifest `{path}` uses an older version of `{BINDINGS_CRATE_NAME}` ({v}) than cargo-component ({this_version}); use `cargo component upgrade --no-install` to update the manifest", path = package.manifest_path))?;
-                            } else {
-                                // cargo-component itself is out of date; warn to upgrade
-                                terminal.warn(format!("manifest `{path}` uses a newer version of `{BINDINGS_CRATE_NAME}` ({v}) than cargo-component ({this_version}); use `cargo component upgrade` to upgrade to the latest version", path = package.manifest_path))?;
-                            };
-                        }
-                        _ => continue,
-                    }
-                }
-                None => continue,
-            }
-        }
-    }
-
-    Ok(metadata)
+    command.exec().context("failed to load cargo metadata")
 }
 
 /// Loads the component metadata for the given package specs.
@@ -512,7 +468,6 @@ async fn generate_bindings(
     cargo_args: &CargoArguments,
 ) -> Result<()> {
     let last_modified_exe = last_modified_time(&std::env::current_exe()?)?;
-    let bindings_dir = metadata.target_directory.join("bindings");
     let file_lock = acquire_lock_file_ro(config.terminal(), metadata)?;
     let lock_file = file_lock
         .as_ref()
@@ -535,13 +490,7 @@ async fn generate_bindings(
             None => continue,
         };
 
-        generate_package_bindings(
-            config,
-            resolution,
-            bindings_dir.as_std_path(),
-            last_modified_exe,
-        )
-        .await?;
+        generate_package_bindings(config, resolution, last_modified_exe).await?;
     }
 
     // Update the lock file if it exists or if the new lock file is non-empty
@@ -595,10 +544,15 @@ async fn create_resolution_map<'a>(
 async fn generate_package_bindings(
     config: &Config,
     resolution: &PackageDependencyResolution<'_>,
-    bindings_dir: &Path,
     last_modified_exe: SystemTime,
 ) -> Result<()> {
-    let output_dir = bindings_dir.join(&resolution.metadata.name);
+    // TODO: make the output path configurable
+    let output_dir = resolution
+        .metadata
+        .manifest_path
+        .parent()
+        .unwrap()
+        .join("src");
     let bindings_path = output_dir.join("bindings.rs");
 
     let last_modified_output = bindings_path

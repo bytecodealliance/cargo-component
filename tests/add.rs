@@ -109,7 +109,6 @@ async fn adds_dependencies_to_target_component() -> Result<()> {
 fn checks_for_duplicate_dependencies() -> Result<()> {
     let project = Project::new("foo")?;
     project.update_manifest(|mut doc| {
-        redirect_bindings_crate(&mut doc);
         doc["package"]["metadata"]["component"]["dependencies"]["foo:bar"] = value("1.2.3");
         Ok(doc)
     })?;

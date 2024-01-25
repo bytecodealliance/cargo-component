@@ -2,7 +2,6 @@
 
 use anyhow::{bail, Context, Result};
 use assert_cmd::prelude::OutputAssertExt;
-use cargo_component::BINDINGS_CRATE_NAME;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -13,7 +12,7 @@ use std::{
 use tempfile::TempDir;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
-use toml_edit::{value, Document, InlineTable};
+use toml_edit::Document;
 use warg_client::{
     storage::{ContentStorage, PublishEntry, PublishInfo},
     FileSystemClient,
@@ -42,19 +41,6 @@ pub fn adapter_path() -> PathBuf {
     path.push(env!("WASI_ADAPTER_VERSION"));
     path.push("wasi_snapshot_preview1.reactor.wasm");
     path
-}
-
-pub fn redirect_bindings_crate(doc: &mut Document) {
-    let mut path = std::env::current_exe().unwrap();
-    path.pop(); // remove test exe name
-    path.pop(); // remove `deps`
-    path.pop(); // remove `debug` or `release`
-    path.pop(); // remove `target`
-    path.push("crates");
-    path.push("bindings");
-
-    doc["dependencies"][BINDINGS_CRATE_NAME] =
-        value(InlineTable::from_iter([("path", path.to_str().unwrap())]));
 }
 
 pub fn cargo_component(args: &str) -> Command {

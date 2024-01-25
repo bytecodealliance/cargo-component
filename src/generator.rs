@@ -273,8 +273,7 @@ impl<'a> SourceGenerator<'a> {
         }
 
         let mut source = String::new();
-        writeln!(&mut source, "// Required for component bindings generation")?;
-        writeln!(&mut source, "cargo_component_bindings::generate!();")?;
+        writeln!(&mut source, "mod bindings;")?;
         writeln!(&mut source)?;
         write!(
             &mut source,

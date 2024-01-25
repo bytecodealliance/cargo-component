@@ -92,7 +92,7 @@ impl PublishCommand {
             }
         }
 
-        let metadata = load_metadata(config.terminal(), self.manifest_path.as_deref(), false)?;
+        let metadata = load_metadata(self.manifest_path.as_deref())?;
         let spec = match &self.cargo_package {
             Some(spec) => Some(spec.clone()),
             None => CargoPackageSpec::find_current_package_spec(&metadata),
