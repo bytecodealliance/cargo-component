@@ -53,7 +53,7 @@ fn it_runs_with_reactor_component() -> Result<()> {
     fs::write(
         project.root().join("wit/deps/cli/run.wit"),
         "
-package wasi:cli@0.2.0-rc-2023-12-05;
+package wasi:cli@0.2.0;
 
 interface run {
     run: func() -> result;
@@ -66,7 +66,7 @@ interface run {
 package my:reactor;
 
 world generator {
-    export wasi:cli/run@0.2.0-rc-2023-12-05;
+    export wasi:cli/run@0.2.0;
 }",
     )?;
 
