@@ -67,8 +67,13 @@ impl AddCommand {
         let config = Config::new(self.common.new_terminal())?;
         let metadata = load_metadata(config.terminal(), self.manifest_path.as_deref(), false)?;
 
+        let spec = match &self.spec {
+            Some(spec) => Some(spec.clone()),
+            None => CargoPackageSpec::find_current_package_spec(&metadata),
+        };
+
         let PackageComponentMetadata { package, metadata }: PackageComponentMetadata<'_> =
-            match &self.spec {
+            match &spec {
                 Some(spec) => {
                     let pkgs = load_component_metadata(&metadata, std::iter::once(spec), false)?;
                     assert!(pkgs.len() == 1, "one package should be present");

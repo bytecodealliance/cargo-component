@@ -204,6 +204,7 @@ pub async fn spawn_server(root: &Path) -> Result<(ServerInstance, warg_client::C
     Ok((instance, config))
 }
 
+#[derive(Debug)]
 pub struct Project {
     pub dir: Rc<TempDir>,
     pub root: PathBuf,
