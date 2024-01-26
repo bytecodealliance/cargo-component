@@ -34,6 +34,7 @@ jobs:
     - name: Install `wasmtime`
       uses: bytecodealliance/actions/wasmtime/setup@v1
       with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
         version: "v17.0.0"
     - name: Run all tests
       run: cargo test --all
