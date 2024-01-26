@@ -606,8 +606,18 @@ async fn generate_package_bindings(
     Ok(())
 }
 
-fn adapter_bytes(metadata: &ComponentMetadata, binary: bool) -> Result<Cow<[u8]>> {
+fn adapter_bytes<'a>(
+    config: &Config,
+    metadata: &'a ComponentMetadata,
+    binary: bool,
+) -> Result<Cow<'a, [u8]>> {
     if let Some(adapter) = &metadata.section.adapter {
+        if metadata.section.proxy {
+            config.terminal().warn(
+                "ignoring `proxy` setting due to `adapter` setting being present in `Cargo.toml`",
+            )?;
+        }
+
         return Ok(fs::read(adapter)
             .with_context(|| {
                 format!(
@@ -619,10 +629,22 @@ fn adapter_bytes(metadata: &ComponentMetadata, binary: bool) -> Result<Cow<[u8]>
     }
 
     if binary {
+        if metadata.section.proxy {
+            config
+                .terminal()
+                .warn("ignoring `proxy` setting in `Cargo.toml` for command component")?;
+        }
+
         Ok(Cow::Borrowed(include_bytes!(concat!(
             "../adapters/",
             env!("WASI_ADAPTER_VERSION"),
             "/wasi_snapshot_preview1.command.wasm"
+        ))))
+    } else if metadata.section.proxy {
+        Ok(Cow::Borrowed(include_bytes!(concat!(
+            "../adapters/",
+            env!("WASI_ADAPTER_VERSION"),
+            "/wasi_snapshot_preview1.proxy.wasm"
         ))))
     } else {
         Ok(Cow::Borrowed(include_bytes!(concat!(
@@ -663,7 +685,10 @@ fn create_component(
 
     let encoder = ComponentEncoder::default()
         .module(&module)?
-        .adapter("wasi_snapshot_preview1", &adapter_bytes(metadata, binary)?)
+        .adapter(
+            "wasi_snapshot_preview1",
+            &adapter_bytes(config, metadata, binary)?,
+        )
         .with_context(|| {
             format!(
                 "failed to load adapter module `{path}`",

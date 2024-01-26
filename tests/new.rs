@@ -23,7 +23,7 @@ fn help() {
 fn it_creates_the_expected_files_for_bin() -> Result<()> {
     let dir = TempDir::new()?;
 
-    cargo_component("new --command foo")
+    cargo_component("new --bin foo")
         .current_dir(dir.path())
         .assert()
         .stderr(contains("Updated manifest of package `foo"))
@@ -180,6 +180,18 @@ async fn it_errors_if_target_does_not_exist() -> Result<()> {
 }
 
 #[test]
+fn it_supports_the_command_option() -> Result<()> {
+    let dir = TempDir::new()?;
+
+    cargo_component("new --command foo")
+        .current_dir(dir.path())
+        .assert()
+        .try_success()?;
+
+    Ok(())
+}
+
+#[test]
 fn it_supports_the_reactor_option() -> Result<()> {
     let dir = TempDir::new()?;
 
@@ -187,6 +199,20 @@ fn it_supports_the_reactor_option() -> Result<()> {
         .current_dir(dir.path())
         .assert()
         .try_success()?;
+
+    Ok(())
+}
+
+#[test]
+fn it_supports_the_proxy_option() -> Result<()> {
+    let dir: TempDir = TempDir::new()?;
+
+    cargo_component("new --lib --proxy foo")
+        .current_dir(dir.path())
+        .assert()
+        .try_success()?;
+
+    assert!(fs::read_to_string(dir.path().join("foo/Cargo.toml"))?.contains("proxy = true"));
 
     Ok(())
 }

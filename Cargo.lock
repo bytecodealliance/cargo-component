@@ -540,6 +540,7 @@ dependencies = [
  "warg-server",
  "wasm-metadata",
  "wasmparser 0.120.0",
+ "wasmprinter",
  "wat",
  "which 6.0.0",
  "wit-bindgen-core",
@@ -3727,6 +3728,16 @@ dependencies = [
  "bitflags 2.4.2",
  "indexmap 2.1.0",
  "semver",
+]
+
+[[package]]
+name = "wasmprinter"
+version = "0.2.77"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d8389a95eb0b3165fea0537a6988960cc23a33d9be650e63fc3d63065fe20dcb"
+dependencies = [
+ "anyhow",
+ "wasmparser 0.120.0",
 ]
 
 [[package]]

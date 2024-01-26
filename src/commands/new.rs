@@ -47,12 +47,16 @@ pub struct NewCommand {
     pub vcs: Option<String>,
 
     /// Create a CLI command component [default]
-    #[clap(long = "command", conflicts_with("lib"))]
-    pub command: bool,
+    #[clap(long = "bin", alias = "command", conflicts_with = "lib")]
+    pub bin: bool,
 
     /// Create a library (reactor) component
     #[clap(long = "lib", alias = "reactor")]
     pub lib: bool,
+
+    /// Use the built-in `wasi:http/proxy` module adapter
+    #[clap(long = "proxy", requires = "lib")]
+    pub proxy: bool,
 
     /// Edition to set for the generated crate
     #[clap(long = "edition", value_name = "YEAR", value_parser = ["2015", "2018", "2021"])]
@@ -277,6 +281,10 @@ impl NewCommand {
             component["registries"] = Item::Table(table);
         }
 
+        if self.proxy {
+            component["proxy"] = value(true);
+        }
+
         let mut metadata = Table::new();
         metadata.set_implicit(true);
         metadata.set_position(doc.len());
@@ -315,7 +323,7 @@ impl NewCommand {
     }
 
     fn is_command(&self) -> bool {
-        self.command || !self.lib
+        self.bin || !self.lib
     }
 
     fn generate_source(

@@ -834,3 +834,67 @@ fn it_builds_with_versioned_wit() -> Result<()> {
 
     Ok(())
 }
+
+#[test]
+fn it_warns_on_proxy_setting_for_command() -> Result<()> {
+    let project = Project::new_bin("foo")?;
+    project.update_manifest(|mut doc| {
+        doc["package"]["metadata"]["component"]["proxy"] = value(true);
+        Ok(doc)
+    })?;
+
+    project
+        .cargo_component("build")
+        .assert()
+        .stderr(contains(
+            "warning: ignoring `proxy` setting in `Cargo.toml` for command component",
+        ))
+        .success();
+
+    validate_component(&project.debug_wasm("foo"))?;
+
+    Ok(())
+}
+
+#[test]
+fn it_warns_with_proxy_and_adapter_settings() -> Result<()> {
+    let project = Project::new("foo")?;
+    project.update_manifest(|mut doc| {
+        doc["package"]["metadata"]["component"]["proxy"] = value(true);
+        doc["package"]["metadata"]["component"]["adapter"] =
+            value(adapter_path().to_str().unwrap());
+        Ok(doc)
+    })?;
+
+    project
+        .cargo_component("build")
+        .assert()
+        .stderr(contains("warning: ignoring `proxy` setting due to `adapter` setting being present in `Cargo.toml`"))
+        .success();
+
+    validate_component(&project.debug_wasm("foo"))?;
+
+    Ok(())
+}
+
+#[test]
+fn it_builds_with_proxy_adapter() -> Result<()> {
+    let dir = Rc::new(TempDir::new()?);
+    let project = Project::with_dir(dir.clone(), "foo", "--proxy")?;
+
+    project
+        .cargo_component("build")
+        .assert()
+        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .success();
+
+    validate_component(&project.debug_wasm("foo"))?;
+
+    let text = wasmprinter::print_file(project.debug_wasm("foo"))?;
+    assert!(
+        !text.contains("wasi:cli/environment"),
+        "proxy wasm should have no reference to `wasi:cli/environment`"
+    );
+
+    Ok(())
+}
