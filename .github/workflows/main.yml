@@ -32,7 +32,7 @@ jobs:
         rustup target add wasm32-unknown-unknown
       shell: bash
     - name: Install Wasmtime
-      run: cargo install wasmtime-cli --locked --features="component-model" --version 16.0.0
+      run: cargo install wasmtime-cli --locked --features="component-model" --version 17.0.0
     - name: Run all tests
       run: cargo test --all
 
