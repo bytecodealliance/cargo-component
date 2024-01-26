@@ -450,10 +450,7 @@ pub fn load_component_metadata<'a>(
 
         pkgs
     } else {
-        // TODO: this should be the default members, or default to all members
-        // However, `cargo-metadata` doesn't return the workspace default members yet
-        // See: https://github.com/oli-obk/cargo_metadata/issues/215
-        metadata.workspace_packages()
+        metadata.workspace_default_packages()
     };
 
     pkgs.into_iter()
