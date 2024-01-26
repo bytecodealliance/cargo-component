@@ -280,6 +280,10 @@ pub struct ComponentSection {
     pub registries: HashMap<String, Url>,
     /// The configuration for bindings generation.
     pub bindings: Bindings,
+    /// Whether to use the built-in `wasi:http/proxy` adapter for the component.
+    ///
+    /// This should only be `true` when `adapter` is None.
+    pub proxy: bool,
 }
 
 /// Represents cargo metadata for a WebAssembly component.

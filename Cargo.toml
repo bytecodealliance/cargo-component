@@ -58,6 +58,7 @@ wasmparser = { workspace = true }
 wat = { workspace = true }
 warg-server = { workspace = true }
 tempfile = { workspace = true }
+wasmprinter = { workspace = true }
 
 [workspace]
 members = ["crates/core", "crates/wit"]
@@ -104,3 +105,4 @@ predicates = "3.1.0"
 wasmparser = "0.120.0"
 wat = "1.0.84"
 warg-server = "0.2.0"
+wasmprinter = "0.2.77"
