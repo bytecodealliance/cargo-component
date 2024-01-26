@@ -14,11 +14,10 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
-use toml_edit::{table, value, Array, Document, InlineTable, Item, Table, Value};
+use toml_edit::{table, value, Document, Item, Table, Value};
 use url::Url;
 
 const WIT_BINDGEN_CRATE: &str = "wit-bindgen";
-const WIT_BINDGEN_VERSION: &str = "0.16.0";
 
 fn escape_wit(s: &str) -> Cow<str> {
     match s {
@@ -282,13 +281,7 @@ impl NewCommand {
         metadata.set_implicit(true);
         metadata.set_position(doc.len());
         metadata["component"] = Item::Table(component);
-
         doc["package"]["metadata"] = Item::Table(metadata);
-        doc["dependencies"][WIT_BINDGEN_CRATE] = value(InlineTable::from_iter([
-            ("version", Value::from(WIT_BINDGEN_VERSION)),
-            ("default-features", Value::from(false)),
-            ("features", Value::from(Array::from_iter(["realloc"]))),
-        ]));
 
         fs::write(&manifest_path, doc.to_string()).with_context(|| {
             format!(
@@ -296,6 +289,22 @@ impl NewCommand {
                 path = manifest_path.display()
             )
         })?;
+
+        // Run cargo add for wit-bindgen
+        let mut cargo_add_command = std::process::Command::new("cargo");
+        cargo_add_command.arg("add");
+        cargo_add_command.arg("--quiet");
+        cargo_add_command.arg("--no-default-features");
+        cargo_add_command.arg("--features");
+        cargo_add_command.arg("realloc");
+        cargo_add_command.arg(WIT_BINDGEN_CRATE);
+        cargo_add_command.current_dir(out_dir);
+        let status = cargo_add_command
+            .status()
+            .context("failed to execute `cargo add` command")?;
+        if !status.success() {
+            bail!("`cargo add` command exited with non-zero status");
+        }
 
         config.terminal().status(
             "Updated",
