@@ -33,7 +33,7 @@ fn named_world_key<'a>(resolve: &'a Resolve, orig: &'a WorldKey, prefix: &str) -
         }
     };
 
-    WorldKey::Name(format!("{prefix}-{name}"))
+    WorldKey::Name(format!("{prefix}/{name}"))
 }
 
 /// A generator for bindings.
@@ -505,6 +505,7 @@ impl<'a> BindingsGenerator<'a> {
             name = source.name.clone();
             docs = source.docs.clone();
             source_pkg = source.package;
+            let pkg = &resolve.packages[source_pkg.unwrap()];
 
             // Check for imported types, which must also import any owning interfaces
             for item in source.imports.values() {
@@ -524,7 +525,14 @@ impl<'a> BindingsGenerator<'a> {
                         functions.insert(key.clone().unwrap_name(), f.clone());
                     }
                     WorldItem::Interface(i) => {
-                        interfaces.insert(named_world_key(resolve, key, &name), *i);
+                        interfaces.insert(
+                            named_world_key(
+                                resolve,
+                                key,
+                                &format!("{}:{}", pkg.name.namespace, pkg.name.name),
+                            ),
+                            *i,
+                        );
                     }
                     _ => continue,
                 }

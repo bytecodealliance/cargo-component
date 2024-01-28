@@ -97,8 +97,8 @@ rpassword = "7.3.1"
 futures = "0.3.30"
 bytes = "1.5.0"
 which = "6.0.0"
-wit-bindgen-rust = "0.16.0"
-wit-bindgen-core = "0.16.0"
+wit-bindgen-rust = { git = "https://github.com/macovedj/wit-bindgen", branch="anticipate-packages" }
+wit-bindgen-core = { git = "https://github.com/macovedj/wit-bindgen", branch="anticipate-packages" }
 tempfile = "3.9.0"
 assert_cmd = "2.0.13"
 predicates = "3.1.0"
