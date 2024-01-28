@@ -15,7 +15,7 @@ fn it_prints_metadata() -> Result<()> {
     project
         .cargo_component("metadata --format-version 1")
         .assert()
-        .stdout(contains("foo 0.1.0"))
+        .stdout(contains(r#""name":"foo","version":"0.1.0""#))
         .success();
 
     Ok(())
@@ -80,7 +80,12 @@ members = ["foo", "bar", "baz"]
     project
         .cargo_component("metadata --format-version 1")
         .assert()
-        .stdout(contains("foo 0.1.0").and(contains("bar 0.1.0").and(contains("baz 0.1.0"))))
+        .stdout(
+            contains(r#"name":"foo","version":"0.1.0""#).and(
+                contains(r#"name":"bar","version":"0.1.0""#)
+                    .and(contains(r#"name":"baz","version":"0.1.0""#)),
+            ),
+        )
         .success();
 
     Ok(())
