@@ -179,14 +179,7 @@ pub async fn run_cargo_command(
             .unwrap_or_else(|| {
                 (
                     PathAndArgs::new("wasmtime")
-                        .args(vec![
-                            "-W",
-                            "component-model",
-                            "-S",
-                            "preview2",
-                            "-S",
-                            "common",
-                        ])
+                        .args(vec!["-S", "preview2", "-S", "common"])
                         .to_owned(),
                     true,
                 )
