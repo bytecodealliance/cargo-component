@@ -9,6 +9,7 @@ use anyhow::{bail, Context, Result};
 use cargo_component_core::registry::DecodedDependency;
 use heck::ToUpperCamelCase;
 use indexmap::{IndexMap, IndexSet};
+use semver::Version;
 use std::{
     borrow::Cow,
     collections::{HashMap, HashSet},
@@ -24,16 +25,35 @@ use wit_parser::{
     World, WorldId, WorldItem, WorldKey,
 };
 
-fn named_world_key<'a>(resolve: &'a Resolve, orig: &'a WorldKey, prefix: &str) -> WorldKey {
-    let name = match orig {
-        WorldKey::Name(n) => n,
-        WorldKey::Interface(id) => {
-            let iface = &resolve.interfaces[*id];
-            iface.name.as_ref().expect("unnamed interface")
-        }
-    };
-
-    WorldKey::Name(format!("{prefix}-{name}"))
+// Used to format `unlocked-dep` import names for dependencies on
+// other components.
+fn format_dep_import(package: &Package, name: Option<&str>, version: Option<&Version>) -> String {
+    match (name, version) {
+        (Some(name), Some(version)) => format!(
+            "unlocked-dep=<{ns}:{pkg}/{name}@{{>={min} <{max}}}>",
+            ns = package.name.namespace,
+            pkg = package.name.name,
+            min = version,
+            max = Version::new(version.major, version.minor + 1, 0)
+        ),
+        (Some(name), None) => format!(
+            "unlocked-dep=<{ns}:{pkg}/{name}>",
+            ns = package.name.namespace,
+            pkg = package.name.name
+        ),
+        (None, Some(version)) => format!(
+            "unlocked-dep=<{ns}:{pkg}@{{>={min} <{max}}}>",
+            ns = package.name.namespace,
+            pkg = package.name.name,
+            min = version,
+            max = Version::new(version.major, version.minor + 1, 0)
+        ),
+        (None, None) => format!(
+            "unlocked-dep=<{ns}:{pkg}>",
+            ns = package.name.namespace,
+            pkg = package.name.name
+        ),
+    }
 }
 
 /// A generator for bindings.
@@ -50,9 +70,14 @@ pub struct BindingsGenerator<'a> {
 impl<'a> BindingsGenerator<'a> {
     /// Creates a new bindings generator for the given bindings directory
     /// and package dependency resolution.
-    pub fn new(resolution: &'a PackageDependencyResolution<'a>) -> Result<Self> {
+    ///
+    /// Returns a tuple of the bindings generator and a map of import names.
+    pub fn new(
+        resolution: &'a PackageDependencyResolution<'a>,
+    ) -> Result<(Self, HashMap<String, String>)> {
+        let mut import_name_map = Default::default();
         let (resolve, world, source_files) =
-            Self::create_target_world(resolution).with_context(|| {
+            Self::create_target_world(resolution, &mut import_name_map).with_context(|| {
                 format!(
                     "failed to create a target world for package `{name}` ({path})",
                     name = resolution.metadata.name,
@@ -60,12 +85,15 @@ impl<'a> BindingsGenerator<'a> {
                 )
             })?;
 
-        Ok(Self {
-            resolution,
-            resolve,
-            world,
-            source_files,
-        })
+        Ok((
+            Self {
+                resolution,
+                resolve,
+                world,
+                source_files,
+            },
+            import_name_map,
+        ))
     }
 
     /// Gets the cargo metadata for the package that the bindings are for.
@@ -245,6 +273,7 @@ impl<'a> BindingsGenerator<'a> {
 
     fn create_target_world(
         resolution: &PackageDependencyResolution,
+        import_name_map: &mut HashMap<String, String>,
     ) -> Result<(Resolve, WorldId, Vec<PathBuf>)> {
         let (mut merged, world_id, source_files) =
             if let Target::Package { id, world, .. } = &resolution.metadata.section.target {
@@ -280,7 +309,13 @@ impl<'a> BindingsGenerator<'a> {
                 .merge(resolve)
                 .with_context(|| format!("failed to merge world of dependency `{id}`"))?
                 .worlds[component_world_id.index()];
-            Self::import_world(&mut merged, source, world_id)?;
+            Self::import_world(
+                &mut merged,
+                source,
+                world_id,
+                dependency.version(),
+                import_name_map,
+            )?;
         }
 
         Ok((merged, world_id, source_files))
@@ -489,59 +524,96 @@ impl<'a> BindingsGenerator<'a> {
         (resolve, world)
     }
 
-    // This function imports in the target world the exports of the source world.
-    //
-    // This is used for dependencies on other components so that their exports may
-    // be imported by the component being built.
-    fn import_world(resolve: &mut Resolve, source: WorldId, target: WorldId) -> Result<()> {
+    /// This function imports in the target world the exports of the source world.
+    ///
+    /// This is used for dependencies on other components so that their exports may
+    /// be imported by the component being built.
+    ///
+    /// This also populates the import name map, which is used to map import names
+    /// that the bindings supports to `unlocked-dep` import names used in the output
+    /// component.
+    fn import_world(
+        resolve: &mut Resolve,
+        source_id: WorldId,
+        target_id: WorldId,
+        version: Option<&Version>,
+        import_name_map: &mut HashMap<String, String>,
+    ) -> Result<()> {
         let mut functions = IndexMap::default();
+        let mut used = IndexMap::new();
         let mut interfaces = IndexMap::new();
-        let name;
-        let docs;
-        let source_pkg;
 
-        {
-            let source = &resolve.worlds[source];
-            name = source.name.clone();
-            docs = source.docs.clone();
-            source_pkg = source.package;
-
-            // Check for imported types, which must also import any owning interfaces
-            for item in source.imports.values() {
-                if let WorldItem::Type(ty) = &item {
-                    if let TypeDefKind::Type(Type::Id(ty)) = resolve.types[*ty].kind {
-                        if let TypeOwner::Interface(i) = resolve.types[ty].owner {
-                            interfaces.insert(WorldKey::Interface(i), i);
-                        }
+        // Check for imported (i.e. used) types, which must also import any owning interfaces
+        for item in resolve.worlds[source_id].imports.values() {
+            if let WorldItem::Type(ty) = &item {
+                if let TypeDefKind::Type(Type::Id(ty)) = resolve.types[*ty].kind {
+                    if let TypeOwner::Interface(i) = resolve.types[ty].owner {
+                        used.insert(WorldKey::Interface(i), WorldItem::Interface(i));
                     }
-                }
-            }
-
-            // Add imports for all exported items
-            for (key, item) in &source.exports {
-                match item {
-                    WorldItem::Function(f) => {
-                        functions.insert(key.clone().unwrap_name(), f.clone());
-                    }
-                    WorldItem::Interface(i) => {
-                        interfaces.insert(named_world_key(resolve, key, &name), *i);
-                    }
-                    _ => continue,
                 }
             }
         }
 
-        for (key, id) in interfaces {
-            let named = matches!(key, WorldKey::Name(_));
-            if resolve.worlds[target]
+        // Add imports for all exported items
+        for (key, item) in &resolve.worlds[source_id].exports {
+            match item {
+                WorldItem::Function(f) => {
+                    functions.insert(key.clone().unwrap_name(), f.clone());
+                }
+                WorldItem::Interface(id) => {
+                    let name = match key {
+                        WorldKey::Name(name) => name.clone(),
+                        WorldKey::Interface(id) => {
+                            let iface = &resolve.interfaces[*id];
+                            let name = iface.name.as_deref().expect("interface has no name");
+                            match iface.package {
+                                Some(pkg) => {
+                                    let pkg = &resolve.packages[pkg];
+                                    format!(
+                                        "{ns}-{pkg}-{name}",
+                                        ns = pkg.name.namespace,
+                                        pkg = pkg.name.name
+                                    )
+                                }
+                                None => name.to_string(),
+                            }
+                        }
+                    };
+
+                    interfaces.insert(name, *id);
+                }
+                _ => continue,
+            }
+        }
+
+        // Import the used interfaces
+        resolve.worlds[target_id].imports.extend(used);
+
+        // Import the exported interfaces
+        for (name, id) in interfaces {
+            // Alloc an interface that will just serve as a name
+            // for the import.
+            let package = resolve.worlds[source_id].package;
+            let name_id = resolve.interfaces.alloc(Interface {
+                name: Some(name.clone()),
+                types: Default::default(),
+                functions: Default::default(),
+                docs: Default::default(),
+                package,
+            });
+
+            let import_name =
+                format_dep_import(&resolve.packages[package.unwrap()], Some(&name), version);
+            import_name_map.insert(name, import_name);
+
+            if resolve.worlds[target_id]
                 .imports
-                .insert(key, WorldItem::Interface(id))
+                .insert(WorldKey::Interface(name_id), WorldItem::Interface(id))
                 .is_some()
-                && named
             {
                 let iface = &resolve.interfaces[id];
-                let pkg = &resolve.packages[iface.package.expect("interface has no package")];
-                let id = pkg
+                let package = &resolve.packages[iface.package.expect("interface has no package")];
+                let id = package
                     .name
                     .interface_id(iface.name.as_deref().expect("interface has no name"));
                 bail!("cannot import dependency `{id}` because it conflicts with an import in the target world");
@@ -550,17 +622,27 @@ impl<'a> BindingsGenerator<'a> {
 
         // If the world had functions, insert an interface that contains them.
         if !functions.is_empty() {
+            let source = &resolve.worlds[source_id];
+            let package = &resolve.packages[source.package.unwrap()];
+            let name = format!(
+                "{ns}-{pkg}",
+                ns = package.name.namespace,
+                pkg = package.name.name
+            );
+
+            import_name_map.insert(name.clone(), format_dep_import(package, None, version));
+
             let interface = resolve.interfaces.alloc(Interface {
                 name: Some(name.clone()),
-                docs,
+                docs: source.docs.clone(),
                 types: Default::default(),
                 functions,
-                package: source_pkg,
+                package: source.package,
             });
 
             // Add any types owned by the world to the interface
             for (id, ty) in resolve.types.iter() {
-                if ty.owner == TypeOwner::World(source) {
+                if ty.owner == TypeOwner::World(source_id) {
                     resolve.interfaces[interface]
                         .types
                         .insert(ty.name.clone().expect("type should have a name"), id);
@@ -568,7 +650,7 @@ impl<'a> BindingsGenerator<'a> {
             }
 
             // Finally, insert the interface into the target world
-            if resolve.worlds[target]
+            if resolve.worlds[target_id]
                 .imports
                 .insert(
                     WorldKey::Name(name.clone()),

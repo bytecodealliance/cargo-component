@@ -280,6 +280,16 @@ impl DependencyResolution {
         }
     }
 
+    /// Gets the resolved version.
+    ///
+    /// Returns `None` if the dependency is not resolved from a registry package.
+    pub fn version(&self) -> Option<&Version> {
+        match self {
+            Self::Registry(res) => Some(&res.version),
+            Self::Local(_) => None,
+        }
+    }
+
     /// The key used in sorting and searching the lock file package list.
     ///
     /// Returns `None` if the dependency is not resolved from a registry package.

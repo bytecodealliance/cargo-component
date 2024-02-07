@@ -139,7 +139,7 @@ use bindings::Guest;
 struct Component;
 impl Guest for Component {
     fn bar() -> String {
-        bindings::foo::bar()
+        bindings::test_foo::bar()
     }
 }
 "#;

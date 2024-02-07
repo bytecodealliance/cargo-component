@@ -20,6 +20,7 @@ use registry::{PackageDependencyResolution, PackageResolutionMap};
 use semver::Version;
 use std::{
     borrow::Cow,
+    collections::HashMap,
     env, fs,
     io::{BufRead, BufReader},
     path::{Path, PathBuf},
@@ -91,7 +92,7 @@ pub async fn run_cargo_command(
     cargo_args: &CargoArguments,
     spawn_args: &[String],
 ) -> Result<Vec<PathBuf>> {
-    generate_bindings(config, metadata, packages, cargo_args).await?;
+    let mut import_name_map = generate_bindings(config, metadata, packages, cargo_args).await?;
 
     let cargo = std::env::var("CARGO")
         .map(PathBuf::from)
@@ -312,6 +313,9 @@ pub async fn run_cargo_command(
                             create_component(
                                 config,
                                 metadata,
+                                import_name_map
+                                    .remove(&package.name)
+                                    .expect("package already processed"),
                                 &artifact.path,
                                 is_bin,
                                 artifact.fresh,
@@ -456,7 +460,7 @@ async fn generate_bindings(
     metadata: &Metadata,
     packages: &[PackageComponentMetadata<'_>],
     cargo_args: &CargoArguments,
-) -> Result<()> {
+) -> Result<HashMap<String, HashMap<String, String>>> {
     let last_modified_exe = last_modified_time(&std::env::current_exe()?)?;
     let file_lock = acquire_lock_file_ro(config.terminal(), metadata)?;
     let lock_file = file_lock
@@ -472,19 +476,23 @@ async fn generate_bindings(
         .transpose()?;
 
     let resolver = lock_file.as_ref().map(LockFileResolver::new);
-    let map =
+    let resolution_map =
         create_resolution_map(config, packages, resolver, cargo_args.network_allowed()).await?;
+    let mut import_name_map = HashMap::new();
     for PackageComponentMetadata { package, .. } in packages {
-        let resolution = match map.get(&package.id) {
+        let resolution = match resolution_map.get(&package.id) {
             Some(resolution) => resolution,
             None => continue,
         };
 
-        generate_package_bindings(config, resolution, last_modified_exe).await?;
+        import_name_map.insert(
+            package.name.clone(),
+            generate_package_bindings(config, resolution, last_modified_exe).await?,
+        );
     }
 
     // Update the lock file if it exists or if the new lock file is non-empty
-    let new_lock_file = map.to_lock_file();
+    let new_lock_file = resolution_map.to_lock_file();
     if (lock_file.is_some() || !new_lock_file.packages.is_empty())
         && Some(&new_lock_file) != lock_file.as_ref()
     {
@@ -505,7 +513,7 @@ async fn generate_bindings(
             })?;
     }
 
-    Ok(())
+    Ok(import_name_map)
 }
 
 async fn create_resolution_map<'a>(
@@ -535,7 +543,7 @@ async fn generate_package_bindings(
     config: &Config,
     resolution: &PackageDependencyResolution<'_>,
     last_modified_exe: SystemTime,
-) -> Result<()> {
+) -> Result<HashMap<String, String>> {
     // TODO: make the output path configurable
     let output_dir = resolution
         .metadata
@@ -551,7 +559,7 @@ async fn generate_package_bindings(
         .transpose()?
         .unwrap_or(SystemTime::UNIX_EPOCH);
 
-    let generator = BindingsGenerator::new(resolution)?;
+    let (generator, import_name_map) = BindingsGenerator::new(resolution)?;
     match generator.reason(last_modified_exe, last_modified_output)? {
         Some(reason) => {
             ::log::debug!(
@@ -593,7 +601,7 @@ async fn generate_package_bindings(
         }
     }
 
-    Ok(())
+    Ok(import_name_map)
 }
 
 fn adapter_bytes<'a>(
@@ -648,6 +656,7 @@ fn adapter_bytes<'a>(
 fn create_component(
     config: &Config,
     metadata: &ComponentMetadata,
+    import_name_map: HashMap<String, String>,
     path: &Path,
     binary: bool,
     fresh: bool,
@@ -675,6 +684,7 @@ fn create_component(
 
     let encoder = ComponentEncoder::default()
         .module(&module)?
+        .import_name_map(import_name_map)
         .adapter(
             "wasi_snapshot_preview1",
             &adapter_bytes(config, metadata, binary)?,
