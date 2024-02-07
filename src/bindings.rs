@@ -358,7 +358,7 @@ impl<'a> BindingsGenerator<'a> {
 
         // Merge all of the dependencies first
         for name in order {
-            match deps.remove(&name).unwrap() {
+            match deps.swap_remove(&name).unwrap() {
                 DecodedDependency::Wit {
                     resolution,
                     package,
