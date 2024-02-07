@@ -604,7 +604,7 @@ impl<'a> BindingsGenerator<'a> {
 
             let import_name =
                 format_dep_import(&resolve.packages[package.unwrap()], Some(&name), version);
-            import_name_map.insert(name, import_name);
+            import_name_map.insert(resolve.id_of(name_id).unwrap(), import_name);
 
             if resolve.worlds[target_id]
                 .imports
