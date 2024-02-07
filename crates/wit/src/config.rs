@@ -11,7 +11,7 @@ use std::{
 };
 use toml_edit::Item;
 use url::Url;
-use warg_protocol::registry::PackageId;
+use warg_protocol::registry::PackageName;
 
 /// The default name of the configuration file.
 pub const CONFIG_FILE_NAME: &str = "wit.toml";
@@ -80,7 +80,7 @@ pub struct Config {
     pub version: Version,
     /// The package dependencies.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
-    pub dependencies: HashMap<PackageId, Dependency>,
+    pub dependencies: HashMap<PackageName, Dependency>,
     /// The registries to use for sourcing packages.
     #[serde(default, skip_serializing_if = "HashMap::is_empty")]
     pub registries: HashMap<String, Url>,

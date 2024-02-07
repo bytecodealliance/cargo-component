@@ -49,24 +49,24 @@ async fn validate_the_version_exists() -> Result<()> {
     let (_server, config) = spawn_server(dir.path()).await?;
     config.write_to_file(&dir.path().join("warg-config.json"))?;
 
-    publish_component(&config, "foo:bar", "1.1.0", "(component)", true).await?;
+    publish_component(&config, "test:bar", "1.1.0", "(component)", true).await?;
 
     let project = Project::with_dir(dir.clone(), "foo", "")?;
 
     project
-        .cargo_component("add foo:bar")
+        .cargo_component("add test:bar")
         .assert()
-        .stderr(contains("Added dependency `foo:bar` with version `1.1.0`"))
+        .stderr(contains("Added dependency `test:bar` with version `1.1.0`"))
         .success();
 
     let manifest = fs::read_to_string(project.root().join("Cargo.toml"))?;
-    assert!(contains(r#""foo:bar" = "1.1.0""#).eval(&manifest));
+    assert!(contains(r#""test:bar" = "1.1.0""#).eval(&manifest));
 
     project
-        .cargo_component("add --id foo:bar2 foo:bar@2.0.0")
+        .cargo_component("add --name test:bar2 test:bar@2.0.0")
         .assert()
         .stderr(contains(
-            "component registry package `foo:bar` has no release matching version requirement `^2.0.0`",
+            "component registry package `test:bar` has no release matching version requirement `^2.0.0`",
         ))
         .failure();
 
@@ -79,7 +79,7 @@ async fn adds_dependencies_to_target_component() -> Result<()> {
     let (_server, config) = spawn_server(dir.path()).await?;
     config.write_to_file(&dir.path().join("warg-config.json"))?;
 
-    publish_component(&config, "foo:bar", "1.1.0", "(component)", true).await?;
+    publish_component(&config, "test:bar", "1.1.0", "(component)", true).await?;
 
     let project = Project::with_dir(dir.clone(), "foo_target", "")?;
 
@@ -87,19 +87,19 @@ async fn adds_dependencies_to_target_component() -> Result<()> {
     assert!(!contains("package.metadata.component.target.dependencies").eval(&manifest));
 
     project
-        .cargo_component("add foo:bar --target")
+        .cargo_component("add test:bar --target")
         .assert()
-        .stderr(contains("Added dependency `foo:bar` with version `1.1.0`"));
+        .stderr(contains("Added dependency `test:bar` with version `1.1.0`"));
 
     let manifest = fs::read_to_string(project.root().join("Cargo.toml"))?;
-    assert!(contains(r#""foo:bar" = "1.1.0""#).eval(&manifest));
+    assert!(contains(r#""test:bar" = "1.1.0""#).eval(&manifest));
     assert!(contains("package.metadata.component.target.dependencies").eval(&manifest));
 
     project
-        .cargo_component("add foo:bar --target")
+        .cargo_component("add test:bar --target")
         .assert()
         .stderr(contains(
-            "cannot add dependency `foo:bar` as it conflicts with an existing dependency",
+            "cannot add dependency `test:bar` as it conflicts with an existing dependency",
         ));
 
     Ok(())
@@ -130,22 +130,22 @@ async fn prints_modified_manifest_for_dry_run() -> Result<()> {
     let (_server, config) = spawn_server(dir.path()).await?;
     config.write_to_file(&dir.path().join("warg-config.json"))?;
 
-    publish_component(&config, "foo:bar", "1.2.3", "(component)", true).await?;
+    publish_component(&config, "test:bar", "1.2.3", "(component)", true).await?;
 
     let project = Project::with_dir(dir.clone(), "foo", "")?;
 
     project
-        .cargo_component("add --dry-run foo:bar")
+        .cargo_component("add --dry-run test:bar")
         .assert()
         .stderr(contains(
-            r#"Added dependency `foo:bar` with version `1.2.3`"#,
+            r#"Added dependency `test:bar` with version `1.2.3`"#,
         ))
         .success();
 
     let manifest = fs::read_to_string(project.root().join("Cargo.toml"))?;
 
     // Assert the dependency was added to the manifest
-    assert!(!contains(r#"\"foo:bar\" = "1.2.3""#).eval(&manifest));
+    assert!(!contains(r#"\"test:bar\" = "1.2.3""#).eval(&manifest));
 
     Ok(())
 }

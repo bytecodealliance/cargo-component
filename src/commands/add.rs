@@ -8,7 +8,7 @@ use anyhow::{bail, Context, Result};
 use cargo_component_core::{
     command::CommonOptions,
     registry::{Dependency, DependencyResolution, DependencyResolver, RegistryPackage},
-    VersionedPackageId,
+    VersionedPackageName,
 };
 use cargo_metadata::Package;
 use clap::Args;
@@ -18,7 +18,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use toml_edit::{value, Document, InlineTable, Item, Table, Value};
-use warg_protocol::registry::PackageId;
+use warg_protocol::registry::PackageName;
 
 /// Add a dependency for a WebAssembly component
 #[derive(Args)]
@@ -44,13 +44,13 @@ pub struct AddCommand {
     #[clap(long = "registry", short = 'r', value_name = "REGISTRY")]
     pub registry: Option<String>,
 
-    /// The id of the dependency to use; defaults to the package id.
-    #[clap(long, value_name = "ID")]
-    pub id: Option<PackageId>,
+    /// The name of the dependency to use; defaults to the package name.
+    #[clap(long, value_name = "NAME")]
+    pub name: Option<PackageName>,
 
-    /// The id of the package to add a dependency to.
+    /// The name of the package to add a dependency to.
     #[clap(value_name = "PACKAGE")]
-    pub package: VersionedPackageId,
+    pub package: VersionedPackageName,
 
     /// Add the dependency to the list of target dependencies
     #[clap(long = "target")]
@@ -93,12 +93,12 @@ impl AddCommand {
             )
         })?;
 
-        let id = match &self.id {
-            Some(id) => id,
-            None => &self.package.id,
+        let name = match &self.name {
+            Some(name) => name,
+            None => &self.package.name,
         };
 
-        self.validate(&metadata, id)?;
+        self.validate(&metadata, name)?;
 
         if let Some(path) = self.path.as_ref() {
             self.add_from_path(package, path)?;
@@ -106,18 +106,18 @@ impl AddCommand {
             config.terminal().status(
                 "Added",
                 format!(
-                    "dependency `{id}` from path `{path}`",
+                    "dependency `{name}` from path `{path}`",
                     path = path.to_str().unwrap()
                 ),
             )?;
         } else {
-            let version = self.resolve_version(&config, &metadata, id, true).await?;
+            let version = self.resolve_version(&config, &metadata, name, true).await?;
             let version = version.trim_start_matches('^');
             self.add(package, version)?;
 
             config.terminal().status(
                 "Added",
-                format!("dependency `{id}` with version `{version}`"),
+                format!("dependency `{name}` with version `{version}`"),
             )?;
         }
 
@@ -128,7 +128,7 @@ impl AddCommand {
         &self,
         config: &Config,
         metadata: &ComponentMetadata,
-        id: &PackageId,
+        name: &PackageName,
         network_allowed: bool,
     ) -> Result<String> {
         let mut resolver = DependencyResolver::new(
@@ -139,7 +139,7 @@ impl AddCommand {
             network_allowed,
         )?;
         let dependency = Dependency::Package(RegistryPackage {
-            id: Some(self.package.id.clone()),
+            name: Some(self.package.name.clone()),
             version: self
                 .package
                 .version
@@ -149,7 +149,7 @@ impl AddCommand {
             registry: self.registry.clone(),
         });
 
-        resolver.add_dependency(id, &dependency).await?;
+        resolver.add_dependency(name, &dependency).await?;
 
         let dependencies = resolver.resolve().await?;
         assert_eq!(dependencies.len(), 1);
@@ -222,15 +222,15 @@ impl AddCommand {
 
     fn add(&self, pkg: &Package, version: &str) -> Result<()> {
         self.with_dependencies(pkg, |dependencies| {
-            match self.id.as_ref() {
-                Some(id) => {
-                    dependencies[id.as_ref()] = value(InlineTable::from_iter([
-                        ("package", Value::from(self.package.id.to_string())),
+            match self.name.as_ref() {
+                Some(name) => {
+                    dependencies[name.as_ref()] = value(InlineTable::from_iter([
+                        ("package", Value::from(self.package.name.to_string())),
                         ("version", Value::from(version)),
                     ]));
                 }
                 _ => {
-                    dependencies[self.package.id.as_ref()] = value(version);
+                    dependencies[self.package.name.as_ref()] = value(version);
                 }
             }
             Ok(())
@@ -239,9 +239,9 @@ impl AddCommand {
 
     fn add_from_path(&self, pkg: &Package, path: &Path) -> Result<()> {
         self.with_dependencies(pkg, |dependencies| {
-            let key = match self.id.as_ref() {
-                Some(id) => id.as_ref(),
-                None => self.package.id.as_ref(),
+            let key = match self.name.as_ref() {
+                Some(name) => name.as_ref(),
+                None => self.package.name.as_ref(),
             };
 
             dependencies[key] = value(InlineTable::from_iter([(
@@ -253,20 +253,20 @@ impl AddCommand {
         })
     }
 
-    fn validate(&self, metadata: &ComponentMetadata, id: &PackageId) -> Result<()> {
+    fn validate(&self, metadata: &ComponentMetadata, name: &PackageName) -> Result<()> {
         if self.target {
             match &metadata.section.target {
                 Target::Package { .. } => {
-                    bail!("cannot add dependency `{id}` to a registry package target")
+                    bail!("cannot add dependency `{name}` to a registry package target")
                 }
                 Target::Local { dependencies, .. } => {
-                    if dependencies.contains_key(id) {
-                        bail!("cannot add dependency `{id}` as it conflicts with an existing dependency");
+                    if dependencies.contains_key(name) {
+                        bail!("cannot add dependency `{name}` as it conflicts with an existing dependency");
                     }
                 }
             }
-        } else if metadata.section.dependencies.contains_key(id) {
-            bail!("cannot add dependency `{id}` as it conflicts with an existing dependency");
+        } else if metadata.section.dependencies.contains_key(name) {
+            bail!("cannot add dependency `{name}` as it conflicts with an existing dependency");
         }
 
         Ok(())

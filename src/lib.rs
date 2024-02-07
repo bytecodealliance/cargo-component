@@ -29,7 +29,7 @@ use std::{
 };
 use warg_client::storage::{ContentStorage, PublishEntry, PublishInfo};
 use warg_crypto::signing::PrivateKey;
-use warg_protocol::registry::PackageId;
+use warg_protocol::registry::PackageName;
 use wasm_metadata::{Link, LinkType, RegistryMetadata};
 use wit_component::ComponentEncoder;
 
@@ -732,8 +732,8 @@ pub struct PublishOptions<'a> {
     pub registry_url: &'a str,
     /// Whether to initialize the package or not.
     pub init: bool,
-    /// The id of the package being published.
-    pub id: &'a PackageId,
+    /// The name of the package being published.
+    pub name: &'a PackageName,
     /// The version of the package being published.
     pub version: &'a Version,
     /// The path to the package being published.
@@ -834,7 +834,7 @@ pub async fn publish(config: &Config, options: &PublishOptions<'_>) -> Result<()
     )?;
 
     let mut info = PublishInfo {
-        id: options.id.clone(),
+        name: options.name.clone(),
         head: None,
         entries: Default::default(),
     };
@@ -850,14 +850,14 @@ pub async fn publish(config: &Config, options: &PublishOptions<'_>) -> Result<()
 
     let record_id = client.publish_with_info(options.signing_key, info).await?;
     client
-        .wait_for_publish(options.id, &record_id, Duration::from_secs(1))
+        .wait_for_publish(options.name, &record_id, Duration::from_secs(1))
         .await?;
 
     config.terminal().status(
         "Published",
         format!(
-            "package `{id}` v{version}",
-            id = options.id,
+            "package `{name}` v{version}",
+            name = options.name,
             version = options.version
         ),
     )?;
@@ -909,8 +909,8 @@ pub async fn update_lockfile(
                     config.terminal().status_with_color(
                         if dry_run { "Would remove" } else { "Removing" },
                         format!(
-                            "dependency `{id}` v{version}",
-                            id = old_pkg.id,
+                            "dependency `{name}` v{version}",
+                            name = old_pkg.name,
                             version = old_ver.version,
                         ),
                         Colors::Red,
@@ -932,8 +932,8 @@ pub async fn update_lockfile(
                     config.terminal().status_with_color(
                         if dry_run { "Would remove" } else { "Removing" },
                         format!(
-                            "dependency `{id}` v{version}",
-                            id = old_pkg.id,
+                            "dependency `{name}` v{version}",
+                            name = old_pkg.name,
                             version = old_ver.version,
                         ),
                         Colors::Red,
@@ -947,8 +947,8 @@ pub async fn update_lockfile(
                 config.terminal().status_with_color(
                     if dry_run { "Would update" } else { "Updating" },
                     format!(
-                        "dependency `{id}` v{old} -> v{new}",
-                        id = old_pkg.id,
+                        "dependency `{name}` v{old} -> v{new}",
+                        name = old_pkg.name,
                         old = old_ver.version,
                         new = new_ver.version
                     ),
@@ -971,8 +971,8 @@ pub async fn update_lockfile(
                     config.terminal().status_with_color(
                         if dry_run { "Would add" } else { "Adding" },
                         format!(
-                            "dependency `{id}` v{version}",
-                            id = new_pkg.id,
+                            "dependency `{name}` v{version}",
+                            name = new_pkg.name,
                             version = new_ver.version,
                         ),
                         Colors::Green,
@@ -993,8 +993,8 @@ pub async fn update_lockfile(
                 config.terminal().status_with_color(
                     if dry_run { "Would add" } else { "Adding" },
                     format!(
-                        "dependency `{id}` v{version}",
-                        id = new_pkg.id,
+                        "dependency `{name}` v{version}",
+                        name = new_pkg.name,
                         version = new_ver.version,
                     ),
                     Colors::Green,

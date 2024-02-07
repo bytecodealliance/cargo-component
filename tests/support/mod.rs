@@ -18,7 +18,7 @@ use warg_client::{
     FileSystemClient,
 };
 use warg_crypto::signing::PrivateKey;
-use warg_protocol::registry::PackageId;
+use warg_protocol::{operator::NamespaceState, registry::PackageName};
 use warg_server::{policy::content::WasmContentPolicy, Config, Server};
 use wasmparser::{Chunk, Encoding, Parser, Payload, Validator, WasmFeatures};
 use wit_parser::{Resolve, UnresolvedPackage};
@@ -61,7 +61,7 @@ pub fn cargo_component(args: &str) -> Command {
 
 pub async fn publish(
     config: &warg_client::Config,
-    id: &PackageId,
+    name: &PackageName,
     version: &str,
     content: Vec<u8>,
     init: bool,
@@ -90,7 +90,7 @@ pub async fn publish(
         .publish_with_info(
             &PrivateKey::decode(test_signing_key().to_string()).unwrap(),
             PublishInfo {
-                id: id.clone(),
+                name: name.clone(),
                 head: None,
                 entries,
             },
@@ -99,7 +99,7 @@ pub async fn publish(
         .context("failed to publish component")?;
 
     client
-        .wait_for_publish(id, &record_id, Duration::from_secs(1))
+        .wait_for_publish(name, &record_id, Duration::from_secs(1))
         .await?;
 
     Ok(())
@@ -162,6 +162,11 @@ pub async fn spawn_server(root: &Path) -> Result<(ServerInstance, warg_client::C
     let shutdown = CancellationToken::new();
     let config = Config::new(
         PrivateKey::decode(test_operator_key().to_string())?,
+        Some(
+            [("test".to_string(), NamespaceState::Defined)]
+                .into_iter()
+                .collect(),
+        ),
         root.join("server"),
     )
     .with_addr(([127, 0, 0, 1], 0))

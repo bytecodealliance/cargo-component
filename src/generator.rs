@@ -13,7 +13,7 @@ use std::{
     path::Path,
     process::{Command, Stdio},
 };
-use warg_protocol::registry::PackageId;
+use warg_protocol::registry::PackageName;
 use wit_bindgen_rust::to_rust_ident;
 use wit_component::DecodedWasm;
 use wit_parser::{
@@ -200,7 +200,7 @@ impl fmt::Display for UseTrie {
 /// The generated source defines a component that will implement the expected
 /// export traits for the given world.
 pub struct SourceGenerator<'a> {
-    id: &'a PackageId,
+    name: &'a PackageName,
     path: &'a Path,
     format: bool,
 }
@@ -210,8 +210,8 @@ impl<'a> SourceGenerator<'a> {
     /// a binary-encoded target wit package.
     ///
     /// If `format` is true, then `cargo fmt` will be run on the generated source.
-    pub fn new(id: &'a PackageId, path: &'a Path, format: bool) -> Self {
-        Self { id, path, format }
+    pub fn new(name: &'a PackageName, path: &'a Path, format: bool) -> Self {
+        Self { name, path, format }
     }
 
     /// Generates the Rust source code for the given world.
@@ -319,16 +319,16 @@ impl<'a> SourceGenerator<'a> {
     fn decode(&self, world: Option<&str>) -> Result<(Resolve, WorldId)> {
         let bytes = fs::read(self.path).with_context(|| {
             format!(
-                "failed to read the content of target package `{id}` path `{path}`",
-                id = self.id,
+                "failed to read the content of target package `{name}` path `{path}`",
+                name = self.name,
                 path = self.path.display()
             )
         })?;
 
         let decoded = wit_component::decode(&bytes).with_context(|| {
             format!(
-                "failed to decode the content of target package `{id}` path `{path}`",
-                id = self.id,
+                "failed to decode the content of target package `{name}` path `{path}`",
+                name = self.name,
                 path = self.path.display()
             )
         })?;
@@ -337,8 +337,8 @@ impl<'a> SourceGenerator<'a> {
             DecodedWasm::WitPackage(resolve, package) => {
                 let world = resolve.select_world(package, world).with_context(|| {
                     format!(
-                        "failed to select world from target package `{id}`",
-                        id = self.id
+                        "failed to select world from target package `{name}`",
+                        name = self.name
                     )
                 })?;
                 Ok((resolve, world))

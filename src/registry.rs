@@ -9,7 +9,7 @@ use cargo_component_core::{
 use semver::Version;
 use std::collections::HashMap;
 use warg_crypto::hash::AnyHash;
-use warg_protocol::registry::PackageId;
+use warg_protocol::registry::PackageName;
 
 /// Represents a resolution of dependencies for a Cargo package.
 #[derive(Debug, Clone)]
@@ -46,7 +46,7 @@ impl<'a> PackageDependencyResolution<'a> {
     }
 
     /// Iterates over all dependency resolutions of the package.
-    pub fn all(&self) -> impl Iterator<Item = (&PackageId, &DependencyResolution)> {
+    pub fn all(&self) -> impl Iterator<Item = (&PackageName, &DependencyResolution)> {
         self.target_resolutions
             .iter()
             .chain(self.resolutions.iter())
@@ -127,21 +127,21 @@ impl<'a> PackageResolutionMap<'a> {
 
     /// Converts the resolution map into a lock file.
     pub fn to_lock_file(&self) -> LockFile {
-        type PackageKey = (PackageId, Option<String>);
+        type PackageKey = (PackageName, Option<String>);
         type VersionsMap = HashMap<String, (Version, AnyHash)>;
         let mut packages: HashMap<PackageKey, VersionsMap> = HashMap::new();
 
         for resolution in self.0.values() {
             for (_, dep) in resolution.all() {
                 match dep.key() {
-                    Some((id, registry)) => {
+                    Some((name, registry)) => {
                         let pkg = match dep {
                             DependencyResolution::Registry(pkg) => pkg,
                             DependencyResolution::Local(_) => unreachable!(),
                         };
 
                         let prev = packages
-                            .entry((id.clone(), registry.map(str::to_string)))
+                            .entry((name.clone(), registry.map(str::to_string)))
                             .or_default()
                             .insert(
                                 pkg.requirement.to_string(),
@@ -160,7 +160,7 @@ impl<'a> PackageResolutionMap<'a> {
 
         let mut packages: Vec<_> = packages
             .into_iter()
-            .map(|((id, registry), versions)| {
+            .map(|((name, registry), versions)| {
                 let mut versions: Vec<LockedPackageVersion> = versions
                     .into_iter()
                     .map(|(requirement, (version, digest))| LockedPackageVersion {
@@ -173,7 +173,7 @@ impl<'a> PackageResolutionMap<'a> {
                 versions.sort_by(|a, b| a.key().cmp(b.key()));
 
                 LockedPackage {
-                    id,
+                    name,
                     registry,
                     versions,
                 }

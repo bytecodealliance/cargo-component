@@ -5,7 +5,7 @@
 use anyhow::Context;
 use semver::VersionReq;
 use std::str::FromStr;
-use warg_protocol::registry::PackageId;
+use warg_protocol::registry::PackageName;
 
 pub mod command;
 pub mod keyring;
@@ -14,22 +14,22 @@ pub mod progress;
 pub mod registry;
 pub mod terminal;
 
-/// Represents a versioned component package identifier.
+/// Represents a versioned component package name.
 #[derive(Clone)]
-pub struct VersionedPackageId {
-    /// The package identifier.
-    pub id: PackageId,
+pub struct VersionedPackageName {
+    /// The package name.
+    pub name: PackageName,
     /// The optional package version.
     pub version: Option<VersionReq>,
 }
 
-impl FromStr for VersionedPackageId {
+impl FromStr for VersionedPackageName {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s.split_once('@') {
-            Some((id, version)) => Ok(Self {
-                id: id.parse()?,
+            Some((name, version)) => Ok(Self {
+                name: name.parse()?,
                 version: Some(
                     version
                         .parse()
@@ -37,7 +37,7 @@ impl FromStr for VersionedPackageId {
                 ),
             }),
             None => Ok(Self {
-                id: s.parse()?,
+                name: s.parse()?,
                 version: None,
             }),
         }

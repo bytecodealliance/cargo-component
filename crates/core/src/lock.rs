@@ -11,7 +11,7 @@ use std::{
 };
 use toml_edit::{Document, Item, Value};
 use warg_crypto::hash::AnyHash;
-use warg_protocol::registry::PackageId;
+use warg_protocol::registry::PackageName;
 
 /// The file format version of the lock file.
 const LOCK_FILE_VERSION: i64 = 1;
@@ -20,8 +20,8 @@ const LOCK_FILE_VERSION: i64 = 1;
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub struct LockedPackage {
-    /// The id of the locked package.
-    pub id: PackageId,
+    /// The name of the locked package.
+    pub name: PackageName,
     /// The registry the package was resolved from.
     ///
     /// Defaults to the default registry if not specified.
@@ -37,9 +37,9 @@ pub struct LockedPackage {
 
 impl LockedPackage {
     /// Gets the key used in sorting and searching the package list.
-    pub fn key(&self) -> (&PackageId, &str) {
+    pub fn key(&self) -> (&PackageName, &str) {
         (
-            &self.id,
+            &self.name,
             self.registry.as_deref().unwrap_or(DEFAULT_REGISTRY_NAME),
         )
     }
@@ -81,13 +81,13 @@ impl<'a> LockFileResolver<'a> {
     pub fn resolve(
         &'a self,
         registry: &str,
-        id: &PackageId,
+        name: &PackageName,
         requirement: &VersionReq,
     ) -> Result<Option<&'a LockedPackageVersion>> {
         if let Some(pkg) = self
             .0
             .packages
-            .binary_search_by_key(&(id, registry), LockedPackage::key)
+            .binary_search_by_key(&(name, registry), LockedPackage::key)
             .ok()
             .map(|i| &self.0.packages[i])
         {
@@ -96,12 +96,12 @@ impl<'a> LockFileResolver<'a> {
                 .binary_search_by_key(&requirement.to_string().as_str(), LockedPackageVersion::key)
             {
                 let locked = &pkg.versions[index];
-                log::info!("dependency package `{id}` from registry `{registry}` with requirement `{requirement}` was resolved by the lock file to version {version}", version = locked.version);
+                log::info!("dependency package `{name}` from registry `{registry}` with requirement `{requirement}` was resolved by the lock file to version {version}", version = locked.version);
                 return Ok(Some(locked));
             }
         }
 
-        log::info!("dependency package `{id}` from registry `{registry}` with requirement `{requirement}` was not in the lock file");
+        log::info!("dependency package `{name}` from registry `{registry}` with requirement `{requirement}` was not in the lock file");
         Ok(None)
     }
 }

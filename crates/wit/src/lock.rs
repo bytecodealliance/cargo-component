@@ -9,7 +9,7 @@ use cargo_component_core::{
 use semver::Version;
 use std::{collections::HashMap, path::Path};
 use warg_crypto::hash::AnyHash;
-use warg_protocol::registry::PackageId;
+use warg_protocol::registry::PackageName;
 
 /// The name of the lock file.
 pub const LOCK_FILE_NAME: &str = "wit.lock";
@@ -57,7 +57,7 @@ pub(crate) fn acquire_lock_file_rw(terminal: &Terminal, config_path: &Path) -> R
 
 /// Constructs a `LockFile` from a `DependencyResolutionMap`.
 pub fn to_lock_file(map: &DependencyResolutionMap) -> LockFile {
-    type PackageKey = (PackageId, Option<String>);
+    type PackageKey = (PackageName, Option<String>);
     type VersionsMap = HashMap<String, (Version, AnyHash)>;
     let mut packages: HashMap<PackageKey, VersionsMap> = HashMap::new();
 
@@ -88,7 +88,7 @@ pub fn to_lock_file(map: &DependencyResolutionMap) -> LockFile {
 
     let mut packages: Vec<_> = packages
         .into_iter()
-        .map(|((id, registry), versions)| {
+        .map(|((name, registry), versions)| {
             let mut versions: Vec<LockedPackageVersion> = versions
                 .into_iter()
                 .map(|(requirement, (version, digest))| LockedPackageVersion {
@@ -101,7 +101,7 @@ pub fn to_lock_file(map: &DependencyResolutionMap) -> LockFile {
             versions.sort_by(|a, b| a.key().cmp(b.key()));
 
             LockedPackage {
-                id,
+                name,
                 registry,
                 versions,
             }

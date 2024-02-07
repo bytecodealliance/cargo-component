@@ -4,24 +4,24 @@ use cargo_component_core::{
     command::CommonOptions,
     registry::{Dependency, DependencyResolution, DependencyResolver, RegistryPackage},
     terminal::Terminal,
-    VersionedPackageId,
+    VersionedPackageName,
 };
 use clap::Args;
 use semver::VersionReq;
 use std::path::PathBuf;
-use warg_protocol::registry::PackageId;
+use warg_protocol::registry::PackageName;
 
 async fn resolve_version(
     config: &Config,
     warg_config: &warg_client::Config,
-    package: &VersionedPackageId,
+    package: &VersionedPackageName,
     registry: &Option<String>,
     terminal: &Terminal,
 ) -> Result<String> {
     let mut resolver =
         DependencyResolver::new(warg_config, &config.registries, None, terminal, true)?;
     let dependency = Dependency::Package(RegistryPackage {
-        id: Some(package.id.clone()),
+        name: Some(package.name.clone()),
         version: package
             .version
             .as_ref()
@@ -30,7 +30,7 @@ async fn resolve_version(
         registry: registry.clone(),
     });
 
-    resolver.add_dependency(&package.id, &dependency).await?;
+    resolver.add_dependency(&package.name, &dependency).await?;
 
     let dependencies = resolver.resolve().await?;
     assert_eq!(dependencies.len(), 1);
@@ -61,9 +61,9 @@ pub struct AddCommand {
     #[clap(long = "registry", short = 'r', value_name = "REGISTRY")]
     pub registry: Option<String>,
 
-    /// The id of the dependency to use; defaults to the package id.
-    #[clap(long, value_name = "ID")]
-    pub id: Option<PackageId>,
+    /// The name of the dependency to use; defaults to the package name.
+    #[clap(long, value_name = "NAME")]
+    pub name: Option<PackageName>,
 
     /// Add a package dependency to a file or directory.
     #[clap(long = "path", value_name = "PATH")]
@@ -71,7 +71,7 @@ pub struct AddCommand {
 
     /// The id of the package to add a dependency to.
     #[clap(value_name = "PACKAGE")]
-    pub package: VersionedPackageId,
+    pub package: VersionedPackageName,
 }
 
 impl AddCommand {
@@ -82,9 +82,9 @@ impl AddCommand {
         let (mut config, config_path) = Config::from_default_file()?
             .with_context(|| format!("failed to find configuration file `{CONFIG_FILE_NAME}`"))?;
 
-        let id = self.id.as_ref().unwrap_or(&self.package.id);
-        if config.dependencies.contains_key(id) {
-            bail!("cannot add dependency `{id}` as it conflicts with an existing dependency");
+        let name = self.name.as_ref().unwrap_or(&self.package.name);
+        if config.dependencies.contains_key(name) {
+            bail!("cannot add dependency `{name}` as it conflicts with an existing dependency");
         }
 
         let warg_config = warg_client::Config::from_default_file()?.unwrap_or_default();
@@ -93,10 +93,10 @@ impl AddCommand {
             Some(path) => {
                 config
                     .dependencies
-                    .insert(id.clone(), Dependency::Local(path.to_path_buf()));
+                    .insert(name.clone(), Dependency::Local(path.to_path_buf()));
 
                 format!(
-                    "dependency `{id}` from path `{path}`{dry_run}",
+                    "dependency `{name}` from path `{path}`{dry_run}",
                     path = path.display(),
                     dry_run = if self.dry_run { " (dry run)" } else { "" }
                 )
@@ -112,19 +112,17 @@ impl AddCommand {
                 .await?;
 
                 let package = RegistryPackage {
-                    id: self.id.is_some().then(|| self.package.id.clone()),
+                    name: self.name.is_some().then(|| self.package.name.clone()),
                     version: version.parse().expect("expected a valid version"),
                     registry: self.registry,
                 };
 
-                let id = self.id.as_ref().unwrap_or(&self.package.id);
-
                 config
                     .dependencies
-                    .insert(id.clone(), Dependency::Package(package));
+                    .insert(name.clone(), Dependency::Package(package));
 
                 format!(
-                    "dependency `{id}` with version `{version}`{dry_run}",
+                    "dependency `{name}` with version `{version}`{dry_run}",
                     dry_run = if self.dry_run { " (dry run)" } else { "" }
                 )
             }

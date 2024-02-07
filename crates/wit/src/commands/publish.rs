@@ -7,7 +7,7 @@ use cargo_component_core::{command::CommonOptions, keyring::get_signing_key, reg
 use clap::Args;
 use warg_client::RegistryUrl;
 use warg_crypto::signing::PrivateKey;
-use warg_protocol::registry::PackageId;
+use warg_protocol::registry::PackageName;
 
 /// Publish a WIT package to a registry.
 #[derive(Args)]
@@ -35,7 +35,7 @@ pub struct PublishCommand {
 
     /// Override the package name to publish.
     #[clap(long, value_name = "NAME")]
-    pub package: Option<PackageId>,
+    pub package: Option<PackageName>,
 }
 
 impl PublishCommand {

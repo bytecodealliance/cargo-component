@@ -7,7 +7,7 @@ use std::{fs, rc::Rc};
 use tempfile::TempDir;
 use toml_edit::{value, Array};
 use warg_client::Client;
-use warg_protocol::registry::PackageId;
+use warg_protocol::registry::PackageName;
 use wasm_metadata::LinkType;
 
 mod support;
@@ -30,9 +30,9 @@ async fn it_publishes_a_component() -> Result<()> {
 
     publish_wit(
         &config,
-        "my:world",
+        "test:world",
         "1.0.0",
-        r#"package my:%world@1.0.0;
+        r#"package test:%world@1.0.0;
 world foo {
     import foo: func() -> string;
     export bar: func() -> string;
@@ -41,7 +41,7 @@ world foo {
     )
     .await?;
 
-    let project = Project::with_dir(dir.clone(), "foo", "--namespace test --target my:world")?;
+    let project = Project::with_dir(dir.clone(), "foo", "--namespace test --target test:world")?;
 
     // Ensure there's a using declaration in the generated source
     let source = fs::read_to_string(project.root().join("src/lib.rs"))?;
@@ -60,7 +60,7 @@ world foo {
     let contents = fs::read_to_string(&path)
         .with_context(|| format!("failed to read lock file `{path}`", path = path.display()))?;
 
-    assert!(contents.contains("id = \"my:world\""));
+    assert!(contents.contains("name = \"test:world\""));
     assert!(contents.contains("version = \"1.0.0\""));
     Ok(())
 }
@@ -73,9 +73,9 @@ async fn it_fails_if_package_does_not_exist() -> Result<()> {
 
     publish_wit(
         &config,
-        "my:world",
+        "test:world",
         "1.0.0",
-        r#"package my:%world@1.0.0;
+        r#"package test:%world@1.0.0;
 world foo {
     import foo: func() -> string;
     export bar: func() -> string;
@@ -84,7 +84,7 @@ world foo {
     )
     .await?;
 
-    let project = Project::with_dir(dir.clone(), "foo", "--namespace test --target my:world")?;
+    let project = Project::with_dir(dir.clone(), "foo", "--namespace test --target test:world")?;
 
     project
         .cargo_component("publish")
@@ -104,9 +104,9 @@ async fn it_publishes_a_dependency() -> Result<()> {
 
     publish_wit(
         &config,
-        "my:world",
+        "test:world",
         "1.0.0",
-        r#"package my:%world@1.0.0;
+        r#"package test:%world@1.0.0;
 world foo {
     export bar: func() -> string;
 }"#,
@@ -114,7 +114,11 @@ world foo {
     )
     .await?;
 
-    let project = Project::with_dir(dir.clone(), "foo", "--namespace test --target my:world/foo")?;
+    let project = Project::with_dir(
+        dir.clone(),
+        "foo",
+        "--namespace test --target test:world/foo",
+    )?;
 
     project
         .cargo_component("publish --init")
@@ -125,7 +129,7 @@ world foo {
 
     validate_component(&project.release_wasm("foo"))?;
 
-    let project = Project::with_dir(dir.clone(), "bar", "--namespace test --target my:world")?;
+    let project = Project::with_dir(dir.clone(), "bar", "--namespace test --target test:world")?;
 
     project
         .cargo_component("add test:foo")
@@ -172,7 +176,7 @@ async fn it_publishes_with_registry_metadata() -> Result<()> {
     let homepage = "https://example.com/home";
     let repository = "https://example.com/repo";
 
-    let project = Project::with_dir(dir.clone(), "foo", "")?;
+    let project = Project::with_dir(dir.clone(), "foo", "--namespace test")?;
     project.update_manifest(|mut doc| {
         let package = &mut doc["package"];
         package["authors"] = value(Array::from_iter(authors));
@@ -189,14 +193,14 @@ async fn it_publishes_with_registry_metadata() -> Result<()> {
         .cargo_component("publish --init")
         .env("CARGO_COMPONENT_PUBLISH_KEY", test_signing_key())
         .assert()
-        .stderr(contains("Published package `component:foo` v0.1.0"))
+        .stderr(contains("Published package `test:foo` v0.1.0"))
         .success();
 
     validate_component(&project.release_wasm("foo"))?;
 
     let client = Client::new_with_config(None, &config)?;
     let download = client
-        .download_exact(&PackageId::new("component:foo")?, &Version::parse("0.1.0")?)
+        .download_exact(&PackageName::new("test:foo")?, &Version::parse("0.1.0")?)
         .await?;
 
     let bytes = fs::read(&download.path).with_context(|| {

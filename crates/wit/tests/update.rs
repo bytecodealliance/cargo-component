@@ -35,20 +35,20 @@ async fn update_without_changes_is_a_noop() -> Result<()> {
     config.write_to_file(&dir.path().join("warg-config.json"))?;
 
     let project = Project::with_dir(dir.clone(), "bar", "")?;
-    project.file("bar.wit", "package foo:bar;\n")?;
+    project.file("bar.wit", "package test:bar;\n")?;
     project
         .wit("publish --init")
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
-        .stderr(contains("Published package `foo:bar` v0.1.0"))
+        .stderr(contains("Published package `test:bar` v0.1.0"))
         .success();
 
     let project = Project::with_dir(dir.clone(), "baz", "")?;
-    project.file("baz.wit", "package foo:baz;\n")?;
+    project.file("baz.wit", "package test:baz;\n")?;
     project
-        .wit("add foo:bar")
+        .wit("add test:bar")
         .assert()
-        .stderr(contains("Added dependency `foo:bar` with version `0.1.0"))
+        .stderr(contains("Added dependency `test:bar` with version `0.1.0"))
         .success();
 
     project
@@ -61,7 +61,7 @@ async fn update_without_changes_is_a_noop() -> Result<()> {
         .wit("update")
         .assert()
         .success()
-        .stderr(contains("foo:bar").not());
+        .stderr(contains("test:bar").not());
 
     Ok(())
 }
@@ -73,20 +73,20 @@ async fn test_update_without_compatible_changes_is_a_noop() -> Result<()> {
     config.write_to_file(&dir.path().join("warg-config.json"))?;
 
     let project = Project::with_dir(dir.clone(), "bar", "")?;
-    project.file("bar.wit", "package foo:bar;\n")?;
+    project.file("bar.wit", "package test:bar;\n")?;
     project
         .wit("publish --init")
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
-        .stderr(contains("Published package `foo:bar` v0.1.0"))
+        .stderr(contains("Published package `test:bar` v0.1.0"))
         .success();
 
     let project = Project::with_dir(dir.clone(), "baz", "")?;
-    project.file("baz.wit", "package foo:baz;\n")?;
+    project.file("baz.wit", "package test:baz;\n")?;
     project
-        .wit("add foo:bar")
+        .wit("add test:bar")
         .assert()
-        .stderr(contains("Added dependency `foo:bar` with version `0.1.0"))
+        .stderr(contains("Added dependency `test:bar` with version `0.1.0"))
         .success();
 
     project
@@ -104,14 +104,14 @@ async fn test_update_without_compatible_changes_is_a_noop() -> Result<()> {
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .current_dir(dir.path().join("bar"))
         .assert()
-        .stderr(contains("Published package `foo:bar` v1.0.0"))
+        .stderr(contains("Published package `test:bar` v1.0.0"))
         .success();
 
     project
         .wit("update")
         .assert()
         .success()
-        .stderr(contains("foo:bar").not());
+        .stderr(contains("test:bar").not());
 
     Ok(())
 }
@@ -123,7 +123,7 @@ async fn update_with_compatible_changes() -> Result<()> {
     config.write_to_file(&dir.path().join("warg-config.json"))?;
 
     let project = Project::with_dir(dir.clone(), "bar", "")?;
-    project.file("bar.wit", "package foo:bar;\n")?;
+    project.file("bar.wit", "package test:bar;\n")?;
     project.file(
         "wit.toml",
         "version = \"1.0.0\"\n[dependencies]\n[registries]\n",
@@ -133,15 +133,15 @@ async fn update_with_compatible_changes() -> Result<()> {
         .wit("publish --init")
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
-        .stderr(contains("Published package `foo:bar` v1.0.0"))
+        .stderr(contains("Published package `test:bar` v1.0.0"))
         .success();
 
     let project = Project::with_dir(dir.clone(), "baz", "")?;
-    project.file("baz.wit", "package foo:baz;\n")?;
+    project.file("baz.wit", "package test:baz;\n")?;
     project
-        .wit("add foo:bar")
+        .wit("add test:bar")
         .assert()
-        .stderr(contains("Added dependency `foo:bar` with version `1.0.0"))
+        .stderr(contains("Added dependency `test:bar` with version `1.0.0"))
         .success();
 
     project
@@ -159,14 +159,14 @@ async fn update_with_compatible_changes() -> Result<()> {
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .current_dir(dir.path().join("bar"))
         .assert()
-        .stderr(contains("Published package `foo:bar` v1.1.0"))
+        .stderr(contains("Published package `test:bar` v1.1.0"))
         .success();
 
     project
         .wit("update")
         .assert()
         .success()
-        .stderr(contains("Updating dependency `foo:bar` v1.0.0 -> v1.1.0"));
+        .stderr(contains("Updating dependency `test:bar` v1.0.0 -> v1.1.0"));
 
     let lock_file = fs::read_to_string(project.root().join("wit.lock"))?;
     assert!(contains("version = \"1.1.0\"").eval(&lock_file));
@@ -181,7 +181,7 @@ async fn update_with_compatible_changes_is_noop_for_dryrun() -> Result<()> {
     config.write_to_file(&dir.path().join("warg-config.json"))?;
 
     let project = Project::with_dir(dir.clone(), "bar", "")?;
-    project.file("bar.wit", "package foo:bar;\n")?;
+    project.file("bar.wit", "package test:bar;\n")?;
     project.file(
         "wit.toml",
         "version = \"1.0.0\"\n[dependencies]\n[registries]\n",
@@ -191,15 +191,15 @@ async fn update_with_compatible_changes_is_noop_for_dryrun() -> Result<()> {
         .wit("publish --init")
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
-        .stderr(contains("Published package `foo:bar` v1.0.0"))
+        .stderr(contains("Published package `test:bar` v1.0.0"))
         .success();
 
     let project = Project::with_dir(dir.clone(), "baz", "")?;
-    project.file("baz.wit", "package foo:baz;\n")?;
+    project.file("baz.wit", "package test:baz;\n")?;
     project
-        .wit("add foo:bar")
+        .wit("add test:bar")
         .assert()
-        .stderr(contains("Added dependency `foo:bar` with version `1.0.0"))
+        .stderr(contains("Added dependency `test:bar` with version `1.0.0"))
         .success();
 
     project
@@ -217,11 +217,11 @@ async fn update_with_compatible_changes_is_noop_for_dryrun() -> Result<()> {
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .current_dir(dir.path().join("bar"))
         .assert()
-        .stderr(contains("Published package `foo:bar` v1.1.0"))
+        .stderr(contains("Published package `test:bar` v1.1.0"))
         .success();
 
     project.wit("update --dry-run").assert().success().stderr(
-        contains("Would update dependency `foo:bar` v1.0.0 -> v1.1.0").and(contains(
+        contains("Would update dependency `test:bar` v1.0.0 -> v1.1.0").and(contains(
             "warning: not updating lock file due to --dry-run option",
         )),
     );
@@ -239,7 +239,7 @@ async fn update_with_changed_dependencies() -> Result<()> {
     config.write_to_file(&dir.path().join("warg-config.json"))?;
 
     let project = Project::with_dir(dir.clone(), "bar", "")?;
-    project.file("bar.wit", "package foo:bar;\n")?;
+    project.file("bar.wit", "package test:bar;\n")?;
     project.file(
         "wit.toml",
         "version = \"1.0.0\"\n[dependencies]\n[registries]\n",
@@ -249,11 +249,11 @@ async fn update_with_changed_dependencies() -> Result<()> {
         .wit("publish --init")
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
-        .stderr(contains("Published package `foo:bar` v1.0.0"))
+        .stderr(contains("Published package `test:bar` v1.0.0"))
         .success();
 
     let project = Project::with_dir(dir.clone(), "baz", "")?;
-    project.file("baz.wit", "package foo:baz;\n")?;
+    project.file("baz.wit", "package test:baz;\n")?;
     project.file(
         "wit.toml",
         "version = \"1.0.0\"\n[dependencies]\n[registries]\n",
@@ -263,15 +263,15 @@ async fn update_with_changed_dependencies() -> Result<()> {
         .wit("publish --init")
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
-        .stderr(contains("Published package `foo:baz` v1.0.0"))
+        .stderr(contains("Published package `test:baz` v1.0.0"))
         .success();
 
     let project = Project::with_dir(dir.clone(), "qux", "")?;
-    project.file("qux.wit", "package foo:qux;\n")?;
+    project.file("qux.wit", "package test:qux;\n")?;
     project
-        .wit("add foo:bar")
+        .wit("add test:bar")
         .assert()
-        .stderr(contains("Added dependency `foo:bar` with version `1.0.0"))
+        .stderr(contains("Added dependency `test:bar` with version `1.0.0"))
         .success();
 
     project
@@ -282,15 +282,15 @@ async fn update_with_changed_dependencies() -> Result<()> {
 
     project.file(
         "wit.toml",
-        "version = \"1.0.0\"\n[dependencies]\n\"foo:baz\" = \"1.0.0\"\n[registries]\n",
+        "version = \"1.0.0\"\n[dependencies]\n\"test:baz\" = \"1.0.0\"\n[registries]\n",
     )?;
 
     project
         .wit("update")
         .assert()
         .stderr(
-            contains("Removing dependency `foo:bar` v1.0.0")
-                .and(contains("Adding dependency `foo:baz` v1.0.0")),
+            contains("Removing dependency `test:bar` v1.0.0")
+                .and(contains("Adding dependency `test:baz` v1.0.0")),
         )
         .success();
 

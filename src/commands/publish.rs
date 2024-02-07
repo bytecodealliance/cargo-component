@@ -126,7 +126,7 @@ impl PublishCommand {
             )
         })?;
 
-        let id = component_metadata.section.package.as_ref().with_context(|| {
+        let name = component_metadata.section.package.as_ref().with_context(|| {
             format!(
                 "package `{name}` is missing a `package.metadata.component.package` setting in manifest `{path}`",
                 name = package.name,
@@ -186,7 +186,7 @@ impl PublishCommand {
             package,
             registry_url,
             init: self.init,
-            id,
+            name,
             version: &component_metadata.version,
             path: &outputs[0],
             signing_key: &signing_key,

@@ -17,7 +17,7 @@ use std::{
     time::SystemTime,
 };
 use url::Url;
-use warg_protocol::registry::PackageId;
+use warg_protocol::registry::PackageName;
 
 /// The default directory to look for a target WIT file.
 pub const DEFAULT_WIT_DIR: &str = "wit";
@@ -81,8 +81,8 @@ pub struct Bindings {
 pub enum Target {
     /// The target is a world from a registry package.
     Package {
-        /// The id of the target package (e.g. `wasi:http`).
-        id: PackageId,
+        /// The name of the target package (e.g. `wasi:http`).
+        name: PackageName,
         /// The registry package being targeted.
         package: RegistryPackage,
         /// The name of the world being targeted.
@@ -107,16 +107,16 @@ pub enum Target {
         /// [select-world]: https://docs.rs/wit-parser/latest/wit_parser/struct.Resolve.html#method.select_world
         world: Option<String>,
         /// The dependencies of the wit document being targeted.
-        dependencies: HashMap<PackageId, Dependency>,
+        dependencies: HashMap<PackageName, Dependency>,
     },
 }
 
 impl Target {
     /// Gets the dependencies of the target.
-    pub fn dependencies(&self) -> Cow<HashMap<PackageId, Dependency>> {
+    pub fn dependencies(&self) -> Cow<HashMap<PackageName, Dependency>> {
         match self {
-            Self::Package { id, package, .. } => Cow::Owned(HashMap::from_iter([(
-                id.clone(),
+            Self::Package { name, package, .. } => Cow::Owned(HashMap::from_iter([(
+                name.clone(),
                 Dependency::Package(package.clone()),
             )])),
             Self::Local { dependencies, .. } => Cow::Borrowed(dependencies),
@@ -145,29 +145,29 @@ impl FromStr for Target {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self> {
-        let (id, version) = match s.split_once('@') {
-            Some((id, version)) => (
-                id,
+        let (name, version) = match s.split_once('@') {
+            Some((name, version)) => (
+                name,
                 version
                     .parse()
                     .with_context(|| format!("invalid target version `{version}`"))?,
             ),
-            None => bail!("expected target format `<package-id>[/<world>]@<version>`"),
+            None => bail!("expected target format `<package-name>[/<world>]@<version>`"),
         };
 
-        let (id, world) = match id.split_once('/') {
-            Some((id, world)) => {
+        let (name, world) = match name.split_once('/') {
+            Some((name, world)) => {
                 wit_parser::validate_id(world)
                     .with_context(|| format!("invalid target world name `{world}`"))?;
-                (id, Some(world.to_string()))
+                (name, Some(world.to_string()))
             }
-            None => (id, None),
+            None => (name, None),
         };
 
         Ok(Self::Package {
-            id: id.parse()?,
+            name: name.parse()?,
             package: RegistryPackage {
-                id: None,
+                name: None,
                 version,
                 registry: None,
             },
@@ -209,7 +209,7 @@ impl<'de> Deserialize<'de> for Target {
                     world: Option<String>,
                     registry: Option<String>,
                     path: Option<PathBuf>,
-                    dependencies: HashMap<PackageId, Dependency>,
+                    dependencies: HashMap<PackageName, Dependency>,
                 }
 
                 let entry = Entry::deserialize(MapAccessDeserializer::new(map))?;
@@ -225,9 +225,9 @@ impl<'de> Deserialize<'de> for Target {
                         }
 
                         Ok(Target::Package {
-                            id: package.parse().map_err(de::Error::custom)?,
+                            name: package.parse().map_err(de::Error::custom)?,
                             package: RegistryPackage {
-                                id: None,
+                                name: None,
                                 version: entry
                                     .version
                                     .ok_or_else(|| de::Error::missing_field("version"))?,
@@ -268,14 +268,14 @@ impl<'de> Deserialize<'de> for Target {
 #[derive(Default, Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct ComponentSection {
-    /// The package id of the component, for publishing.
-    pub package: Option<PackageId>,
+    /// The package name of the component, for publishing.
+    pub package: Option<PackageName>,
     /// The world targeted by the component.
     pub target: Target,
     /// The path to the WASI adapter to use.
     pub adapter: Option<PathBuf>,
     /// The dependencies of the component.
-    pub dependencies: HashMap<PackageId, Dependency>,
+    pub dependencies: HashMap<PackageName, Dependency>,
     /// The registries to use for the component.
     pub registries: HashMap<String, Url>,
     /// The configuration for bindings generation.

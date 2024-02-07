@@ -258,13 +258,13 @@ impl NewCommand {
             if let Some((resolution, world)) = target.as_ref() {
                 component["target"] = match world {
                     Some(world) => value(format!(
-                        "{id}/{world}@{version}",
-                        id = resolution.id,
+                        "{name}/{world}@{version}",
+                        name = resolution.name,
                         version = resolution.version
                     )),
                     None => value(format!(
-                        "{id}@{version}",
-                        id = resolution.id,
+                        "{name}@{version}",
+                        name = resolution.name,
                         version = resolution.version
                     )),
                 };
@@ -333,7 +333,7 @@ impl NewCommand {
         match target {
             Some((resolution, world)) => {
                 let generator =
-                    SourceGenerator::new(&resolution.id, &resolution.path, !self.no_rustfmt);
+                    SourceGenerator::new(&resolution.name, &resolution.path, !self.no_rustfmt);
                 generator.generate(world.as_deref()).map(Into::into)
             }
             None => {
@@ -391,8 +391,8 @@ impl Guest for Component {
                 config.terminal().status(
                     "Generated",
                     format!(
-                        "source file `{path}` for target `{id}` v{version}",
-                        id = resolution.id,
+                        "source file `{path}` for target `{name}` v{version}",
+                        name = resolution.name,
                         version = resolution.version
                     ),
                 )?;
@@ -514,7 +514,11 @@ world example {{
         network_allowed: bool,
     ) -> Result<Option<(RegistryResolution, Option<String>)>> {
         match target {
-            Some(metadata::Target::Package { id, package, world }) => {
+            Some(metadata::Target::Package {
+                name,
+                package,
+                world,
+            }) => {
                 let mut resolver = DependencyResolver::new(
                     config.warg(),
                     registries,
@@ -524,7 +528,7 @@ world example {{
                 )?;
                 let dependency = Dependency::Package(package);
 
-                resolver.add_dependency(&id, &dependency).await?;
+                resolver.add_dependency(&name, &dependency).await?;
 
                 let dependencies = resolver.resolve().await?;
                 assert_eq!(dependencies.len(), 1);

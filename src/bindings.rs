@@ -16,7 +16,7 @@ use std::{
     path::{Path, PathBuf},
     time::SystemTime,
 };
-use warg_protocol::registry::PackageId;
+use warg_protocol::registry;
 use wit_bindgen_core::Files;
 use wit_bindgen_rust::{ExportKey, Opts};
 use wit_component::DecodedWasm;
@@ -276,8 +276,8 @@ impl<'a> BindingsGenerator<'a> {
         import_name_map: &mut HashMap<String, String>,
     ) -> Result<(Resolve, WorldId, Vec<PathBuf>)> {
         let (mut merged, world_id, source_files) =
-            if let Target::Package { id, world, .. } = &resolution.metadata.section.target {
-                Self::target_package(resolution, id, world.as_deref())?
+            if let Target::Package { name, world, .. } = &resolution.metadata.section.target {
+                Self::target_package(resolution, name, world.as_deref())?
             } else if let Some(path) = resolution.metadata.target_path() {
                 Self::target_local_path(
                     resolution,
@@ -323,7 +323,7 @@ impl<'a> BindingsGenerator<'a> {
 
     fn target_package(
         resolution: &PackageDependencyResolution,
-        id: &PackageId,
+        name: &registry::PackageName,
         world: Option<&str>,
     ) -> Result<(Resolve, WorldId, Vec<PathBuf>)> {
         // We must have resolved a target package dependency at this point
@@ -333,14 +333,14 @@ impl<'a> BindingsGenerator<'a> {
         let dependency = resolution.target_resolutions.values().next().unwrap();
         let (resolve, pkg, source_files) = dependency.decode()?.resolve().with_context(|| {
             format!(
-                "failed to resolve target package `{id}`",
-                id = dependency.id()
+                "failed to resolve target package `{name}`",
+                name = dependency.name()
             )
         })?;
 
         let world = resolve
             .select_world(pkg, world)
-            .with_context(|| format!("failed to select world from target package `{id}`"))?;
+            .with_context(|| format!("failed to select world from target package `{name}`"))?;
 
         Ok((resolve, world, source_files))
     }
@@ -401,8 +401,8 @@ impl<'a> BindingsGenerator<'a> {
                     source_files.extend(package.source_files().map(Path::to_path_buf));
                     merged.push(package).with_context(|| {
                         format!(
-                            "failed to merge target dependency `{id}`",
-                            id = resolution.id()
+                            "failed to merge target dependency `{name}`",
+                            name = resolution.name()
                         )
                     })?;
                 }
@@ -417,8 +417,8 @@ impl<'a> BindingsGenerator<'a> {
 
                     merged.merge(resolve).with_context(|| {
                         format!(
-                            "failed to merge world of target dependency `{id}`",
-                            id = resolution.id()
+                            "failed to merge world of target dependency `{name}`",
+                            name = resolution.name()
                         )
                     })?;
                 }
@@ -467,7 +467,7 @@ impl<'a> BindingsGenerator<'a> {
                 } => {
                     for name in package.foreign_deps.keys() {
                         if !visiting.insert(name) {
-                            bail!("foreign dependency `{name}` forms a dependency cycle while parsing target dependency `{id}`", id = resolution.id());
+                            bail!("foreign dependency `{name}` forms a dependency cycle while parsing target dependency `{other}`", other = resolution.name());
                         }
 
                         // Only visit known dependencies
