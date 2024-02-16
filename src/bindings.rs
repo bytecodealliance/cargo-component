@@ -199,6 +199,7 @@ impl<'a> BindingsGenerator<'a> {
                 }
             },
             additional_derive_attributes: settings.derives.clone(),
+            std_feature: settings.std_feature,
             ..Default::default()
         };
 

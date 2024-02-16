@@ -72,6 +72,9 @@ pub struct Bindings {
     pub ownership: Ownership,
     /// Additional derives to apply to generated binding types.
     pub derives: Vec<String>,
+    /// If true, code generation should qualify any features that depend on
+    /// `std` with `cfg(feature = "std")`.
+    pub std_feature: bool,
 }
 
 /// The target of a component.
