@@ -380,7 +380,7 @@ fn empty_world_with_dep_valid() -> Result<()> {
 
             #[no_mangle]
             pub extern \"C\" fn foo() {
-                bindings::bar::hello();
+                bindings::foo_bar::hello();
             }
         ",
     )?;
@@ -651,13 +651,13 @@ world random-generator {
         r#"
 mod bindings;
 
-use bindings::{Guest, comp1};
+use bindings::{Guest, my_comp1};
 
 struct Component;
 
 impl Guest for Component {
     fn rand() -> u32 {
-        comp1::rand(comp1::Seed { value: 1 })
+        my_comp1::rand(my_comp1::Seed { value: 1 })
     }
 }
 "#,

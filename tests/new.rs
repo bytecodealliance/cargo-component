@@ -138,9 +138,9 @@ async fn it_targets_a_world() -> Result<()> {
 
     publish_wit(
         &config,
-        "foo:bar",
+        "test:bar",
         "1.2.3",
-        r#"package foo:bar@1.2.3;
+        r#"package test:bar@1.2.3;
 world foo {
     resource file {
         open: static func(path: string) -> file;
@@ -153,7 +153,7 @@ world foo {
     )
     .await?;
 
-    let project = Project::with_dir(dir.clone(), "component", "--target foo:bar@1.0.0")?;
+    let project = Project::with_dir(dir.clone(), "component", "--target test:bar@1.0.0")?;
 
     project
         .cargo_component("build")

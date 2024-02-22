@@ -26,9 +26,9 @@ use warg_client::{
     Config, FileSystemClient, StorageLockResult,
 };
 use warg_crypto::hash::AnyHash;
-use warg_protocol::registry::PackageId;
+use warg_protocol::registry;
 use wit_component::DecodedWasm;
-use wit_parser::{PackageName, Resolve, UnresolvedPackage, WorldId};
+use wit_parser::{PackageId, PackageName, Resolve, UnresolvedPackage, WorldId};
 
 /// The name of the default registry.
 pub const DEFAULT_REGISTRY_NAME: &str = "default";
@@ -86,19 +86,19 @@ impl Serialize for Dependency {
     {
         match self {
             Self::Package(package) => {
-                if package.id.is_none() && package.registry.is_none() {
+                if package.name.is_none() && package.registry.is_none() {
                     let version = package.version.to_string();
                     version.trim_start_matches('^').serialize(serializer)
                 } else {
                     #[derive(Serialize)]
                     struct Entry<'a> {
-                        package: Option<&'a PackageId>,
+                        package: Option<&'a registry::PackageName>,
                         version: &'a str,
                         registry: Option<&'a str>,
                     }
 
                     Entry {
-                        package: package.id.as_ref(),
+                        package: package.name.as_ref(),
                         version: package.version.to_string().trim_start_matches('^'),
                         registry: package.registry.as_deref(),
                     }
@@ -146,7 +146,7 @@ impl<'de> Deserialize<'de> for Dependency {
                 #[serde(default, deny_unknown_fields)]
                 struct Entry {
                     path: Option<PathBuf>,
-                    package: Option<PackageId>,
+                    package: Option<registry::PackageName>,
                     version: Option<VersionReq>,
                     registry: Option<String>,
                 }
@@ -155,9 +155,9 @@ impl<'de> Deserialize<'de> for Dependency {
 
                 match (entry.path, entry.package, entry.version, entry.registry) {
                     (Some(path), None, None, None) => Ok(Self::Value::Local(path)),
-                    (None, id, Some(version), registry) => {
+                    (None, name, Some(version), registry) => {
                         Ok(Self::Value::Package(RegistryPackage {
-                            id,
+                            name,
                             version,
                             registry,
                         }))
@@ -193,10 +193,10 @@ impl FromStr for Dependency {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RegistryPackage {
-    /// The id of the package.
+    /// The name of the package.
     ///
-    /// If not specified, the id from the mapping will be used.
-    pub id: Option<PackageId>,
+    /// If not specified, the name from the mapping will be used.
+    pub name: Option<registry::PackageName>,
 
     /// The version requirement of the package.
     pub version: VersionReq,
@@ -212,7 +212,7 @@ impl FromStr for RegistryPackage {
 
     fn from_str(s: &str) -> Result<Self> {
         Ok(Self {
-            id: None,
+            name: None,
             version: s
                 .parse()
                 .with_context(|| format!("'{s}' is an invalid registry package version"))?,
@@ -224,12 +224,12 @@ impl FromStr for RegistryPackage {
 /// Represents information about a resolution of a registry package.
 #[derive(Clone, Debug)]
 pub struct RegistryResolution {
-    /// The id of the dependency that was resolved.
+    /// The name of the dependency that was resolved.
     ///
-    /// This may differ from the package id if the dependency was renamed.
-    pub id: PackageId,
-    /// The id of the package from the registry that was resolved.
-    pub package: PackageId,
+    /// This may differ from `package` if the dependency was renamed.
+    pub name: registry::PackageName,
+    /// The name of the package from the registry that was resolved.
+    pub package: registry::PackageName,
     /// The name of the registry used to resolve the package.
     ///
     /// A value of `None` indicates that the default registry was used.
@@ -247,8 +247,8 @@ pub struct RegistryResolution {
 /// Represents information about a resolution of a local file.
 #[derive(Clone, Debug)]
 pub struct LocalResolution {
-    /// The id of the dependency that was resolved.
-    pub id: PackageId,
+    /// The name of the dependency that was resolved.
+    pub name: registry::PackageName,
     /// The path to the resolved dependency.
     pub path: PathBuf,
 }
@@ -264,11 +264,11 @@ pub enum DependencyResolution {
 }
 
 impl DependencyResolution {
-    /// Gets the id of the dependency that was resolved.
-    pub fn id(&self) -> &PackageId {
+    /// Gets the name of the dependency that was resolved.
+    pub fn name(&self) -> &registry::PackageName {
         match self {
-            Self::Registry(res) => &res.id,
-            Self::Local(res) => &res.id,
+            Self::Registry(res) => &res.name,
+            Self::Local(res) => &res.name,
         }
     }
 
@@ -280,10 +280,20 @@ impl DependencyResolution {
         }
     }
 
+    /// Gets the resolved version.
+    ///
+    /// Returns `None` if the dependency is not resolved from a registry package.
+    pub fn version(&self) -> Option<&Version> {
+        match self {
+            Self::Registry(res) => Some(&res.version),
+            Self::Local(_) => None,
+        }
+    }
+
     /// The key used in sorting and searching the lock file package list.
     ///
     /// Returns `None` if the dependency is not resolved from a registry package.
-    pub fn key(&self) -> Option<(&PackageId, Option<&str>)> {
+    pub fn key(&self) -> Option<(&registry::PackageName, Option<&str>)> {
         match self {
             DependencyResolution::Registry(pkg) => Some((&pkg.package, pkg.registry.as_deref())),
             DependencyResolution::Local(_) => None,
@@ -307,8 +317,8 @@ impl DependencyResolution {
 
         let bytes = fs::read(self.path()).with_context(|| {
             format!(
-                "failed to read content of dependency `{id}` at path `{path}`",
-                id = self.id(),
+                "failed to read content of dependency `{name}` at path `{path}`",
+                name = self.name(),
                 path = self.path().display()
             )
         })?;
@@ -332,8 +342,8 @@ impl DependencyResolution {
             resolution: self,
             decoded: wit_component::decode(&bytes).with_context(|| {
                 format!(
-                    "failed to decode content of dependency `{id}` at path `{path}`",
-                    id = self.id(),
+                    "failed to decode content of dependency `{name}` at path `{path}`",
+                    name = self.name(),
                     path = self.path().display()
                 )
             })?,
@@ -364,7 +374,7 @@ impl<'a> DecodedDependency<'a> {
     ///
     /// If the dependency is an unresolved WIT package, it will assume that the
     /// package has no foreign dependencies.
-    pub fn resolve(self) -> Result<(Resolve, wit_parser::PackageId, Vec<PathBuf>)> {
+    pub fn resolve(self) -> Result<(Resolve, PackageId, Vec<PathBuf>)> {
         match self {
             Self::Wit { package, .. } => {
                 let mut resolve = Resolve::new();
@@ -411,7 +421,7 @@ pub struct DependencyResolver<'a> {
     warg_config: &'a Config,
     lock_file: Option<LockFileResolver<'a>>,
     registries: IndexMap<&'a str, Registry<'a>>,
-    resolutions: HashMap<PackageId, DependencyResolution>,
+    resolutions: HashMap<registry::PackageName, DependencyResolution>,
     network_allowed: bool,
 }
 
@@ -438,19 +448,19 @@ impl<'a> DependencyResolver<'a> {
     /// Add a dependency to the resolver.
     pub async fn add_dependency(
         &mut self,
-        id: &'a PackageId,
+        name: &'a registry::PackageName,
         dependency: &'a Dependency,
     ) -> Result<()> {
         match dependency {
             Dependency::Package(package) => {
                 // Dependency comes from a registry, add a dependency to the resolver
                 let registry_name = package.registry.as_deref().unwrap_or(DEFAULT_REGISTRY_NAME);
-                let package_id = package.id.clone().unwrap_or_else(|| id.clone());
+                let package_name = package.name.clone().unwrap_or_else(|| name.clone());
 
                 // Resolve the version from the lock file if there is one
                 let locked = match self.lock_file.as_ref().and_then(|resolver| {
                     resolver
-                        .resolve(registry_name, &package_id, &package.version)
+                        .resolve(registry_name, &package_name, &package.version)
                         .transpose()
                 }) {
                     Some(Ok(locked)) => Some(locked),
@@ -476,17 +486,17 @@ impl<'a> DependencyResolver<'a> {
                 };
 
                 registry
-                    .add_dependency(id, package_id, &package.version, registry_name, locked)
+                    .add_dependency(name, package_name, &package.version, registry_name, locked)
                     .await?;
             }
             Dependency::Local(p) => {
                 // A local path dependency, insert a resolution immediately
                 let res = DependencyResolution::Local(LocalResolution {
-                    id: id.clone(),
+                    name: name.clone(),
                     path: p.clone(),
                 });
 
-                let prev = self.resolutions.insert(id.clone(), res);
+                let prev = self.resolutions.insert(name.clone(), res);
                 assert!(prev.is_none());
             }
         }
@@ -516,7 +526,7 @@ impl<'a> DependencyResolver<'a> {
         for resolution in
             Self::download_and_resolve(registries, downloads, terminal, network_allowed).await?
         {
-            let prev = resolutions.insert(resolution.id().clone(), resolution);
+            let prev = resolutions.insert(resolution.name().clone(), resolution);
             assert!(prev.is_none());
         }
 
@@ -608,16 +618,16 @@ impl<'a> DependencyResolver<'a> {
             progress.tick_now(0, count, "")?;
 
             let mut futures = FuturesUnordered::new();
-            for ((registry_name, package, version), deps) in downloads {
+            for ((registry_name, name, version), deps) in downloads {
                 let registry_index = registries.get_index_of(registry_name).unwrap();
                 let (_, registry) = registries.get_index(registry_index).unwrap();
 
-                log::info!("downloading content for package `{package}` from component registry `{registry_name}`");
+                log::info!("downloading content for package `{name}` from component registry `{registry_name}`");
 
                 let client = registry.client.clone();
                 futures.push(tokio::spawn(async move {
-                    let res = client.download_exact(&package, &version).await;
-                    (registry_index, package, version, deps, res)
+                    let res = client.download_exact(&name, &version).await;
+                    (registry_index, name, version, deps, res)
                 }))
             }
 
@@ -625,37 +635,37 @@ impl<'a> DependencyResolver<'a> {
 
             let mut finished = 0;
             while let Some(res) = futures.next().await {
-                let (registry_index, id, version, deps, res) =
+                let (registry_index, name, version, deps, res) =
                     res.context("failed to join content download task")?;
-                let (name, registry) = registries
+                let (registry_name, registry) = registries
                     .get_index_mut(registry_index)
                     .expect("out of bounds registry index");
 
                 let download = res.with_context(|| {
-                    format!("failed to download package `{id}` (v{version}) from component registry `{name}`")
+                    format!("failed to download package `{name}` (v{version}) from component registry `{registry_name}`")
                 })?;
 
                 log::info!(
-                    "downloaded contents of package `{id}` (v{version}) from component registry `{name}`"
+                    "downloaded contents of package `{name}` (v{version}) from component registry `{registry_name}`"
                 );
 
                 finished += 1;
                 progress.tick_now(
                     finished,
                     count,
-                    &format!(": downloaded `{id}` (v{version})"),
+                    &format!(": downloaded `{name}` (v{version})"),
                 )?;
 
                 for index in deps {
                     let dependency = &mut registry.dependencies[index];
                     assert!(dependency.resolution.is_none());
                     dependency.resolution = Some(RegistryResolution {
-                        id: dependency.id.clone(),
+                        name: dependency.name.clone(),
                         package: dependency.package.clone(),
-                        registry: if *name == DEFAULT_REGISTRY_NAME {
+                        registry: if *registry_name == DEFAULT_REGISTRY_NAME {
                             None
                         } else {
-                            Some(name.to_string())
+                            Some(registry_name.to_string())
                         },
                         requirement: dependency.version.clone(),
                         version: download.version.clone(),
@@ -683,22 +693,22 @@ impl<'a> DependencyResolver<'a> {
 
 struct Registry<'a> {
     client: Arc<FileSystemClient>,
-    packages: HashMap<PackageId, PackageInfo>,
+    packages: HashMap<registry::PackageName, PackageInfo>,
     dependencies: Vec<RegistryDependency<'a>>,
-    upserts: HashSet<PackageId>,
+    upserts: HashSet<registry::PackageName>,
 }
 
 impl<'a> Registry<'a> {
     async fn add_dependency(
         &mut self,
-        id: &'a PackageId,
-        package: PackageId,
+        name: &'a registry::PackageName,
+        package: registry::PackageName,
         version: &'a VersionReq,
         registry: &str,
         locked: Option<&LockedPackageVersion>,
     ) -> Result<()> {
         let dep = RegistryDependency {
-            id,
+            name,
             package: package.clone(),
             version,
             locked: locked.map(|l| (l.version.clone(), l.digest.clone())),
@@ -792,7 +802,7 @@ impl<'a> Registry<'a> {
                     // Content is already present, set the resolution
                     assert!(dependency.resolution.is_none());
                     dependency.resolution = Some(RegistryResolution {
-                        id: dependency.id.clone(),
+                        name: dependency.name.clone(),
                         package: dependency.package.clone(),
                         registry: if registry == DEFAULT_REGISTRY_NAME {
                             None
@@ -839,10 +849,10 @@ impl<'a> Registry<'a> {
 
     async fn load_package<'b>(
         client: &FileSystemClient,
-        packages: &'b mut HashMap<PackageId, PackageInfo>,
-        id: PackageId,
+        packages: &'b mut HashMap<registry::PackageName, PackageInfo>,
+        name: registry::PackageName,
     ) -> Result<Option<&'b PackageInfo>> {
-        match packages.entry(id) {
+        match packages.entry(name) {
             hash_map::Entry::Occupied(e) => Ok(Some(e.into_mut())),
             hash_map::Entry::Vacant(e) => match client.registry().load_package(e.key()).await? {
                 Some(p) => Ok(Some(e.insert(p))),
@@ -852,14 +862,14 @@ impl<'a> Registry<'a> {
     }
 }
 
-type DownloadMapKey<'a> = (&'a str, PackageId, Version);
+type DownloadMapKey<'a> = (&'a str, registry::PackageName, Version);
 type DownloadMap<'a> = HashMap<DownloadMapKey<'a>, Vec<usize>>;
 
 struct RegistryDependency<'a> {
-    /// The package ID assigned in the configuration file.
-    id: &'a PackageId,
-    /// The package ID of the registry package.
-    package: PackageId,
+    /// The package name assigned in the configuration file.
+    name: &'a registry::PackageName,
+    /// The package name of the registry package.
+    package: registry::PackageName,
     version: &'a VersionReq,
     locked: Option<(Version, AnyHash)>,
     resolution: Option<RegistryResolution>,
@@ -867,5 +877,5 @@ struct RegistryDependency<'a> {
 
 /// Represents a map of dependency resolutions.
 ///
-/// The key to the map is the package ID of the dependency.
-pub type DependencyResolutionMap = HashMap<PackageId, DependencyResolution>;
+/// The key to the map is the package name of the dependency.
+pub type DependencyResolutionMap = HashMap<registry::PackageName, DependencyResolution>;

@@ -62,29 +62,29 @@ async fn validate_the_version_exists() -> Result<()> {
     config.write_to_file(&dir.path().join("warg-config.json"))?;
 
     let project = Project::with_dir(dir.clone(), "foo", "")?;
-    project.file("foo.wit", "package foo:bar;\n")?;
+    project.file("foo.wit", "package test:bar;\n")?;
     project
         .wit("publish --init")
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
-        .stderr(contains("Published package `foo:bar` v0.1.0"))
+        .stderr(contains("Published package `test:bar` v0.1.0"))
         .success();
 
     let project = Project::with_dir(dir.clone(), "bar", "")?;
     project
-        .wit("add foo:bar")
+        .wit("add test:bar")
         .assert()
-        .stderr(contains("Added dependency `foo:bar` with version `0.1.0`"))
+        .stderr(contains("Added dependency `test:bar` with version `0.1.0`"))
         .success();
 
     let manifest = fs::read_to_string(project.root().join("wit.toml"))?;
-    assert!(contains(r#""foo:bar" = "0.1.0""#).eval(&manifest));
+    assert!(contains(r#""test:bar" = "0.1.0""#).eval(&manifest));
 
     project
-        .wit("add --id foo:bar2 foo:bar@2.0.0")
+        .wit("add --name test:bar2 test:bar@2.0.0")
         .assert()
         .stderr(contains(
-            "component registry package `foo:bar` has no release matching version requirement `^2.0.0`",
+            "component registry package `test:bar` has no release matching version requirement `^2.0.0`",
         ))
         .failure();
 
@@ -98,29 +98,29 @@ async fn checks_for_duplicate_dependencies() -> Result<()> {
     config.write_to_file(&dir.path().join("warg-config.json"))?;
 
     let project = Project::with_dir(dir.clone(), "foo", "")?;
-    project.file("foo.wit", "package foo:bar;\n")?;
+    project.file("foo.wit", "package test:bar;\n")?;
     project
         .wit("publish --init")
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
-        .stderr(contains("foo"))
+        .stderr(contains("Published package `test:bar` v0.1.0"))
         .success();
 
     let project = Project::with_dir(dir.clone(), "bar", "")?;
     project
-        .wit("add foo:bar")
+        .wit("add test:bar")
         .assert()
-        .stderr(contains("Added dependency `foo:bar` with version `0.1.0`"))
+        .stderr(contains("Added dependency `test:bar` with version `0.1.0`"))
         .success();
 
     let manifest = fs::read_to_string(project.root().join("wit.toml"))?;
-    assert!(contains(r#""foo:bar" = "0.1.0""#).eval(&manifest));
+    assert!(contains(r#""test:bar" = "0.1.0""#).eval(&manifest));
 
     project
-        .wit("add foo:bar")
+        .wit("add test:bar")
         .assert()
         .stderr(contains(
-            "cannot add dependency `foo:bar` as it conflicts with an existing dependency",
+            "cannot add dependency `test:bar` as it conflicts with an existing dependency",
         ))
         .failure();
 
@@ -134,25 +134,25 @@ async fn does_not_modify_manifest_for_dry_run() -> Result<()> {
     config.write_to_file(&dir.path().join("warg-config.json"))?;
 
     let project = Project::with_dir(dir.clone(), "foo", "")?;
-    project.file("foo.wit", "package foo:bar;\n")?;
+    project.file("foo.wit", "package test:bar;\n")?;
     project
         .wit("publish --init")
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
-        .stderr(contains("foo"))
+        .stderr(contains("Published package `test:bar` v0.1.0"))
         .success();
 
     let project = Project::with_dir(dir.clone(), "bar", "")?;
     project
-        .wit("add foo:bar --dry-run")
+        .wit("add test:bar --dry-run")
         .assert()
         .stderr(contains(
-            "Would add dependency `foo:bar` with version `0.1.0` (dry run)",
+            "Would add dependency `test:bar` with version `0.1.0` (dry run)",
         ))
         .success();
 
     let manifest = fs::read_to_string(project.root().join("wit.toml"))?;
-    assert!(!contains("foo:bar").eval(&manifest));
+    assert!(!contains("test:bar").eval(&manifest));
 
     Ok(())
 }

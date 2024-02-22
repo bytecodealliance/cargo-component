@@ -15,10 +15,10 @@ use lock::{acquire_lock_file_ro, acquire_lock_file_rw, to_lock_file};
 use std::{collections::HashSet, path::Path, time::Duration};
 use warg_client::storage::{ContentStorage, PublishEntry, PublishInfo};
 use warg_crypto::signing::PrivateKey;
-use warg_protocol::registry::PackageId;
+use warg_protocol::registry;
 use wasm_metadata::{Link, LinkType, RegistryMetadata};
 use wit_component::DecodedWasm;
-use wit_parser::{PackageName, Resolve, UnresolvedPackage};
+use wit_parser::{PackageId, PackageName, Resolve, UnresolvedPackage};
 
 pub mod commands;
 pub mod config;
@@ -52,8 +52,8 @@ async fn resolve_dependencies(
         true,
     )?;
 
-    for (id, dep) in &config.dependencies {
-        resolver.add_dependency(id, dep).await?;
+    for (name, dep) in &config.dependencies {
+        resolver.add_dependency(name, dep).await?;
     }
 
     let map = resolver.resolve().await?;
@@ -81,19 +81,17 @@ async fn resolve_dependencies(
 fn parse_wit_package(
     dir: &Path,
     dependencies: &DependencyResolutionMap,
-) -> Result<(Resolve, wit_parser::PackageId)> {
+) -> Result<(Resolve, PackageId)> {
     let mut merged = Resolve::default();
 
     // Start by decoding all of the dependencies
     let mut deps = IndexMap::new();
-    for (id, resolution) in dependencies {
+    for (name, resolution) in dependencies {
         let decoded = resolution.decode()?;
-        let name = decoded.package_name();
-
-        if let Some(prev) = deps.insert(name.clone(), decoded) {
+        if let Some(prev) = deps.insert(decoded.package_name().clone(), decoded) {
             bail!(
-                "duplicate definitions of package `{name}` found while decoding dependency `{id}`",
-                name = prev.package_name()
+                "duplicate definitions of package `{prev}` found while decoding dependency `{name}`",
+                prev = prev.package_name()
             );
         }
     }
@@ -119,14 +117,17 @@ fn parse_wit_package(
 
     // Merge all of the dependencies first
     for name in order {
-        match deps.remove(&name).unwrap() {
+        match deps.swap_remove(&name).unwrap() {
             DecodedDependency::Wit {
                 resolution,
                 package,
             } => {
                 source_files.extend(package.source_files().map(Path::to_path_buf));
                 merged.push(package).with_context(|| {
-                    format!("failed to merge dependency `{id}`", id = resolution.id())
+                    format!(
+                        "failed to merge dependency `{name}`",
+                        name = resolution.name()
+                    )
                 })?;
             }
             DecodedDependency::Wasm {
@@ -140,8 +141,8 @@ fn parse_wit_package(
 
                 merged.merge(resolve).with_context(|| {
                     format!(
-                        "failed to merge world of dependency `{id}`",
-                        id = resolution.id()
+                        "failed to merge world of dependency `{name}`",
+                        name = resolution.name()
                     )
                 })?;
             }
@@ -179,7 +180,7 @@ fn parse_wit_package(
                     // the package is resolved
                     if let Some(dep) = deps.get(name) {
                         if !visiting.insert(name) {
-                            bail!("foreign dependency `{name}` forms a dependency cycle while parsing dependency `{id}`", id = resolution.id());
+                            bail!("foreign dependency `{name}` forms a dependency cycle while parsing dependency `{other}`", other = resolution.name());
                         }
 
                         visit(dep, deps, order, visiting)?;
@@ -201,7 +202,7 @@ fn parse_wit_package(
 
                     if let Some(dep) = deps.get(&package.name) {
                         if !visiting.insert(&package.name) {
-                            bail!("foreign dependency `{name}` forms a dependency cycle while parsing dependency `{id}`", id = resolution.id(), name = package.name);
+                            bail!("foreign dependency `{name}` forms a dependency cycle while parsing dependency `{other}`", name = package.name, other = resolution.name());
                         }
 
                         visit(dep, deps, order, visiting)?;
@@ -223,7 +224,7 @@ async fn build_wit_package(
     config_path: &Path,
     warg_config: &warg_client::Config,
     terminal: &Terminal,
-) -> Result<(PackageId, Vec<u8>)> {
+) -> Result<(registry::PackageName, Vec<u8>)> {
     let dependencies =
         resolve_dependencies(config, config_path, warg_config, terminal, true).await?;
 
@@ -232,7 +233,7 @@ async fn build_wit_package(
     let (mut resolve, package) = parse_wit_package(dir, &dependencies)?;
 
     let pkg = &mut resolve.packages[package];
-    let id = format!("{ns}:{name}", ns = pkg.name.namespace, name = pkg.name.name).parse()?;
+    let name = format!("{ns}:{name}", ns = pkg.name.namespace, name = pkg.name.name).parse()?;
 
     let bytes = wit_component::encode(Some(true), &resolve, package)?;
 
@@ -247,7 +248,7 @@ async fn build_wit_package(
         .add_to_wasm(&bytes)
         .context("failed to add producers metadata to output WIT package")?;
 
-    Ok((id, bytes))
+    Ok((name, bytes))
 }
 
 struct PublishOptions<'a> {
@@ -256,7 +257,7 @@ struct PublishOptions<'a> {
     warg_config: &'a warg_client::Config,
     url: &'a str,
     signing_key: &'a PrivateKey,
-    package: Option<&'a PackageId>,
+    package: Option<&'a registry::PackageName>,
     init: bool,
     dry_run: bool,
 }
@@ -312,7 +313,7 @@ fn add_registry_metadata(config: &Config, bytes: &[u8]) -> Result<Vec<u8>> {
 }
 
 async fn publish_wit_package(options: PublishOptions<'_>, terminal: &Terminal) -> Result<()> {
-    let (id, bytes) = build_wit_package(
+    let (name, bytes) = build_wit_package(
         options.config,
         options.config_path,
         options.warg_config,
@@ -326,7 +327,7 @@ async fn publish_wit_package(options: PublishOptions<'_>, terminal: &Terminal) -
     }
 
     let bytes = add_registry_metadata(options.config, &bytes)?;
-    let id = options.package.unwrap_or(&id);
+    let name = options.package.unwrap_or(&name);
     let client = create_client(options.warg_config, options.url, terminal)?;
 
     let content = client
@@ -337,10 +338,10 @@ async fn publish_wit_package(options: PublishOptions<'_>, terminal: &Terminal) -
         )
         .await?;
 
-    terminal.status("Publishing", format!("package `{id}` ({content})",))?;
+    terminal.status("Publishing", format!("package `{name}` ({content})"))?;
 
     let mut info = PublishInfo {
-        id: id.clone(),
+        name: name.clone(),
         head: None,
         entries: Default::default(),
     };
@@ -356,13 +357,13 @@ async fn publish_wit_package(options: PublishOptions<'_>, terminal: &Terminal) -
 
     let record_id = client.publish_with_info(options.signing_key, info).await?;
     client
-        .wait_for_publish(id, &record_id, Duration::from_secs(1))
+        .wait_for_publish(name, &record_id, Duration::from_secs(1))
         .await?;
 
     terminal.status(
         "Published",
         format!(
-            "package `{id}` v{version}",
+            "package `{name}` v{version}",
             version = options.config.version
         ),
     )?;
@@ -381,8 +382,8 @@ pub async fn update_lockfile(
     // Resolve all dependencies as if the lock file does not exist
     let mut resolver =
         DependencyResolver::new(warg_config, &config.registries, None, terminal, true)?;
-    for (id, dep) in &config.dependencies {
-        resolver.add_dependency(id, dep).await?;
+    for (name, dep) in &config.dependencies {
+        resolver.add_dependency(name, dep).await?;
     }
 
     let map = resolver.resolve().await?;
@@ -416,8 +417,8 @@ pub async fn update_lockfile(
                     terminal.status_with_color(
                         if dry_run { "Would remove" } else { "Removing" },
                         format!(
-                            "dependency `{id}` v{version}",
-                            id = old_pkg.id,
+                            "dependency `{name}` v{version}",
+                            name = old_pkg.name,
                             version = old_ver.version,
                         ),
                         Colors::Red,
@@ -439,8 +440,8 @@ pub async fn update_lockfile(
                     terminal.status_with_color(
                         if dry_run { "Would remove" } else { "Removing" },
                         format!(
-                            "dependency `{id}` v{version}",
-                            id = old_pkg.id,
+                            "dependency `{name}` v{version}",
+                            name = old_pkg.name,
                             version = old_ver.version,
                         ),
                         Colors::Red,
@@ -454,8 +455,8 @@ pub async fn update_lockfile(
                 terminal.status_with_color(
                     if dry_run { "Would update" } else { "Updating" },
                     format!(
-                        "dependency `{id}` v{old} -> v{new}",
-                        id = old_pkg.id,
+                        "dependency `{name}` v{old} -> v{new}",
+                        name = old_pkg.name,
                         old = old_ver.version,
                         new = new_ver.version
                     ),
@@ -478,8 +479,8 @@ pub async fn update_lockfile(
                     terminal.status_with_color(
                         if dry_run { "Would add" } else { "Adding" },
                         format!(
-                            "dependency `{id}` v{version}",
-                            id = new_pkg.id,
+                            "dependency `{name}` v{version}",
+                            name = new_pkg.name,
                             version = new_ver.version,
                         ),
                         Colors::Green,
@@ -500,8 +501,8 @@ pub async fn update_lockfile(
                 terminal.status_with_color(
                     if dry_run { "Would add" } else { "Adding" },
                     format!(
-                        "dependency `{id}` v{version}",
-                        id = new_pkg.id,
+                        "dependency `{name}` v{version}",
+                        name = new_pkg.name,
                         version = new_ver.version,
                     ),
                     Colors::Green,

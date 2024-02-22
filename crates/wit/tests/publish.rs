@@ -8,7 +8,7 @@ use semver::Version;
 use tempfile::TempDir;
 use toml_edit::{value, Array};
 use warg_client::{Client, FileSystemClient};
-use warg_protocol::registry::PackageId;
+use warg_protocol::registry::PackageName;
 use wasm_metadata::LinkType;
 
 mod support;
@@ -41,12 +41,12 @@ async fn it_publishes_a_wit_package() -> Result<()> {
     config.write_to_file(&dir.path().join("warg-config.json"))?;
 
     let project = Project::with_dir(dir.clone(), "foo", "")?;
-    project.file("baz.wit", "package baz:qux;\n")?;
+    project.file("baz.wit", "package test:qux;\n")?;
     project
         .wit("publish --init")
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
-        .stderr(contains("Published package `baz:qux` v0.1.0"))
+        .stderr(contains("Published package `test:qux` v0.1.0"))
         .success();
 
     Ok(())
@@ -59,7 +59,7 @@ async fn it_does_a_dry_run_publish() -> Result<()> {
     config.write_to_file(&dir.path().join("warg-config.json"))?;
 
     let project = Project::with_dir(dir.clone(), "foo", "")?;
-    project.file("baz.wit", "package baz:qux;\n")?;
+    project.file("baz.wit", "package test:qux;\n")?;
     project
         .wit("publish --init --dry-run")
         .env("WIT_PUBLISH_KEY", test_signing_key())
@@ -72,11 +72,11 @@ async fn it_does_a_dry_run_publish() -> Result<()> {
     let client = FileSystemClient::new_with_config(None, &config)?;
 
     assert!(client
-        .download(&"baz:qux".parse().unwrap(), &"0.1.0".parse().unwrap())
+        .download(&"test:qux".parse().unwrap(), &"0.1.0".parse().unwrap())
         .await
         .unwrap_err()
         .to_string()
-        .contains("package `baz:qux` does not exist"));
+        .contains("package `test:qux` does not exist"));
 
     Ok(())
 }
@@ -96,7 +96,7 @@ async fn it_publishes_with_registry_metadata() -> Result<()> {
     let repository = "https://example.com/repo";
 
     let project = Project::with_dir(dir.clone(), "foo", "")?;
-    project.file("baz.wit", "package baz:qux;\n")?;
+    project.file("baz.wit", "package test:qux;\n")?;
 
     project.update_manifest(|mut doc| {
         doc["authors"] = value(Array::from_iter(authors));
@@ -113,12 +113,12 @@ async fn it_publishes_with_registry_metadata() -> Result<()> {
         .wit("publish --init")
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
-        .stderr(contains("Published package `baz:qux` v0.1.0"))
+        .stderr(contains("Published package `test:qux` v0.1.0"))
         .success();
 
     let client = Client::new_with_config(None, &config)?;
     let download = client
-        .download_exact(&PackageId::new("baz:qux")?, &Version::parse("0.1.0")?)
+        .download_exact(&PackageName::new("test:qux")?, &Version::parse("0.1.0")?)
         .await?;
 
     let bytes = fs::read(&download.path).with_context(|| {

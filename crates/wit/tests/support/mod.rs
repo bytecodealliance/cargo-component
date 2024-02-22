@@ -14,6 +14,7 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use toml_edit::Document;
 use warg_crypto::signing::PrivateKey;
+use warg_protocol::operator::NamespaceState;
 use warg_server::{policy::content::WasmContentPolicy, Config, Server};
 use wasmparser::{Chunk, Encoding, Parser, Payload, Validator, WasmFeatures};
 
@@ -85,6 +86,11 @@ pub async fn spawn_server(root: &Path) -> Result<(ServerInstance, warg_client::C
     let shutdown = CancellationToken::new();
     let config = Config::new(
         PrivateKey::decode(test_operator_key().to_string())?,
+        Some(
+            [("test".to_string(), NamespaceState::Defined)]
+                .into_iter()
+                .collect(),
+        ),
         root.join("server"),
     )
     .with_addr(([127, 0, 0, 1], 0))
