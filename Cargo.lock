@@ -505,7 +505,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-component"
-version = "0.7.1"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -550,7 +550,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-component-core"
-version = "0.7.1"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -4053,7 +4053,7 @@ dependencies = [
 
 [[package]]
 name = "wit"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "assert_cmd",
