@@ -6,6 +6,7 @@ use cargo_component_core::{
     lock::{LockFile, LockFileResolver, LockedPackage, LockedPackageVersion},
     registry::{DependencyResolution, DependencyResolutionMap, DependencyResolver},
 };
+use cargo_metadata::PackageId;
 use semver::Version;
 use std::collections::HashMap;
 use warg_crypto::hash::AnyHash;
@@ -58,21 +59,26 @@ impl<'a> PackageDependencyResolution<'a> {
         lock_file: Option<LockFileResolver<'_>>,
         network_allowed: bool,
     ) -> Result<DependencyResolutionMap> {
-        let target_deps = metadata.section.target.dependencies();
+        match &metadata.section {
+            Some(section) => {
+                let target_deps = section.target.dependencies();
 
-        let mut resolver = DependencyResolver::new(
-            config.warg(),
-            &metadata.section.registries,
-            lock_file,
-            config.terminal(),
-            network_allowed,
-        )?;
+                let mut resolver = DependencyResolver::new(
+                    config.warg(),
+                    &section.registries,
+                    lock_file,
+                    config.terminal(),
+                    network_allowed,
+                )?;
 
-        for (name, dependency) in target_deps.iter() {
-            resolver.add_dependency(name, dependency).await?;
+                for (name, dependency) in target_deps.iter() {
+                    resolver.add_dependency(name, dependency).await?;
+                }
+
+                resolver.resolve().await
+            }
+            None => Ok(Default::default()),
         }
-
-        resolver.resolve().await
     }
 
     async fn resolve_deps(
@@ -81,27 +87,30 @@ impl<'a> PackageDependencyResolution<'a> {
         lock_file: Option<LockFileResolver<'_>>,
         network_allowed: bool,
     ) -> Result<DependencyResolutionMap> {
-        let mut resolver = DependencyResolver::new(
-            config.warg(),
-            &metadata.section.registries,
-            lock_file,
-            config.terminal(),
-            network_allowed,
-        )?;
+        match &metadata.section {
+            Some(section) => {
+                let mut resolver = DependencyResolver::new(
+                    config.warg(),
+                    &section.registries,
+                    lock_file,
+                    config.terminal(),
+                    network_allowed,
+                )?;
 
-        for (name, dependency) in &metadata.section.dependencies {
-            resolver.add_dependency(name, dependency).await?;
+                for (name, dependency) in &section.dependencies {
+                    resolver.add_dependency(name, dependency).await?;
+                }
+
+                resolver.resolve().await
+            }
+            None => Ok(Default::default()),
         }
-
-        resolver.resolve().await
     }
 }
 
 /// Represents a mapping between all component packages and their dependency resolutions.
 #[derive(Debug, Default, Clone)]
-pub struct PackageResolutionMap<'a>(
-    HashMap<cargo_metadata::PackageId, PackageDependencyResolution<'a>>,
-);
+pub struct PackageResolutionMap<'a>(HashMap<PackageId, PackageDependencyResolution<'a>>);
 
 impl<'a> PackageResolutionMap<'a> {
     /// Inserts a package dependency resolution into the map.
@@ -109,11 +118,7 @@ impl<'a> PackageResolutionMap<'a> {
     /// # Panics
     ///
     /// Panics if the package already has a dependency resolution.
-    pub fn insert(
-        &mut self,
-        id: cargo_metadata::PackageId,
-        resolution: PackageDependencyResolution<'a>,
-    ) {
+    pub fn insert(&mut self, id: PackageId, resolution: PackageDependencyResolution<'a>) {
         let prev = self.0.insert(id, resolution);
         assert!(prev.is_none());
     }
@@ -121,7 +126,7 @@ impl<'a> PackageResolutionMap<'a> {
     /// Gets a package dependency resolution from the map.
     ///
     /// Returns `None` if the package has no dependency resolution.
-    pub fn get(&self, id: &cargo_metadata::PackageId) -> Option<&PackageDependencyResolution<'a>> {
+    pub fn get(&self, id: &PackageId) -> Option<&PackageDependencyResolution<'a>> {
         self.0.get(id)
     }
 

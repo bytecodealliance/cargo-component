@@ -37,6 +37,7 @@ wit-bindgen-core = { workspace = true }
 wit-parser = { workspace = true }
 wit-component = { workspace = true }
 wasm-metadata = { workspace = true }
+wasmparser = { workspace = true }
 parse_arg = { workspace = true }
 cargo_metadata = { workspace = true }
 cargo-config2 = { workspace = true }
@@ -50,11 +51,11 @@ rpassword = { workspace = true }
 futures = { workspace = true }
 bytes = { workspace = true }
 which = { workspace = true }
+shell-escape = "0.1.5"
 
 [dev-dependencies]
 assert_cmd = { workspace = true }
 predicates = { workspace = true }
-wasmparser = { workspace = true }
 wat = { workspace = true }
 warg-server = { workspace = true }
 tempfile = { workspace = true }

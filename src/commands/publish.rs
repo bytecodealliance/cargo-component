@@ -6,7 +6,7 @@ use crate::{
 use anyhow::{bail, Context, Result};
 use cargo_component_core::{command::CommonOptions, keyring::get_signing_key, registry::find_url};
 use clap::Args;
-use std::path::PathBuf;
+use std::{borrow::Cow, path::PathBuf};
 use warg_client::RegistryUrl;
 use warg_crypto::signing::PrivateKey;
 
@@ -118,15 +118,9 @@ impl PublishCommand {
         })?];
 
         let package = packages[0].package;
-        let component_metadata = packages[0].metadata.as_ref().with_context(|| {
-            format!(
-                "package `{name}` is missing component metadata in manifest `{path}`",
-                name = package.name,
-                path = package.manifest_path
-            )
-        })?;
+        let component_metadata = &packages[0].metadata;
 
-        let name = component_metadata.section.package.as_ref().with_context(|| {
+        let name = component_metadata.section.as_ref().map(|s| s.package.as_ref()).unwrap_or_default().with_context(|| {
             format!(
                 "package `{name}` is missing a `package.metadata.component.package` setting in manifest `{path}`",
                 name = package.name,
@@ -134,9 +128,15 @@ impl PublishCommand {
             )
         })?;
 
+        let registries = component_metadata
+            .section
+            .as_ref()
+            .map(|s| Cow::Borrowed(&s.registries))
+            .unwrap_or_default();
+
         let registry_url = find_url(
             self.registry.as_deref(),
-            &component_metadata.section.registries,
+            &registries,
             config.warg().default_url.as_deref(),
         )?;
 
@@ -153,6 +153,7 @@ impl PublishCommand {
         let cargo_build_args = CargoArguments {
             color: self.common.color,
             verbose: self.common.verbose as usize,
+            help: false,
             quiet: self.common.quiet,
             targets: self.target.clone().into_iter().collect(),
             manifest_path: self.manifest_path.clone(),
