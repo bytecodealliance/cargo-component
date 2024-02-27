@@ -59,26 +59,24 @@ impl<'a> PackageDependencyResolution<'a> {
         lock_file: Option<LockFileResolver<'_>>,
         network_allowed: bool,
     ) -> Result<DependencyResolutionMap> {
-        match &metadata.section {
-            Some(section) => {
-                let target_deps = section.target.dependencies();
-
-                let mut resolver = DependencyResolver::new(
-                    config.warg(),
-                    &section.registries,
-                    lock_file,
-                    config.terminal(),
-                    network_allowed,
-                )?;
-
-                for (name, dependency) in target_deps.iter() {
-                    resolver.add_dependency(name, dependency).await?;
-                }
-
-                resolver.resolve().await
-            }
-            None => Ok(Default::default()),
+        let target_deps = metadata.section.target.dependencies();
+        if target_deps.is_empty() {
+            return Ok(Default::default());
         }
+
+        let mut resolver = DependencyResolver::new(
+            config.warg(),
+            &metadata.section.registries,
+            lock_file,
+            config.terminal(),
+            network_allowed,
+        )?;
+
+        for (name, dependency) in target_deps.iter() {
+            resolver.add_dependency(name, dependency).await?;
+        }
+
+        resolver.resolve().await
     }
 
     async fn resolve_deps(
@@ -87,24 +85,23 @@ impl<'a> PackageDependencyResolution<'a> {
         lock_file: Option<LockFileResolver<'_>>,
         network_allowed: bool,
     ) -> Result<DependencyResolutionMap> {
-        match &metadata.section {
-            Some(section) => {
-                let mut resolver = DependencyResolver::new(
-                    config.warg(),
-                    &section.registries,
-                    lock_file,
-                    config.terminal(),
-                    network_allowed,
-                )?;
-
-                for (name, dependency) in &section.dependencies {
-                    resolver.add_dependency(name, dependency).await?;
-                }
-
-                resolver.resolve().await
-            }
-            None => Ok(Default::default()),
+        if metadata.section.dependencies.is_empty() {
+            return Ok(Default::default());
         }
+
+        let mut resolver = DependencyResolver::new(
+            config.warg(),
+            &metadata.section.registries,
+            lock_file,
+            config.terminal(),
+            network_allowed,
+        )?;
+
+        for (name, dependency) in &metadata.section.dependencies {
+            resolver.add_dependency(name, dependency).await?;
+        }
+
+        resolver.resolve().await
     }
 }
 

@@ -14,7 +14,6 @@ use cargo_metadata::Package;
 use clap::Args;
 use semver::VersionReq;
 use std::{
-    borrow::Cow,
     fs,
     path::{Path, PathBuf},
 };
@@ -125,15 +124,9 @@ impl AddCommand {
         name: &PackageName,
         network_allowed: bool,
     ) -> Result<String> {
-        let registries = metadata
-            .section
-            .as_ref()
-            .map(|s| Cow::Borrowed(&s.registries))
-            .unwrap_or_default();
-
         let mut resolver = DependencyResolver::new(
             config.warg(),
-            &registries,
+            &metadata.section.registries,
             None,
             config.terminal(),
             network_allowed,
@@ -268,21 +261,19 @@ impl AddCommand {
     }
 
     fn validate(&self, metadata: &ComponentMetadata, name: &PackageName) -> Result<()> {
-        if let Some(section) = &metadata.section {
-            if self.target {
-                match &section.target {
-                    Target::Package { .. } => {
-                        bail!("cannot add dependency `{name}` to a registry package target")
-                    }
-                    Target::Local { dependencies, .. } => {
-                        if dependencies.contains_key(name) {
-                            bail!("cannot add dependency `{name}` as it conflicts with an existing dependency");
-                        }
+        if self.target {
+            match &metadata.section.target {
+                Target::Package { .. } => {
+                    bail!("cannot add dependency `{name}` to a registry package target")
+                }
+                Target::Local { dependencies, .. } => {
+                    if dependencies.contains_key(name) {
+                        bail!("cannot add dependency `{name}` as it conflicts with an existing dependency");
                     }
                 }
-            } else if section.dependencies.contains_key(name) {
-                bail!("cannot add dependency `{name}` as it conflicts with an existing dependency");
             }
+        } else if metadata.section.dependencies.contains_key(name) {
+            bail!("cannot add dependency `{name}` as it conflicts with an existing dependency");
         }
 
         Ok(())

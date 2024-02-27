@@ -400,7 +400,7 @@ fn componentize_artifacts(
                 _ => continue,
             };
 
-            match read_artifact(path.as_std_path(), metadata.section.is_some())? {
+            match read_artifact(path.as_std_path(), metadata.section_present)? {
                 ArtifactKind::Module => {
                     log::debug!(
                         "output file `{path}` is a WebAssembly module that will not be componentized"
@@ -861,14 +861,8 @@ fn adapter_bytes(
     metadata: &ComponentMetadata,
     is_command: bool,
 ) -> Result<Cow<'static, [u8]>> {
-    let (adapter, proxy) = if let Some(section) = &metadata.section {
-        (section.adapter.as_deref(), section.proxy)
-    } else {
-        (None, false)
-    };
-
-    if let Some(adapter) = adapter {
-        if proxy {
+    if let Some(adapter) = &metadata.section.adapter {
+        if metadata.section.proxy {
             config.terminal().warn(
                 "ignoring `proxy` setting due to `adapter` setting being present in `Cargo.toml`",
             )?;
@@ -885,7 +879,7 @@ fn adapter_bytes(
     }
 
     if is_command {
-        if proxy {
+        if metadata.section.proxy {
             config
                 .terminal()
                 .warn("ignoring `proxy` setting in `Cargo.toml` for command component")?;
@@ -896,7 +890,7 @@ fn adapter_bytes(
             env!("WASI_ADAPTER_VERSION"),
             "/wasi_snapshot_preview1.command.wasm"
         ))))
-    } else if proxy {
+    } else if metadata.section.proxy {
         Ok(Cow::Borrowed(include_bytes!(concat!(
             "../adapters/",
             env!("WASI_ADAPTER_VERSION"),
@@ -958,14 +952,12 @@ fn componentize(
         .with_context(|| {
             format!(
                 "failed to load adapter module `{path}`",
-                path = if let Some(path) =
-                    metadata.section.as_ref().and_then(|s| s.adapter.as_ref())
-                {
-                    path.as_path()
-                } else {
-                    Path::new("<built-in>")
-                }
-                .display()
+                path = metadata
+                    .section
+                    .adapter
+                    .as_deref()
+                    .unwrap_or_else(|| Path::new("<built-in>"))
+                    .display()
             )
         })?
         .validate(true);

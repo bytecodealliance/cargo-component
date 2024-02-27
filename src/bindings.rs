@@ -140,13 +140,7 @@ impl<'a> BindingsGenerator<'a> {
 
     /// Generates the bindings source for a package.
     pub fn generate(self) -> Result<String> {
-        let settings = self
-            .resolution
-            .metadata
-            .section
-            .as_ref()
-            .map(|s| Cow::Borrowed(&s.bindings))
-            .unwrap_or_default();
+        let settings = &self.resolution.metadata.section.bindings;
 
         fn implementor_path_str(path: &str) -> String {
             format!("super::{path}")

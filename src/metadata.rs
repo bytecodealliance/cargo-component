@@ -301,7 +301,9 @@ pub struct ComponentMetadata {
     /// The last modified time of the manifest file.
     pub modified_at: SystemTime,
     /// The component section in `Cargo.toml`.
-    pub section: Option<ComponentSection>,
+    pub section: ComponentSection,
+    /// Whether the component section was present in `Cargo.toml`.
+    pub section_present: bool,
 }
 
 impl ComponentMetadata {
@@ -312,20 +314,23 @@ impl ComponentMetadata {
             path = package.manifest_path
         );
 
-        let mut section: Option<ComponentSection> = match package.metadata.get("component").cloned()
-        {
-            Some(component) => Some(from_value(component).with_context(|| {
-                format!(
-                    "failed to deserialize component metadata from `{path}`",
-                    path = package.manifest_path
-                )
-            })?),
+        let mut section_present = false;
+        let mut section: ComponentSection = match package.metadata.get("component").cloned() {
+            Some(component) => {
+                section_present = true;
+                from_value(component).with_context(|| {
+                    format!(
+                        "failed to deserialize component metadata from `{path}`",
+                        path = package.manifest_path
+                    )
+                })?
+            }
             None => {
                 log::debug!(
                     "manifest `{path}` has no component metadata",
                     path = package.manifest_path
                 );
-                None
+                Default::default()
             }
         };
 
@@ -342,31 +347,29 @@ impl ComponentMetadata {
         let modified_at = crate::last_modified_time(package.manifest_path.as_std_path())?;
 
         // Make all paths stored in the metadata relative to the manifest directory.
-        if let Some(section) = &mut section {
-            if let Target::Local {
-                path, dependencies, ..
-            } = &mut section.target
-            {
-                if let Some(path) = path {
-                    *path = manifest_dir.join(path.as_path());
-                }
-
-                for dependency in dependencies.values_mut() {
-                    if let Dependency::Local(path) = dependency {
-                        *path = manifest_dir.join(path.as_path());
-                    }
-                }
+        if let Target::Local {
+            path, dependencies, ..
+        } = &mut section.target
+        {
+            if let Some(path) = path {
+                *path = manifest_dir.join(path.as_path());
             }
 
-            for dependency in section.dependencies.values_mut() {
+            for dependency in dependencies.values_mut() {
                 if let Dependency::Local(path) = dependency {
                     *path = manifest_dir.join(path.as_path());
                 }
             }
+        }
 
-            if let Some(adapter) = section.adapter.as_mut() {
-                *adapter = manifest_dir.join(adapter.as_path());
+        for dependency in section.dependencies.values_mut() {
+            if let Dependency::Local(path) = dependency {
+                *path = manifest_dir.join(path.as_path());
             }
+        }
+
+        if let Some(adapter) = section.adapter.as_mut() {
+            *adapter = manifest_dir.join(adapter.as_path());
         }
 
         Ok(Self {
@@ -375,6 +378,7 @@ impl ComponentMetadata {
             manifest_path: package.manifest_path.clone().into(),
             modified_at,
             section,
+            section_present,
         })
     }
 
@@ -382,11 +386,8 @@ impl ComponentMetadata {
     ///
     /// Returns `None` if the target is not a registry package.
     pub fn target_package(&self) -> Option<&PackageName> {
-        match &self.section {
-            Some(ComponentSection {
-                target: Target::Package { name, .. },
-                ..
-            }) => Some(name),
+        match &self.section.target {
+            Target::Package { name, .. } => Some(name),
             _ => None,
         }
     }
@@ -396,11 +397,11 @@ impl ComponentMetadata {
     /// Returns `None` if the target is a registry package or
     /// if a path is not specified and the default path does not exist.
     pub fn target_path(&self) -> Option<Cow<Path>> {
-        match self.section.as_ref().map(|s| &s.target) {
-            Some(Target::Local {
+        match &self.section.target {
+            Target::Local {
                 path: Some(path), ..
-            }) => Some(path.into()),
-            None | Some(Target::Local { path: None, .. }) => {
+            } => Some(path.into()),
+            Target::Local { path: None, .. } => {
                 let path = self.manifest_path.parent().unwrap().join(DEFAULT_WIT_DIR);
 
                 if path.exists() {
@@ -409,7 +410,7 @@ impl ComponentMetadata {
                     None
                 }
             }
-            Some(Target::Package { .. }) => None,
+            Target::Package { .. } => None,
         }
     }
 
@@ -417,6 +418,6 @@ impl ComponentMetadata {
     ///
     /// Returns `None` if there is no target world.
     pub fn target_world(&self) -> Option<&str> {
-        self.section.as_ref().and_then(|s| s.target.world())
+        self.section.target.world()
     }
 }
