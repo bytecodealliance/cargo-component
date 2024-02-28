@@ -366,6 +366,8 @@ pub struct CargoArguments {
     pub color: Option<Color>,
     /// The (count of) --verbose argument.
     pub verbose: usize,
+    /// The --help argument.
+    pub help: bool,
     /// The --quiet argument.
     pub quiet: bool,
     /// The --target argument.
@@ -422,7 +424,8 @@ impl CargoArguments {
             .flag("--all", None)
             .flag("--workspace", None)
             .counting("--verbose", Some('v'))
-            .flag("--quiet", Some('q'));
+            .flag("--quiet", Some('q'))
+            .flag("--help", Some('h'));
 
         let mut iter = iter.map(Into::into).peekable();
 
@@ -453,6 +456,7 @@ impl CargoArguments {
                 .map(|v| v.parse())
                 .transpose()?,
             verbose: args.get("--verbose").unwrap().count(),
+            help: args.get("--help").unwrap().count() > 0,
             quiet: args.get("--quiet").unwrap().count() > 0,
             manifest_path: args
                 .get_mut("--manifest-path")
@@ -775,6 +779,7 @@ mod test {
             CargoArguments {
                 color: None,
                 verbose: 0,
+                help: false,
                 quiet: false,
                 targets: Vec::new(),
                 manifest_path: None,
@@ -792,6 +797,7 @@ mod test {
             [
                 "component",
                 "publish",
+                "--help",
                 "-vvv",
                 "--color=auto",
                 "--manifest-path",
@@ -820,6 +826,7 @@ mod test {
             CargoArguments {
                 color: Some(Color::Auto),
                 verbose: 3,
+                help: true,
                 quiet: true,
                 targets: vec!["foo".to_string(), "bar".to_string()],
                 manifest_path: Some("Cargo.toml".into()),

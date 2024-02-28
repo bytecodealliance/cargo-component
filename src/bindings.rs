@@ -2,7 +2,7 @@
 
 use crate::{
     last_modified_time,
-    metadata::{ComponentMetadata, Ownership, Target},
+    metadata::{ComponentMetadata, Ownership},
     registry::PackageDependencyResolution,
 };
 use anyhow::{bail, Context, Result};
@@ -277,14 +277,10 @@ impl<'a> BindingsGenerator<'a> {
         import_name_map: &mut HashMap<String, String>,
     ) -> Result<(Resolve, WorldId, Vec<PathBuf>)> {
         let (mut merged, world_id, source_files) =
-            if let Target::Package { name, world, .. } = &resolution.metadata.section.target {
-                Self::target_package(resolution, name, world.as_deref())?
+            if let Some(name) = resolution.metadata.target_package() {
+                Self::target_package(resolution, name, resolution.metadata.target_world())?
             } else if let Some(path) = resolution.metadata.target_path() {
-                Self::target_local_path(
-                    resolution,
-                    &path,
-                    resolution.metadata.section.target.world(),
-                )?
+                Self::target_local_path(resolution, &path, resolution.metadata.target_world())?
             } else {
                 let (merged, world) = Self::target_empty_world(resolution);
                 (merged, world, Vec::new())

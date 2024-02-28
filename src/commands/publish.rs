@@ -118,13 +118,7 @@ impl PublishCommand {
         })?];
 
         let package = packages[0].package;
-        let component_metadata = packages[0].metadata.as_ref().with_context(|| {
-            format!(
-                "package `{name}` is missing component metadata in manifest `{path}`",
-                name = package.name,
-                path = package.manifest_path
-            )
-        })?;
+        let component_metadata = &packages[0].metadata;
 
         let name = component_metadata.section.package.as_ref().with_context(|| {
             format!(
@@ -153,6 +147,7 @@ impl PublishCommand {
         let cargo_build_args = CargoArguments {
             color: self.common.color,
             verbose: self.common.verbose as usize,
+            help: false,
             quiet: self.common.quiet,
             targets: self.target.clone().into_iter().collect(),
             manifest_path: self.manifest_path.clone(),

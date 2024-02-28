@@ -302,31 +302,35 @@ pub struct ComponentMetadata {
     pub modified_at: SystemTime,
     /// The component section in `Cargo.toml`.
     pub section: ComponentSection,
+    /// Whether the component section was present in `Cargo.toml`.
+    pub section_present: bool,
 }
 
 impl ComponentMetadata {
     /// Creates a new component metadata for the given cargo package.
-    ///
-    /// Returns `Ok(None)` if the package does not have a `component` section.
-    pub fn from_package(package: &Package) -> Result<Option<Self>> {
+    pub fn from_package(package: &Package) -> Result<Self> {
         log::debug!(
             "searching for component metadata in manifest `{path}`",
             path = package.manifest_path
         );
 
+        let mut section_present = false;
         let mut section: ComponentSection = match package.metadata.get("component").cloned() {
-            Some(component) => from_value(component).with_context(|| {
-                format!(
-                    "failed to deserialize component metadata from `{path}`",
-                    path = package.manifest_path
-                )
-            })?,
+            Some(component) => {
+                section_present = true;
+                from_value(component).with_context(|| {
+                    format!(
+                        "failed to deserialize component metadata from `{path}`",
+                        path = package.manifest_path
+                    )
+                })?
+            }
             None => {
                 log::debug!(
                     "manifest `{path}` has no component metadata",
                     path = package.manifest_path
                 );
-                return Ok(None);
+                Default::default()
             }
         };
 
@@ -368,13 +372,24 @@ impl ComponentMetadata {
             *adapter = manifest_dir.join(adapter.as_path());
         }
 
-        Ok(Some(Self {
+        Ok(Self {
             name: package.name.clone(),
             version: package.version.clone(),
             manifest_path: package.manifest_path.clone().into(),
             modified_at,
             section,
-        }))
+            section_present,
+        })
+    }
+
+    /// Gets the target package name.
+    ///
+    /// Returns `None` if the target is not a registry package.
+    pub fn target_package(&self) -> Option<&PackageName> {
+        match &self.section.target {
+            Target::Package { name, .. } => Some(name),
+            _ => None,
+        }
     }
 
     /// Gets the path to a local target.
@@ -397,5 +412,12 @@ impl ComponentMetadata {
             }
             Target::Package { .. } => None,
         }
+    }
+
+    /// Gets the target world.
+    ///
+    /// Returns `None` if there is no target world.
+    pub fn target_world(&self) -> Option<&str> {
+        self.section.target.world()
     }
 }

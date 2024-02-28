@@ -86,13 +86,6 @@ impl AddCommand {
                 )?,
             };
 
-        let metadata = metadata.with_context(|| {
-            format!(
-                "manifest `{path}` is not a WebAssembly component package",
-                path = package.manifest_path
-            )
-        })?;
-
         let name = match &self.name {
             Some(name) => name,
             None => &self.package.name,
@@ -183,25 +176,39 @@ impl AddCommand {
             )
         })?;
 
+        let metadata = document["package"]["metadata"]
+            .or_insert(Item::Table(Table::new()))
+            .as_table_mut()
+            .context("section `package.metadata` is not a table")?;
+
+        metadata.set_implicit(true);
+
+        let component = metadata["component"]
+            .or_insert(Item::Table(Table::new()))
+            .as_table_mut()
+            .context("section `package.metadata.component` is not a table")?;
+
+        component.set_implicit(true);
+
         let dependencies = if self.target {
-            let target = document["package"]["metadata"]["component"]["target"]
+            let target = component["target"]
                 .or_insert(Item::Table(Table::new()))
                 .as_table_mut()
-                .unwrap();
+                .context("section `package.metadata.component.target` is not a table")?;
+
+            target.set_implicit(true);
 
             target["dependencies"]
                 .or_insert(Item::Table(Table::new()))
                 .as_table_mut()
-                .unwrap()
+                .context(
+                    "section `package.metadata.component.target.dependencies` is not a table",
+                )?
         } else {
-            document["package"]["metadata"]["component"]["dependencies"]
+            component["dependencies"]
+                .or_insert(Item::Table(Table::new()))
                 .as_table_mut()
-                .with_context(|| {
-                    format!(
-                        "failed to find component metadata in manifest file `{path}`",
-                        path = pkg.manifest_path
-                    )
-                })?
+                .context("section `package.metadata.component.dependencies` is not a table")?
         };
 
         body(dependencies)?;
