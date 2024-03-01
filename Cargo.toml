@@ -107,3 +107,9 @@ wasmparser = "0.200.0"
 wat = "1.200.0"
 warg-server = "0.3.0"
 wasmprinter = "0.200.0"
+
+[profile.release]
+panic = "abort"
+lto = true
+codegen-units = 1
+strip = "debuginfo"
