@@ -30,6 +30,8 @@ jobs:
         rustup target add wasm32-wasi
         rustup target add wasm32-wasi --toolchain nightly
         rustup target add wasm32-unknown-unknown
+        rustup component add rustfmt
+        rustup component add rustfmt --toolchain nightly
       shell: bash
     - name: Install `wasmtime`
       uses: bytecodealliance/actions/wasmtime/setup@v1
