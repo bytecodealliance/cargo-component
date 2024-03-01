@@ -338,7 +338,8 @@ impl NewCommand {
             }
             None => {
                 if self.is_command() {
-                    Ok(r#"mod bindings;
+                    Ok(r#"#[allow(warnings)]
+mod bindings;
 
 fn main() {
     println!("Hello, world!");
@@ -346,7 +347,8 @@ fn main() {
 "#
                     .into())
                 } else {
-                    Ok(r#"mod bindings;
+                    Ok(r#"#[allow(warnings)]
+mod bindings;
 
 use bindings::Guest;
 
@@ -358,6 +360,8 @@ impl Guest for Component {
         "Hello, World!".to_string()
     }
 }
+
+bindings::export!(Component with_types_in bindings);
 "#
                     .into())
                 }

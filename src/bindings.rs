@@ -7,18 +7,16 @@ use crate::{
 };
 use anyhow::{bail, Context, Result};
 use cargo_component_core::registry::DecodedDependency;
-use heck::ToUpperCamelCase;
 use indexmap::{IndexMap, IndexSet};
 use semver::Version;
 use std::{
-    borrow::Cow,
     collections::{HashMap, HashSet},
     path::{Path, PathBuf},
     time::SystemTime,
 };
 use warg_protocol::registry;
 use wit_bindgen_core::Files;
-use wit_bindgen_rust::{ExportKey, Opts};
+use wit_bindgen_rust::Opts;
 use wit_component::DecodedWasm;
 use wit_parser::{
     Interface, Package, PackageName, Resolve, Type, TypeDefKind, TypeOwner, UnresolvedPackage,
@@ -141,80 +139,8 @@ impl<'a> BindingsGenerator<'a> {
     /// Generates the bindings source for a package.
     pub fn generate(self) -> Result<String> {
         let settings = &self.resolution.metadata.section.bindings;
-
-        fn implementor_path_str(path: &str) -> String {
-            format!("super::{path}")
-        }
-
-        fn resource_implementor(
-            key: &str,
-            name: &str,
-            resources: &HashMap<String, String>,
-        ) -> String {
-            implementor_path_str(
-                &resources
-                    .get(key)
-                    .map(Cow::Borrowed)
-                    .unwrap_or_else(|| Cow::Owned(name.to_upper_camel_case())),
-            )
-        }
-
-        let implementor =
-            implementor_path_str(settings.implementor.as_deref().unwrap_or("Component"));
-
-        let world = &self.resolve.worlds[self.world];
-        let mut exports = HashMap::new();
-        exports.insert(ExportKey::World, implementor.clone());
-
-        for (name, item) in &world.exports {
-            let key = match name {
-                WorldKey::Name(name) => name.clone(),
-                WorldKey::Interface(id) => {
-                    let interface = &self.resolve.interfaces[*id];
-                    let package = &self.resolve.packages
-                        [interface.package.expect("interface must have a package")];
-
-                    let mut key = String::new();
-                    key.push_str(&package.name.namespace);
-                    key.push(':');
-                    key.push_str(&package.name.name);
-                    key.push('/');
-                    key.push_str(interface.name.as_ref().expect("interface must have a name"));
-                    // wit-bindgen expects to not have the package version number in
-                    // the export map, so don't append it here
-                    key
-                }
-            };
-
-            let implementor = match item {
-                WorldItem::Interface(id) => {
-                    let interface = &self.resolve.interfaces[*id];
-                    for (name, ty) in &interface.types {
-                        match self.resolve.types[*ty].kind {
-                            TypeDefKind::Resource => {
-                                let key = format!("{key}/{name}");
-                                let implementor =
-                                    resource_implementor(&key, name, &settings.resources);
-                                exports.insert(ExportKey::Name(key), implementor);
-                            }
-                            _ => continue,
-                        }
-                    }
-
-                    implementor.clone()
-                }
-                WorldItem::Type(id) => match self.resolve.types[*id].kind {
-                    TypeDefKind::Resource => resource_implementor(&key, &key, &settings.resources),
-                    _ => continue,
-                },
-                WorldItem::Function(_) => implementor.clone(),
-            };
-
-            exports.insert(ExportKey::Name(key), implementor);
-        }
-
         let opts = Opts {
-            exports,
+            rustfmt: settings.format,
             ownership: match settings.ownership {
                 Ownership::Owning => wit_bindgen_rust::Ownership::Owning,
                 Ownership::Borrowing => wit_bindgen_rust::Ownership::Borrowing {

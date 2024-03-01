@@ -1,3 +1,4 @@
+#[allow(warnings)]
 mod bindings;
 
 use bindings::{
@@ -18,3 +19,5 @@ impl Guest for Component {
         data
     }
 }
+
+bindings::export!(Component with_types_in bindings);

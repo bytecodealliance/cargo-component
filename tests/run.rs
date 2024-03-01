@@ -14,6 +14,7 @@ fn it_runs_with_command_component() -> Result<()> {
     fs::write(
         project.root().join("src/main.rs"),
         r#"
+#[allow(warnings)]
 mod bindings;
 
 fn main() {
@@ -73,6 +74,7 @@ world generator {
     fs::write(
         project.root().join("src/lib.rs"),
         r#"
+#[allow(warnings)]
 mod bindings;
 
 use bindings::exports::wasi::cli::run::Guest;
@@ -88,7 +90,10 @@ impl Guest for Component {
         }
         Ok(())
     }
-}"#,
+}
+
+bindings::export!(Component with_types_in bindings);
+"#,
     )?;
 
     project

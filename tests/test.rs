@@ -49,6 +49,7 @@ world generator {
     fs::write(
         project.root().join("src/main.rs"),
         r#"
+#[allow(warnings)]
 mod bindings;
 
 use bindings::{Seed};
@@ -102,11 +103,10 @@ world generator {
     fs::write(
         project.root().join("src/lib.rs"),
         r#"
+#[allow(warnings)]
 mod bindings;
 
 use bindings::{Seed};
-
-struct Component;
 
 fn rand(seed: Seed) -> u32 {
     seed.value + 1

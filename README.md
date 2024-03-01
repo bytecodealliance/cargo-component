@@ -227,6 +227,7 @@ The component will export a `hello-world` function returning a string.
 The implementation of the component will be in `src/lib.rs`:
 
 ```rust
+#[allow(warnings)]
 mod bindings;
 
 use bindings::Guest;
@@ -239,6 +240,8 @@ impl Guest for Component {
         "Hello, World!".to_string()
     }
 }
+
+bindings::export!(Component with_types_in bindings);
 ```
 
 The `bindings` module contains the the types and traits that correspond to the

@@ -162,6 +162,7 @@ world foo {
         .stderr(contains("`test:bar` v1.0.0 -> v1.1.0"));
 
     let source = r#"
+#[allow(warnings)]
 mod bindings;
 use bindings::{baz, Guest};
 struct Component;
@@ -170,6 +171,8 @@ impl Guest for Component {
         baz()
     }
 }
+
+bindings::export!(Component with_types_in bindings);
 "#;
 
     fs::write(project.root().join("src/lib.rs"), source)?;
