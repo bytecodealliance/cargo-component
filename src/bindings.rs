@@ -154,6 +154,8 @@ impl<'a> BindingsGenerator<'a> {
             },
             additional_derive_attributes: settings.derives.clone(),
             std_feature: settings.std_feature,
+            runtime_path: Some("wit_bindgen_rt".to_string()),
+            bitflags_path: Some("bitflags".to_string()),
             ..Default::default()
         };
 

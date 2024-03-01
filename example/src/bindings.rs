@@ -260,5 +260,5 @@ ssed-by\x02\x0dwit-component\x070.201.0\x10wit-bindgen-rust\x060.20.0";
 #[doc(hidden)]
 #[cfg(target_arch = "wasm32")]
 pub fn __link_custom_section_describing_imports() {
-    wit_bindgen::rt::maybe_link_cabi_realloc();
+    wit_bindgen_rt::maybe_link_cabi_realloc();
 }
