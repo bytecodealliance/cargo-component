@@ -137,23 +137,6 @@ ecosystem such that `cargo` itself might support them.
 
 Until that time, there's `cargo component`!
 
-## Status
-
-A quick note on the implementation status of the component model
-proposal.
-
-At this time of this writing, no WebAssembly runtimes have fully
-implemented the component model proposal.
-
-[Wasmtime](https://github.com/bytecodealliance/wasmtime)
-has implementation efforts underway to support it, but it's still a
-_work-in-progress_.
-
-Until runtime support grows and additional tools are implemented
-for linking components together, the usefulness of `cargo component`
-today is effectively limited to creating components that runtime
-and tooling developers can use to test their implementations.
-
 ## WASI Support
 
 Currently `cargo component` targets `wasm32-wasi` by default.
