@@ -138,6 +138,7 @@ world foo {
         .success();
 
     let source = r#"
+#[allow(warnings)]
 mod bindings;
 use bindings::Guest;
 struct Component;
@@ -146,6 +147,8 @@ impl Guest for Component {
         bindings::test_foo::bar()
     }
 }
+
+bindings::export!(Component with_types_in bindings);
 "#;
 
     fs::write(project.root().join("src/lib.rs"), source)?;

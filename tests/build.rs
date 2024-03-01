@@ -4,7 +4,7 @@ use assert_cmd::prelude::*;
 use predicates::{prelude::PredicateBooleanExt, str::contains};
 use std::{fs, rc::Rc};
 use tempfile::TempDir;
-use toml_edit::{value, Array, InlineTable, Item, Table};
+use toml_edit::{value, Array, Item, Table};
 
 mod support;
 
@@ -253,7 +253,8 @@ world example {
 
     fs::write(
         project.root().join("src/lib.rs"),
-        "mod bindings;
+        "#[allow(warnings)]
+mod bindings;
 use bindings::exports::{foo::bar::baz::{Guest as Baz, Ty}, bar::baz::qux::Guest as Qux};
 
 struct Component;
@@ -269,43 +270,9 @@ impl Qux for Component {
         todo!()
     }
 }
+
+bindings::export!(Component with_types_in bindings);
 ",
-    )?;
-
-    project
-        .cargo_component("build")
-        .assert()
-        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
-        .success();
-
-    validate_component(&project.debug_wasm("foo"))?;
-
-    Ok(())
-}
-
-#[test]
-fn it_builds_with_a_specified_implementor() -> Result<()> {
-    let project = Project::new("foo")?;
-    project.update_manifest(|mut doc| {
-        doc["package"]["metadata"]["component"]["bindings"]["implementor"] =
-            value("CustomImplementor");
-        Ok(doc)
-    })?;
-
-    fs::write(
-        project.root().join("src/lib.rs"),
-        r#"mod bindings;
-
-use bindings::Guest;
-
-struct CustomImplementor;
-
-impl Guest for CustomImplementor {
-    fn hello_world() -> String {
-        todo!()
-    }
-}
-"#,
     )?;
 
     project
@@ -341,6 +308,7 @@ fn empty_world_with_dep_valid() -> Result<()> {
     fs::write(
         project.root().join("src/lib.rs"),
         "
+            #[allow(warnings)]
             mod bindings;
             use bindings::{Guest, Foo};
             struct Component;
@@ -350,6 +318,8 @@ fn empty_world_with_dep_valid() -> Result<()> {
                     vec![Foo::BAR]
                 }
             }
+
+            bindings::export!(Component with_types_in bindings);
         ",
     )?;
 
@@ -376,6 +346,7 @@ fn empty_world_with_dep_valid() -> Result<()> {
     fs::write(
         project.root().join("src/lib.rs"),
         "
+            #[allow(warnings)]
             mod bindings;
 
             #[no_mangle]
@@ -416,78 +387,22 @@ fn it_builds_with_resources() -> Result<()> {
     fs::write(
         project.root().join("src/lib.rs"),
         r#"
+            #[allow(warnings)]
             mod bindings;
 
             use std::cell::Cell;
+
+            struct Component;
+
+            impl bindings::exports::baz::Guest for Component {
+                type KeyedInteger = KeyedInteger;
+            }
+
+            bindings::export!(Component with_types_in bindings);
 
             pub struct KeyedInteger(Cell<u32>);
 
             impl bindings::exports::baz::GuestKeyedInteger for KeyedInteger {
-                fn new(x: u32) -> Self {
-                    Self(Cell::new(x))
-                }
-
-                fn get(&self) -> u32 {
-                    self.0.get()
-                }
-
-                fn set(&self, x: u32) {
-                    self.0.set(x);
-                }
-
-                fn key() -> String {
-                    "my-key".to_string()
-                }
-            }
-        "#,
-    )?;
-
-    project.cargo_component("build").assert().success();
-
-    let dep = project.debug_wasm("foo");
-    validate_component(&dep)?;
-
-    Ok(())
-}
-
-#[test]
-fn it_builds_with_resources_with_custom_implementor() -> Result<()> {
-    let project = Project::new("foo")?;
-    project.update_manifest(|mut doc| {
-        doc["package"]["metadata"]["component"]["bindings"]["resources"] = value(
-            InlineTable::from_iter([("baz/keyed-integer", "MyKeyedInteger")]),
-        );
-        Ok(doc)
-    })?;
-
-    fs::write(
-        project.root().join("wit/world.wit"),
-        "
-            package foo:bar;
-
-            world bar {
-                export baz: interface {
-                    resource keyed-integer {
-                        constructor(x: u32);
-                        get: func() -> u32;
-                        set: func(x: u32);
-                        key: static func() -> string;
-                    }
-                }
-            }
-        ",
-    )?;
-
-    fs::write(
-        project.root().join("src/lib.rs"),
-        r#"
-            mod bindings;
-            use std::cell::Cell;
-            use bindings::exports::baz::GuestKeyedInteger;
-
-            pub struct MyKeyedInteger(Cell<u32>);
-
-            impl GuestKeyedInteger for MyKeyedInteger {
                 fn new(x: u32) -> Self {
                     Self(Cell::new(x))
                 }
@@ -545,9 +460,18 @@ fn it_builds_resources_with_specified_ownership_model() -> Result<()> {
     fs::write(
         project.root().join("src/lib.rs"),
         r#"
+            #[allow(warnings)]
             mod bindings;
 
             use std::cell::Cell;
+
+            struct Component;
+
+            impl bindings::exports::baz::Guest for Component {
+                type KeyedInteger = KeyedInteger;
+            }
+
+            bindings::export!(Component with_types_in bindings);
 
             pub struct KeyedInteger(Cell<u32>);
 
@@ -605,6 +529,7 @@ world random-generator {
     fs::write(
         comp1.root().join("src/lib.rs"),
         r#"
+#[allow(warnings)]
 mod bindings;
 
 use bindings::{Guest, Seed};
@@ -616,6 +541,8 @@ impl Guest for Component {
         seed.value + 1
     }
 }
+
+bindings::export!(Component with_types_in bindings);
 "#,
     )?;
 
@@ -649,6 +576,7 @@ world random-generator {
     fs::write(
         comp2.root().join("src/lib.rs"),
         r#"
+#[allow(warnings)]
 mod bindings;
 
 use bindings::{Guest, my_comp1};
@@ -660,6 +588,8 @@ impl Guest for Component {
         my_comp1::rand(my_comp1::Seed { value: 1 })
     }
 }
+
+bindings::export!(Component with_types_in bindings);
 "#,
     )?;
 
@@ -767,6 +697,7 @@ world foo-world {
     fs::write(
         project.root().join("src/lib.rs"),
         r#"
+#[allow(warnings)]
 mod bindings;
 use bindings::Guest;
 use bindings::my::derive::foo::Bar;
@@ -781,6 +712,8 @@ impl Guest for Component {
         stuff
     }
 }
+
+bindings::export!(Component with_types_in bindings);
 "#,
     )?;
 
@@ -817,6 +750,7 @@ fn it_builds_with_versioned_wit() -> Result<()> {
     fs::write(
         project.root().join("src/lib.rs"),
         r#"
+            #[allow(warnings)]
             mod bindings;
 
             struct Component;
@@ -824,6 +758,8 @@ fn it_builds_with_versioned_wit() -> Result<()> {
             impl bindings::exports::foo::bar::foo::Guest for Component {
                 fn f() {}
             }
+
+            bindings::export!(Component with_types_in bindings);
         "#,
     )?;
 

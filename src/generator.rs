@@ -273,7 +273,7 @@ impl<'a> SourceGenerator<'a> {
         }
 
         let mut source = String::new();
-        writeln!(&mut source, "mod bindings;")?;
+        writeln!(&mut source, "#[allow(warnings)]\nmod bindings;")?;
         writeln!(&mut source)?;
         write!(
             &mut source,
@@ -290,6 +290,11 @@ impl<'a> SourceGenerator<'a> {
 
             source.push_str(imp);
         }
+
+        writeln!(
+            &mut source,
+            "\n\nbindings::export!(Component with_types_in bindings);"
+        )?;
 
         if self.format {
             let mut child = Command::new("rustfmt")

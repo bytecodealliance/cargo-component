@@ -34,6 +34,7 @@ world generator {
         r#"
 #![feature(test)]
 
+#[allow(warnings)]
 mod bindings;
 
 extern crate test;
@@ -56,6 +57,8 @@ impl Guest for Component {
         fibonacci(size)
     }
 }
+
+bindings::export!(Component with_types_in bindings);
 
 #[bench]
 fn bench_recursive_fibonacci(b: &mut Bencher) {

@@ -57,17 +57,11 @@ impl FromStr for Ownership {
 }
 
 /// Configuration for bindings generation.
-#[derive(Default, Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct Bindings {
-    /// The path to the type that implements the target world.
-    ///
-    /// If `None`, a type named `Component` will be used.
-    pub implementor: Option<String>,
-    /// A map of resource names to implementing types.
-    ///
-    /// An example would be "foo:bar/baz/res" => "MyResource".
-    pub resources: HashMap<String, String>,
+    /// Whether or not to run `rustfmt` on the bindings; defaults to true.
+    pub format: bool,
     /// The ownership model for generated types.
     pub ownership: Ownership,
     /// Additional derives to apply to generated binding types.
@@ -75,6 +69,17 @@ pub struct Bindings {
     /// If true, code generation should qualify any features that depend on
     /// `std` with `cfg(feature = "std")`.
     pub std_feature: bool,
+}
+
+impl Default for Bindings {
+    fn default() -> Self {
+        Self {
+            format: true,
+            ownership: Default::default(),
+            derives: Default::default(),
+            std_feature: false,
+        }
+    }
 }
 
 /// The target of a component.
