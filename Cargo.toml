@@ -45,6 +45,7 @@ libc = { workspace = true }
 warg-protocol = { workspace = true }
 warg-crypto = { workspace = true }
 warg-client = { workspace = true }
+warg-credentials = { workspace = true }
 p256 = { workspace = true }
 rand_core = { workspace = true }
 rpassword = { workspace = true }
@@ -52,6 +53,8 @@ futures = { workspace = true }
 bytes = { workspace = true }
 which = { workspace = true }
 shell-escape = "0.1.5"
+secrecy = { workspace = true }
+keyring = { workspace = true }
 
 [dev-dependencies]
 assert_cmd = { workspace = true }
@@ -66,9 +69,10 @@ members = ["crates/core", "crates/wit"]
 
 [workspace.dependencies]
 cargo-component-core = { path = "crates/core", version = "0.9.1" }
-warg-protocol = "0.3.0"
-warg-crypto = "0.3.0"
-warg-client = "0.3.0"
+warg-protocol = {git = "https://github.com/bytecodealliance/registry", rev = "6b65022" }
+warg-crypto = {git = "https://github.com/bytecodealliance/registry", rev = "6b65022" }
+warg-client = {git = "https://github.com/bytecodealliance/registry", rev = "6b65022" }
+warg-credentials = {git = "https://github.com/bytecodealliance/registry", rev = "6b65022" }
 anyhow = "1.0.80"
 clap = { version = "4.5.1", features = ["derive"] }
 toml_edit = { version = "0.22.6", features = ["serde"] }
@@ -98,6 +102,7 @@ rpassword = "7.3.1"
 futures = "0.3.30"
 bytes = "1.5.0"
 which = "6.0.0"
+secrecy = "0.8.0"
 wit-bindgen-rust = "0.21.0"
 wit-bindgen-core = "0.21.0"
 tempfile = "3.10.1"
@@ -105,7 +110,7 @@ assert_cmd = "2.0.14"
 predicates = "3.1.0"
 wasmparser = "0.201.0"
 wat = "1.201.0"
-warg-server = "0.3.0"
+warg-server = {git = "https://github.com/bytecodealliance/registry", rev = "6b65022" }
 wasmprinter = "0.201.0"
 
 [profile.release]

@@ -8,6 +8,7 @@ use crate::{
 use anyhow::{bail, Context, Result};
 use futures::{stream::FuturesUnordered, StreamExt};
 use indexmap::IndexMap;
+use secrecy::Secret;
 use semver::{Comparator, Op, Version, VersionReq};
 use serde::{
     de::{self, value::MapAccessDeserializer},
@@ -23,8 +24,9 @@ use std::{
 use url::Url;
 use warg_client::{
     storage::{ContentStorage, PackageInfo, RegistryStorage},
-    Config, FileSystemClient, StorageLockResult,
+    Config, FileSystemClient, RegistryUrl, StorageLockResult,
 };
+use warg_credentials::keyring::get_auth_token;
 use warg_crypto::hash::AnyHash;
 use warg_protocol::registry;
 use wit_component::DecodedWasm;
@@ -49,13 +51,30 @@ pub fn find_url<'a>(
     }
 }
 
+/// Gets the auth token for the given registry URL.
+pub fn auth_token(config: &Config, registry: Option<String>) -> Result<Option<Secret<String>>> {
+    if config.auth {
+        return if let Some(reg_url) = registry {
+            Ok(get_auth_token(&RegistryUrl::new(reg_url)?)?)
+        } else if let Some(url) = config.home_url.as_ref() {
+            Ok(get_auth_token(&RegistryUrl::new(url)?)?)
+        } else {
+            Ok(None)
+        };
+    }
+    Ok(None)
+}
 /// Creates a registry client with the given warg configuration.
 pub fn create_client(
     config: &warg_client::Config,
     url: &str,
     terminal: &Terminal,
 ) -> Result<FileSystemClient> {
-    match FileSystemClient::try_new_with_config(Some(url), config)? {
+    match FileSystemClient::try_new_with_config(
+        Some(url),
+        config,
+        auth_token(config, Some(url.to_string()))?,
+    )? {
         StorageLockResult::Acquired(client) => Ok(client),
         StorageLockResult::NotAcquired(path) => {
             terminal.status_with_color(
@@ -64,7 +83,11 @@ pub fn create_client(
                 Colors::Cyan,
             )?;
 
-            Ok(FileSystemClient::new_with_config(Some(url), config)?)
+            Ok(FileSystemClient::new_with_config(
+                Some(url),
+                config,
+                auth_token(config, Some(url.to_string()))?,
+            )?)
         }
     }
 }
@@ -474,7 +497,7 @@ impl<'a> DependencyResolver<'a> {
                         let url = find_url(
                             Some(registry_name),
                             self.registry_urls,
-                            self.warg_config.default_url.as_deref(),
+                            self.warg_config.home_url.as_deref(),
                         )?;
                         e.insert(Registry {
                             client: Arc::new(create_client(self.warg_config, url, self.terminal)?),
@@ -854,7 +877,11 @@ impl<'a> Registry<'a> {
     ) -> Result<Option<&'b PackageInfo>> {
         match packages.entry(name) {
             hash_map::Entry::Occupied(e) => Ok(Some(e.into_mut())),
-            hash_map::Entry::Vacant(e) => match client.registry().load_package(e.key()).await? {
+            hash_map::Entry::Vacant(e) => match client
+                .registry()
+                .load_package(client.get_warg_registry(), e.key())
+                .await?
+            {
                 Some(p) => Ok(Some(e.insert(p))),
                 None => Ok(None),
             },

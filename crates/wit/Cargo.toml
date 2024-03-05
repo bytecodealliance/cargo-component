@@ -20,6 +20,7 @@ serde = { workspace = true }
 toml_edit = { workspace = true }
 warg-protocol = { workspace = true }
 warg-client = { workspace = true }
+warg-credentials = { workspace = true }
 warg-crypto = { workspace = true }
 log = { workspace = true }
 clap = { workspace = true }
@@ -30,6 +31,7 @@ indexmap = { workspace = true }
 wit-parser = { workspace = true }
 wit-component = { workspace = true }
 wasm-metadata = { workspace = true }
+keyring = { workspace = true }
 futures = { workspace = true }
 bytes = { workspace = true }
 tokio = { workspace = true }

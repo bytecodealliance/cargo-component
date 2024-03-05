@@ -111,9 +111,12 @@ pub async fn spawn_server(root: &Path) -> Result<(ServerInstance, warg_client::C
     };
 
     let config = warg_client::Config {
-        default_url: Some(format!("http://{addr}")),
+        home_url: Some(format!("http://{addr}")),
         registries_dir: Some(root.join("registries")),
         content_dir: Some(root.join("content")),
+        namespace_map_path: Some(root.join("namespaces")),
+        keys: None,
+        auth: false,
     };
 
     Ok((instance, config))

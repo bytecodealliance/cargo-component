@@ -1,6 +1,7 @@
 use crate::support::*;
 use anyhow::{Context, Result};
 use assert_cmd::prelude::*;
+use cargo_component_core::registry::auth_token;
 use predicates::str::contains;
 use semver::Version;
 use std::{fs, rc::Rc};
@@ -201,7 +202,7 @@ async fn it_publishes_with_registry_metadata() -> Result<()> {
 
     validate_component(&project.release_wasm("foo"))?;
 
-    let client = Client::new_with_config(None, &config)?;
+    let client = Client::new_with_config(None, &config, None)?;
     let download = client
         .download_exact(&PackageName::new("test:foo")?, &Version::parse("0.1.0")?)
         .await?;
