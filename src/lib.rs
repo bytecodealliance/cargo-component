@@ -805,8 +805,7 @@ async fn generate_package_bindings(
     let last_modified_output = bindings_path
         .is_file()
         .then(|| last_modified_time(&bindings_path))
-        .transpose()?
-        .unwrap_or(SystemTime::UNIX_EPOCH);
+        .transpose()?;
 
     let (generator, import_name_map) = BindingsGenerator::new(resolution)?;
     match generator.reason(last_modified_exe, last_modified_output)? {

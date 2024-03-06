@@ -106,8 +106,13 @@ impl<'a> BindingsGenerator<'a> {
     pub fn reason(
         &self,
         last_modified_exe: SystemTime,
-        last_modified_output: SystemTime,
+        last_modified_output: Option<SystemTime>,
     ) -> Result<Option<&'static str>> {
+        let last_modified_output = match last_modified_output {
+            Some(time) => time,
+            None => return Ok(Some("the bindings have not been generated yet")),
+        };
+
         let metadata = self.metadata();
         let exe_modified = last_modified_exe > last_modified_output;
         let manifest_modified = metadata.modified_at > last_modified_output;
@@ -125,7 +130,7 @@ impl<'a> BindingsGenerator<'a> {
             Ok(Some(if manifest_modified {
                 "the manifest was modified"
             } else if target_modified {
-                "the target WIT file was modified"
+                "the target WIT package was modified"
             } else if exe_modified {
                 "the cargo-component executable was modified"
             } else {
@@ -204,6 +209,12 @@ impl<'a> BindingsGenerator<'a> {
         resolution: &PackageDependencyResolution,
         import_name_map: &mut HashMap<String, String>,
     ) -> Result<(Resolve, WorldId, Vec<PathBuf>)> {
+        log::debug!(
+            "creating target world for package `{name}` ({path})",
+            name = resolution.metadata.name,
+            path = resolution.metadata.manifest_path.display()
+        );
+
         let (mut merged, world_id, source_files) =
             if let Some(name) = resolution.metadata.target_package() {
                 Self::target_package(resolution, name, resolution.metadata.target_world())?
@@ -216,6 +227,8 @@ impl<'a> BindingsGenerator<'a> {
 
         // Merge all component dependencies as interface imports
         for (id, dependency) in &resolution.resolutions {
+            log::debug!("importing component dependency `{id}`");
+
             let (mut resolve, component_world_id) = dependency
                 .decode()?
                 .into_component_world()
@@ -468,12 +481,19 @@ impl<'a> BindingsGenerator<'a> {
         let mut used = IndexMap::new();
         let mut interfaces = IndexMap::new();
 
-        // Check for imported (i.e. used) types, which must also import any owning interfaces
+        // Check for directly used types from the component's world
+        // Add any used interfaces to the `used` map
         for item in resolve.worlds[source_id].imports.values() {
             if let WorldItem::Type(ty) = &item {
                 if let TypeDefKind::Type(Type::Id(ty)) = resolve.types[*ty].kind {
-                    if let TypeOwner::Interface(i) = resolve.types[ty].owner {
-                        used.insert(WorldKey::Interface(i), WorldItem::Interface(i));
+                    if let TypeOwner::Interface(id) = resolve.types[ty].owner {
+                        log::debug!(
+                            "importing interface `{iface}` for used type `{ty}`",
+                            iface = resolve.id_of(id).as_deref().unwrap_or("<unnamed>"),
+                            ty = resolve.types[ty].name.as_deref().unwrap_or("<unnamed>")
+                        );
+
+                        used.insert(WorldKey::Interface(id), WorldItem::Interface(id));
                     }
                 }
             }
@@ -483,6 +503,7 @@ impl<'a> BindingsGenerator<'a> {
         for (key, item) in &resolve.worlds[source_id].exports {
             match item {
                 WorldItem::Function(f) => {
+                    log::debug!("importing function `{name}`", name = f.name);
                     functions.insert(key.clone().unwrap_name(), f.clone());
                 }
                 WorldItem::Interface(id) => {
@@ -505,6 +526,35 @@ impl<'a> BindingsGenerator<'a> {
                         }
                     };
 
+                    // Check for used types from this interface
+                    // Add any used interfaces to the `used` map
+                    for (_, ty) in &resolve.interfaces[*id].types {
+                        if let TypeDefKind::Type(Type::Id(ty)) = resolve.types[*ty].kind {
+                            if let TypeOwner::Interface(other) = resolve.types[ty].owner {
+                                if other != *id {
+                                    log::debug!(
+                                        "importing interface `{iface}` for used type `{ty}`",
+                                        iface =
+                                            resolve.id_of(other).as_deref().unwrap_or("<unnamed>"),
+                                        ty = resolve.types[ty]
+                                            .name
+                                            .as_deref()
+                                            .unwrap_or("<unnamed>")
+                                    );
+
+                                    used.insert(
+                                        WorldKey::Interface(other),
+                                        WorldItem::Interface(other),
+                                    );
+                                }
+                            }
+                        }
+                    }
+
+                    log::debug!(
+                        "importing interface `{iface}`",
+                        iface = resolve.id_of(*id).as_ref().unwrap_or(&name),
+                    );
                     interfaces.insert(name, *id);
                 }
                 _ => continue,
