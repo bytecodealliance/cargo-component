@@ -519,9 +519,19 @@ interface types {
     }
 }
 
+interface types2 {
+    type seed = u32;
+}
+
+interface other {
+    use types2.{seed};
+    rand: func(seed: seed) -> u32;
+}
+
 world random-generator {
     use types.{seed};
     export rand: func(seed: seed) -> u32;
+    export other;
 }
 ",
     )?;
@@ -532,13 +542,19 @@ world random-generator {
 #[allow(warnings)]
 mod bindings;
 
-use bindings::{Guest, Seed};
+use bindings::{Guest, Seed, exports::my::comp1::other};
 
 struct Component;
 
 impl Guest for Component {
     fn rand(seed: Seed) -> u32 {
         seed.value + 1
+    }
+}
+
+impl other::Guest for Component {
+    fn rand(seed: other::Seed) -> u32 {
+        seed + 2
     }
 }
 
@@ -579,13 +595,13 @@ world random-generator {
 #[allow(warnings)]
 mod bindings;
 
-use bindings::{Guest, my_comp1};
+use bindings::{Guest, my_comp1, my};
 
 struct Component;
 
 impl Guest for Component {
     fn rand() -> u32 {
-        my_comp1::rand(my_comp1::Seed { value: 1 })
+        my_comp1::rand(my_comp1::Seed { value: 1 }) + my::comp1::my_comp1_other::rand(1)
     }
 }
 
