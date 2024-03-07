@@ -53,7 +53,7 @@ pub fn find_url<'a>(
 
 /// Gets the auth token for the given registry URL.
 pub fn auth_token(config: &Config, registry: Option<String>) -> Result<Option<Secret<String>>> {
-    if config.auth {
+    if config.keyring_auth {
         return if let Some(reg_url) = registry {
             Ok(get_auth_token(&RegistryUrl::new(reg_url)?)?)
         } else if let Some(url) = config.home_url.as_ref() {

@@ -2,7 +2,6 @@ use crate::config::Config;
 use anyhow::{Context, Result};
 use cargo_component_core::{command::CommonOptions, terminal::Colors};
 use clap::{Args, Subcommand};
-use indexmap::IndexSet;
 use p256::ecdsa::SigningKey;
 use rand_core::OsRng;
 use std::io::{self, Write};
@@ -63,15 +62,11 @@ pub struct KeyIdCommand {
 impl KeyIdCommand {
     /// Executes the command.
     pub async fn exec(self, config: &Config) -> Result<()> {
-        let key = if let Some(keys) = &config.warg.keys {
-            get_signing_key(Some(&self.url), &keys, config.warg.home_url.as_deref())?
-        } else {
-            get_signing_key(
-                Some(&self.url),
-                &IndexSet::new(),
-                config.warg.home_url.as_deref(),
-            )?
-        };
+        let key = get_signing_key(
+            Some(&self.url),
+            &config.warg.keys,
+            config.warg.home_url.as_deref(),
+        )?;
         println!(
             "{fingerprint}",
             fingerprint = key.public_key().fingerprint()
@@ -93,16 +88,12 @@ impl KeyNewCommand {
     /// Executes the command.
     pub async fn exec(self, config: &mut Config) -> Result<()> {
         let key = SigningKey::random(&mut OsRng).into();
-        if let Some(keys) = &mut config.warg.keys {
-            set_signing_key(Some(&self.url), &key, keys, config.warg.home_url.as_deref())?;
-        } else {
-            set_signing_key(
-                Some(&self.url),
-                &key,
-                &mut IndexSet::new(),
-                config.warg.home_url.as_deref(),
-            )?;
-        };
+        set_signing_key(
+            Some(&self.url),
+            &key,
+            &mut config.warg.keys,
+            config.warg.home_url.as_deref(),
+        )?;
 
         config.terminal().status(
             "Created",
@@ -137,13 +128,10 @@ impl KeySetCommand {
 
         // let key = PrivateKey::decode(key).context("signing key is not in the correct format")?;
 
-        if config.warg.keys.is_none() {
-            config.warg.keys = Some(IndexSet::new());
-        }
         set_signing_key(
             Some(&self.url),
             &key,
-            config.warg.keys.as_mut().unwrap(),
+            &mut config.warg.keys,
             config.warg.home_url.as_deref(),
         )?;
         config
@@ -204,7 +192,7 @@ impl KeyDeleteCommand {
 
         delete_signing_key(
             Some(&self.url),
-            &config.warg.keys.as_ref().expect("Please set a default signing key by typing `warg key set <alg:base64>` or `warg key new"),
+            &config.warg.keys,
             config.warg.home_url.as_deref(),
         )?;
 

@@ -2,6 +2,7 @@
 
 use anyhow::{bail, Context, Result};
 use assert_cmd::prelude::OutputAssertExt;
+use indexmap::IndexSet;
 use std::{
     env, fs,
     path::{Path, PathBuf},
@@ -115,8 +116,8 @@ pub async fn spawn_server(root: &Path) -> Result<(ServerInstance, warg_client::C
         registries_dir: Some(root.join("registries")),
         content_dir: Some(root.join("content")),
         namespace_map_path: Some(root.join("namespaces")),
-        keys: None,
-        auth: false,
+        keys: IndexSet::new(),
+        keyring_auth: false,
     };
 
     Ok((instance, config))

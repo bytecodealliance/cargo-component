@@ -4,7 +4,6 @@ use cargo_component_core::{
     terminal::{Colors, Terminal},
 };
 use clap::{Args, Subcommand};
-use indexmap::IndexSet;
 use p256::ecdsa::SigningKey;
 use rand_core::OsRng;
 use std::io::{self, Write};
@@ -65,15 +64,7 @@ pub struct KeyIdCommand {
 impl KeyIdCommand {
     /// Executes the command.
     pub async fn exec(self, config: Config) -> Result<()> {
-        let key = if let Some(keys) = config.keys.clone() {
-            get_signing_key(Some(&self.url), &keys, config.home_url.as_deref())?
-        } else {
-            get_signing_key(
-                Some(&self.url),
-                &IndexSet::new(),
-                config.home_url.as_deref(),
-            )?
-        };
+        let key = get_signing_key(Some(&self.url), &config.keys, config.home_url.as_deref())?;
         println!(
             "{fingerprint}",
             fingerprint = key.public_key().fingerprint()
@@ -95,16 +86,12 @@ impl KeyNewCommand {
     /// Executes the command.
     pub async fn exec(self, terminal: &Terminal, mut config: Config) -> Result<()> {
         let key = SigningKey::random(&mut OsRng).into();
-        if let Some(keys) = &mut config.keys {
-            set_signing_key(Some(&self.url), &key, keys, config.home_url.as_deref())?;
-        } else {
-            set_signing_key(
-                Some(&self.url),
-                &key,
-                &mut IndexSet::new(),
-                config.home_url.as_deref(),
-            )?;
-        };
+        set_signing_key(
+            Some(&self.url),
+            &key,
+            &mut config.keys,
+            config.home_url.as_deref(),
+        )?;
 
         terminal.status(
             "Created",
@@ -130,23 +117,19 @@ pub struct KeySetCommand {
 
 impl KeySetCommand {
     /// Executes the command.
-    pub async fn exec(self, terminal: &Terminal, config: Config) -> Result<()> {
+    pub async fn exec(self, terminal: &Terminal, mut config: Config) -> Result<()> {
         let key = PrivateKey::decode(
             rpassword::prompt_password("input signing key (expected format is `<alg>:<base64>`): ")
                 .context("failed to read signing key")?,
         )
         .context("signing key is not in the correct format")?;
 
-        if let Some(keys) = &mut config.keys.clone() {
-            set_signing_key(Some(&self.url), &key, keys, config.home_url.as_deref())?;
-        } else {
-            set_signing_key(
-                Some(&self.url),
-                &key,
-                &mut IndexSet::new(),
-                config.home_url.as_deref(),
-            )?;
-        };
+        set_signing_key(
+            Some(&self.url),
+            &key,
+            &mut config.keys,
+            config.home_url.as_deref(),
+        )?;
 
         terminal.status(
             "Set",
@@ -200,11 +183,7 @@ impl KeyDeleteCommand {
             return Ok(());
         }
 
-        delete_signing_key(
-          Some(&self.url),
-          &config.keys.clone().expect("Please set a default signing key by typing `warg key set <alg:base64>` or `warg key new"),
-          config.home_url.as_deref(),
-        )?;
+        delete_signing_key(Some(&self.url), &config.keys, config.home_url.as_deref())?;
 
         terminal.status(
             "Deleted",

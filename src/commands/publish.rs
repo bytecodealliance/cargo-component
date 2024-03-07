@@ -6,7 +6,6 @@ use crate::{
 use anyhow::{bail, Context, Result};
 use cargo_component_core::{command::CommonOptions, registry::find_url};
 use clap::Args;
-use indexmap::IndexSet;
 use std::path::PathBuf;
 use warg_credentials::keyring::get_signing_key;
 use warg_crypto::signing::PrivateKey;
@@ -134,19 +133,11 @@ impl PublishCommand {
         let signing_key = if let Ok(key) = std::env::var("CARGO_COMPONENT_PUBLISH_KEY") {
             PrivateKey::decode(key).context("failed to parse signing key from `CARGO_COMPONENT_PUBLISH_KEY` environment variable")?
         } else {
-            if let Some(keys) = config.warg.keys.clone() {
-                get_signing_key(
-                    self.registry.as_deref(),
-                    &keys,
-                    config.warg.home_url.as_deref(),
-                )?
-            } else {
-                get_signing_key(
-                    self.registry.as_deref(),
-                    &IndexSet::new(),
-                    config.warg.home_url.as_deref(),
-                )?
-            }
+            get_signing_key(
+                self.registry.as_deref(),
+                &config.warg().keys,
+                config.warg.home_url.as_deref(),
+            )?
         };
 
         let cargo_build_args = CargoArguments {

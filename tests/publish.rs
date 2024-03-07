@@ -1,7 +1,6 @@
 use crate::support::*;
 use anyhow::{Context, Result};
 use assert_cmd::prelude::*;
-use cargo_component_core::registry::auth_token;
 use predicates::str::contains;
 use semver::Version;
 use std::{fs, rc::Rc};

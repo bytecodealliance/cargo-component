@@ -5,7 +5,6 @@ use crate::{
 use anyhow::{Context, Result};
 use cargo_component_core::{command::CommonOptions, registry::find_url};
 use clap::Args;
-use indexmap::IndexSet;
 use warg_credentials::keyring::get_signing_key;
 use warg_crypto::signing::PrivateKey;
 use warg_protocol::registry::PackageName;
@@ -57,19 +56,11 @@ impl PublishCommand {
                 "failed to parse signing key from `WIT_PUBLISH_KEY` environment variable",
             )?
         } else {
-            if let Some(keys) = &warg_config.keys {
-                get_signing_key(
-                    self.registry.as_deref(),
-                    &keys,
-                    warg_config.home_url.as_deref(),
-                )?
-            } else {
-                get_signing_key(
-                    self.registry.as_deref(),
-                    &IndexSet::new(),
-                    warg_config.home_url.as_deref(),
-                )?
-            }
+            get_signing_key(
+                self.registry.as_deref(),
+                &warg_config.keys,
+                warg_config.home_url.as_deref(),
+            )?
         };
 
         publish_wit_package(
