@@ -141,6 +141,48 @@ async fn it_targets_a_world() -> Result<()> {
         "test:bar",
         "1.2.3",
         r#"package test:bar@1.2.3;
+
+interface bar {
+    resource a {
+        constructor(a: borrow<a>);
+        a: static func(a: borrow<a>) -> a;
+        b: func(a: a);
+    }
+
+    resource b {
+        constructor(a: borrow<a>);
+        a: static func(a: borrow<a>) -> a;
+        b: func(a: a);
+    }
+
+    w: func(a: a) -> a;
+    x: func(b: b) -> b;
+    y: func(a: borrow<a>);
+    z: func(b: borrow<b>);
+}
+
+interface baz {
+    use bar.{a as a2};
+
+    resource a {
+        constructor(a: borrow<a>);
+        a: static func(a: borrow<a>) -> a;
+        b: func(a: a);
+    }
+
+    resource b {
+        constructor(a: borrow<a>);
+        a: static func(a: borrow<a>) -> a;
+        b: func(a: a);
+    }
+
+    v: func(a2: borrow<a2>) -> a2;
+    w: func(a: a) -> a;
+    x: func(b: b) -> b;
+    y: func(a: borrow<a>);
+    z: func(b: borrow<b>);
+}
+
 world foo {
     resource file {
         open: static func(path: string) -> file;
@@ -148,13 +190,14 @@ world foo {
     }
     import foo: func() -> file;
     export bar: func(file: borrow<file>) -> file;
+    export bar;
+    export baz;
 }"#,
         true,
     )
     .await?;
 
     let project = Project::with_dir(dir.clone(), "component", "--target test:bar@1.0.0")?;
-
     project
         .cargo_component("build")
         .assert()
