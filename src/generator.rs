@@ -229,35 +229,24 @@ impl ReservedNames {
 struct UnimplementedFunction<'a> {
     resolve: &'a Resolve,
     func: &'a Function,
+    in_world: bool,
 }
 
 impl<'a> UnimplementedFunction<'a> {
-    fn new(resolve: &'a Resolve, func: &'a Function) -> Self {
-        Self { resolve, func }
+    fn new(resolve: &'a Resolve, func: &'a Function, in_world: bool) -> Self {
+        Self {
+            resolve,
+            func,
+            in_world,
+        }
     }
 
     fn print(&self, trie: &mut UseTrie, source: &mut String) -> Result<()> {
-        let (name, is_static, self_param, self_type) = match self.func.kind {
-            FunctionKind::Freestanding => (
-                Cow::Owned(to_rust_ident(&self.func.name)),
-                false,
-                false,
-                None,
-            ),
-            FunctionKind::Method(id) => (
-                to_rust_ident(
-                    self.func
-                        .name
-                        .split_once('.')
-                        .expect("invalid method name")
-                        .1,
-                )
-                .into(),
-                false,
-                true,
-                Some(id),
-            ),
-            FunctionKind::Static(id) => (
+        let (name, self_param, constructor) = match self.func.kind {
+            FunctionKind::Freestanding => {
+                (Cow::Owned(to_rust_ident(&self.func.name)), false, false)
+            }
+            FunctionKind::Method(_) => (
                 to_rust_ident(
                     self.func
                         .name
@@ -268,18 +257,25 @@ impl<'a> UnimplementedFunction<'a> {
                 .into(),
                 true,
                 false,
-                Some(id),
             ),
-            FunctionKind::Constructor(id) => ("new".into(), false, false, Some(id)),
+            FunctionKind::Static(_) => (
+                to_rust_ident(
+                    self.func
+                        .name
+                        .split_once('.')
+                        .expect("invalid method name")
+                        .1,
+                )
+                .into(),
+                false,
+                false,
+            ),
+            FunctionKind::Constructor(_) => ("new".into(), false, true),
         };
 
         // TODO: it would be nice to share the printing of the signature of the function
         // with wit-bindgen, but right now it's tightly coupled with interface generation.
-        write!(
-            source,
-            "    {modifier}fn {name}(",
-            modifier = if is_static { "static " } else { "" }
-        )?;
+        write!(source, "    fn {name}(")?;
 
         for (i, (name, param)) in self.func.params.iter().enumerate() {
             if i > 0 {
@@ -291,7 +287,7 @@ impl<'a> UnimplementedFunction<'a> {
             } else {
                 source.push_str(&to_rust_ident(name));
                 source.push_str(": ");
-                self.print_type(param, self_type, trie, source)?;
+                self.print_type(self.in_world, param, trie, source)?;
             }
         }
         source.push(')');
@@ -299,12 +295,16 @@ impl<'a> UnimplementedFunction<'a> {
             0 => {}
             1 => {
                 source.push_str(" -> ");
-                self.print_type(
-                    self.func.results.iter_types().next().unwrap(),
-                    self_type,
-                    trie,
-                    source,
-                )?;
+                if constructor {
+                    source.push_str("Self");
+                } else {
+                    self.print_type(
+                        self.in_world,
+                        self.func.results.iter_types().next().unwrap(),
+                        trie,
+                        source,
+                    )?;
+                }
             }
             _ => {
                 source.push_str(" -> (");
@@ -313,7 +313,7 @@ impl<'a> UnimplementedFunction<'a> {
                         source.push_str(", ");
                     }
 
-                    self.print_type(ty, self_type, trie, source)?;
+                    self.print_type(self.in_world, ty, trie, source)?;
                 }
 
                 source.push(')');
@@ -325,8 +325,8 @@ impl<'a> UnimplementedFunction<'a> {
 
     fn print_type(
         &self,
+        in_world: bool,
         ty: &Type,
-        self_type: Option<TypeId>,
         trie: &mut UseTrie,
         source: &mut String,
     ) -> Result<()> {
@@ -344,7 +344,7 @@ impl<'a> UnimplementedFunction<'a> {
             Type::Float64 => source.push_str("f64"),
             Type::Char => source.push_str("char"),
             Type::String => source.push_str("String"),
-            Type::Id(id) => self.print_type_id(*id, self_type, trie, source)?,
+            Type::Id(id) => self.print_type_id(in_world, *id, trie, source)?,
         }
 
         Ok(())
@@ -352,38 +352,34 @@ impl<'a> UnimplementedFunction<'a> {
 
     fn print_type_id(
         &self,
+        in_world: bool,
         id: TypeId,
-        self_type: Option<TypeId>,
         trie: &mut UseTrie,
         source: &mut String,
     ) -> Result<()> {
         let ty = &self.resolve.types[id];
 
         if ty.name.is_some() {
-            if Some(id) == self_type {
-                source.push_str("Self");
-            } else {
-                self.print_type_path(ty, trie, source);
-            }
+            self.print_type_path(ty, trie, source);
             return Ok(());
         }
 
         match &ty.kind {
             TypeDefKind::List(ty) => {
                 source.push_str("Vec<");
-                self.print_type(ty, self_type, trie, source)?;
+                self.print_type(in_world, ty, trie, source)?;
                 source.push('>');
             }
             TypeDefKind::Option(ty) => {
                 source.push_str("Option<");
-                self.print_type(ty, self_type, trie, source)?;
+                self.print_type(in_world, ty, trie, source)?;
                 source.push('>');
             }
             TypeDefKind::Result(r) => {
                 source.push_str("Result<");
-                self.print_optional_type(r.ok.as_ref(), self_type, trie, source)?;
+                self.print_optional_type(in_world, r.ok.as_ref(), trie, source)?;
                 source.push_str(", ");
-                self.print_optional_type(r.err.as_ref(), self_type, trie, source)?;
+                self.print_optional_type(in_world, r.err.as_ref(), trie, source)?;
                 source.push('>');
             }
             TypeDefKind::Variant(_) => {
@@ -395,7 +391,7 @@ impl<'a> UnimplementedFunction<'a> {
                     if i > 0 {
                         source.push_str(", ");
                     }
-                    self.print_type(ty, self_type, trie, source)?;
+                    self.print_type(in_world, ty, trie, source)?;
                 }
                 source.push(')');
             }
@@ -410,23 +406,28 @@ impl<'a> UnimplementedFunction<'a> {
             }
             TypeDefKind::Future(ty) => {
                 source.push_str("Future<");
-                self.print_optional_type(ty.as_ref(), self_type, trie, source)?;
+                self.print_optional_type(in_world, ty.as_ref(), trie, source)?;
                 source.push('>');
             }
             TypeDefKind::Stream(stream) => {
                 source.push_str("Stream<");
-                self.print_optional_type(stream.element.as_ref(), self_type, trie, source)?;
+                self.print_optional_type(in_world, stream.element.as_ref(), trie, source)?;
                 source.push_str(", ");
-                self.print_optional_type(stream.end.as_ref(), self_type, trie, source)?;
+                self.print_optional_type(in_world, stream.end.as_ref(), trie, source)?;
                 source.push('>');
             }
-            TypeDefKind::Type(ty) => self.print_type(ty, self_type, trie, source)?,
+            TypeDefKind::Type(ty) => self.print_type(in_world, ty, trie, source)?,
             TypeDefKind::Handle(Handle::Own(id)) => {
-                self.print_type_id(*id, self_type, trie, source)?
+                self.print_type_id(in_world, *id, trie, source)?
             }
             TypeDefKind::Handle(Handle::Borrow(id)) => {
-                source.push('&');
-                self.print_type_id(*id, self_type, trie, source)?
+                if in_world {
+                    source.push('&');
+                }
+                self.print_type_id(in_world, *id, trie, source)?;
+                if !in_world {
+                    source.push_str("Borrow");
+                }
             }
             TypeDefKind::Resource => {
                 bail!("unsupported anonymous resource type found in WIT package")
@@ -465,13 +466,13 @@ impl<'a> UnimplementedFunction<'a> {
 
     fn print_optional_type(
         &self,
+        in_world: bool,
         ty: Option<&Type>,
-        self_type: Option<TypeId>,
         trie: &mut UseTrie,
         source: &mut String,
     ) -> Result<()> {
         match ty {
-            Some(ty) => self.print_type(ty, self_type, trie, source)?,
+            Some(ty) => self.print_type(in_world, ty, trie, source)?,
             None => source.push_str("()"),
         }
 
@@ -559,7 +560,7 @@ impl<'a> InterfaceGenerator<'a> {
             )?;
 
             for func in &resource.functions {
-                UnimplementedFunction::new(self.resolve, func).print(trie, &mut source)?;
+                UnimplementedFunction::new(self.resolve, func, false).print(trie, &mut source)?;
             }
 
             source.push_str("}\n");
@@ -598,7 +599,7 @@ impl<'a> InterfaceGenerator<'a> {
                 source.push('\n');
             }
 
-            UnimplementedFunction::new(self.resolve, func).print(trie, &mut source)?;
+            UnimplementedFunction::new(self.resolve, func, false).print(trie, &mut source)?;
         }
 
         source.push_str("}\n");
@@ -654,7 +655,7 @@ impl<'a> ImplementationGenerator<'a> {
                     source.push('\n');
                 }
 
-                UnimplementedFunction::new(self.resolve, func).print(trie, &mut source)?;
+                UnimplementedFunction::new(self.resolve, func, true).print(trie, &mut source)?;
             }
 
             source.push_str("}\n");
