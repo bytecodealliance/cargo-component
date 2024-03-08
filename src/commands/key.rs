@@ -126,8 +126,6 @@ impl KeySetCommand {
         )
         .context("signing key is not in the correct format")?;
 
-        // let key = PrivateKey::decode(key).context("signing key is not in the correct format")?;
-
         set_signing_key(
             Some(&self.url),
             &key,

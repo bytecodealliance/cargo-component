@@ -31,7 +31,6 @@ indexmap = { workspace = true }
 wit-parser = { workspace = true }
 wit-component = { workspace = true }
 wasm-metadata = { workspace = true }
-keyring = { workspace = true }
 futures = { workspace = true }
 bytes = { workspace = true }
 tokio = { workspace = true }
