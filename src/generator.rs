@@ -3,7 +3,7 @@
 
 use anyhow::{bail, Context, Result};
 use heck::{AsSnakeCase, ToSnakeCase, ToUpperCamelCase};
-use indexmap::IndexSet;
+use indexmap::{map::Entry, IndexMap, IndexSet};
 use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet},
@@ -17,9 +17,12 @@ use warg_protocol::registry::PackageName;
 use wit_bindgen_rust::to_rust_ident;
 use wit_component::DecodedWasm;
 use wit_parser::{
-    Function, Handle, Interface, Resolve, Type, TypeDef, TypeDefKind, TypeId, TypeOwner, WorldId,
-    WorldItem, WorldKey,
+    Function, FunctionKind, Handle, Interface, Resolve, Type, TypeDef, TypeDefKind, TypeId,
+    TypeOwner, World, WorldId, WorldItem, WorldKey,
 };
+
+/// The type name that implements the export traits.
+const IMPLEMENTER: &str = "Component";
 
 /// Represents a node in a "use" trie.
 #[derive(Default)]
@@ -81,6 +84,13 @@ struct UseTrie {
 }
 
 impl UseTrie {
+    /// Reserves names in the trie.
+    ///
+    /// Any conflicting insert into the tree will use a qualified path instead.
+    fn reserve_names(&mut self, names: &ReservedNames) {
+        self.types.extend(names.0.keys().cloned());
+    }
+
     /// Gets the used types at a given path.
     fn get<'a>(&self, path: impl Iterator<Item = &'a str>) -> Option<impl Iterator<Item = &str>> {
         let mut node = &self.root;
@@ -195,7 +205,471 @@ impl fmt::Display for UseTrie {
     }
 }
 
-/// Represents a Rust source code generator for targeting a given wit package.
+/// Used to keep track of type names for implementing types.
+///
+/// Conflicting type names will have a number appended to them.
+#[derive(Default)]
+struct ReservedNames(IndexMap<String, usize>);
+
+impl ReservedNames {
+    fn reserve(&mut self, name: &str) -> String {
+        let mut name = name.to_upper_camel_case();
+        let count = self.0.entry(name.clone()).or_insert(0);
+        *count += 1;
+
+        if *count > 1 {
+            write!(&mut name, "{count}").unwrap();
+        }
+
+        name
+    }
+}
+
+/// Used to write an unimplemented trait function.
+struct UnimplementedFunction<'a> {
+    resolve: &'a Resolve,
+    func: &'a Function,
+}
+
+impl<'a> UnimplementedFunction<'a> {
+    fn new(resolve: &'a Resolve, func: &'a Function) -> Self {
+        Self { resolve, func }
+    }
+
+    fn print(&self, trie: &mut UseTrie, source: &mut String) -> Result<()> {
+        let (name, is_static, self_param, self_type) = match self.func.kind {
+            FunctionKind::Freestanding => (
+                Cow::Owned(to_rust_ident(&self.func.name)),
+                false,
+                false,
+                None,
+            ),
+            FunctionKind::Method(id) => (
+                to_rust_ident(
+                    self.func
+                        .name
+                        .split_once('.')
+                        .expect("invalid method name")
+                        .1,
+                )
+                .into(),
+                false,
+                true,
+                Some(id),
+            ),
+            FunctionKind::Static(id) => (
+                to_rust_ident(
+                    self.func
+                        .name
+                        .split_once('.')
+                        .expect("invalid method name")
+                        .1,
+                )
+                .into(),
+                true,
+                false,
+                Some(id),
+            ),
+            FunctionKind::Constructor(id) => ("new".into(), false, false, Some(id)),
+        };
+
+        // TODO: it would be nice to share the printing of the signature of the function
+        // with wit-bindgen, but right now it's tightly coupled with interface generation.
+        write!(
+            source,
+            "    {modifier}fn {name}(",
+            modifier = if is_static { "static " } else { "" }
+        )?;
+
+        for (i, (name, param)) in self.func.params.iter().enumerate() {
+            if i > 0 {
+                source.push_str(", ");
+            }
+
+            if i == 0 && self_param {
+                write!(source, "&self")?;
+            } else {
+                source.push_str(&to_rust_ident(name));
+                source.push_str(": ");
+                self.print_type(param, self_type, trie, source)?;
+            }
+        }
+        source.push(')');
+        match self.func.results.len() {
+            0 => {}
+            1 => {
+                source.push_str(" -> ");
+                self.print_type(
+                    self.func.results.iter_types().next().unwrap(),
+                    self_type,
+                    trie,
+                    source,
+                )?;
+            }
+            _ => {
+                source.push_str(" -> (");
+                for (i, ty) in self.func.results.iter_types().enumerate() {
+                    if i > 0 {
+                        source.push_str(", ");
+                    }
+
+                    self.print_type(ty, self_type, trie, source)?;
+                }
+
+                source.push(')');
+            }
+        }
+        source.push_str(" {\n        unimplemented!()\n    }\n");
+        Ok(())
+    }
+
+    fn print_type(
+        &self,
+        ty: &Type,
+        self_type: Option<TypeId>,
+        trie: &mut UseTrie,
+        source: &mut String,
+    ) -> Result<()> {
+        match ty {
+            Type::Bool => source.push_str("bool"),
+            Type::U8 => source.push_str("u8"),
+            Type::U16 => source.push_str("u16"),
+            Type::U32 => source.push_str("u32"),
+            Type::U64 => source.push_str("u64"),
+            Type::S8 => source.push_str("i8"),
+            Type::S16 => source.push_str("i16"),
+            Type::S32 => source.push_str("i32"),
+            Type::S64 => source.push_str("i64"),
+            Type::Float32 => source.push_str("f32"),
+            Type::Float64 => source.push_str("f64"),
+            Type::Char => source.push_str("char"),
+            Type::String => source.push_str("String"),
+            Type::Id(id) => self.print_type_id(*id, self_type, trie, source)?,
+        }
+
+        Ok(())
+    }
+
+    fn print_type_id(
+        &self,
+        id: TypeId,
+        self_type: Option<TypeId>,
+        trie: &mut UseTrie,
+        source: &mut String,
+    ) -> Result<()> {
+        let ty = &self.resolve.types[id];
+
+        if ty.name.is_some() {
+            if Some(id) == self_type {
+                source.push_str("Self");
+            } else {
+                self.print_type_path(ty, trie, source);
+            }
+            return Ok(());
+        }
+
+        match &ty.kind {
+            TypeDefKind::List(ty) => {
+                source.push_str("Vec<");
+                self.print_type(ty, self_type, trie, source)?;
+                source.push('>');
+            }
+            TypeDefKind::Option(ty) => {
+                source.push_str("Option<");
+                self.print_type(ty, self_type, trie, source)?;
+                source.push('>');
+            }
+            TypeDefKind::Result(r) => {
+                source.push_str("Result<");
+                self.print_optional_type(r.ok.as_ref(), self_type, trie, source)?;
+                source.push_str(", ");
+                self.print_optional_type(r.err.as_ref(), self_type, trie, source)?;
+                source.push('>');
+            }
+            TypeDefKind::Variant(_) => {
+                bail!("unsupported anonymous variant type found in WIT package")
+            }
+            TypeDefKind::Tuple(t) => {
+                source.push('(');
+                for (i, ty) in t.types.iter().enumerate() {
+                    if i > 0 {
+                        source.push_str(", ");
+                    }
+                    self.print_type(ty, self_type, trie, source)?;
+                }
+                source.push(')');
+            }
+            TypeDefKind::Record(_) => {
+                bail!("unsupported anonymous record type found in WIT package")
+            }
+            TypeDefKind::Flags(_) => {
+                bail!("unsupported anonymous flags type found in WIT package")
+            }
+            TypeDefKind::Enum(_) => {
+                bail!("unsupported anonymous enum type found in WIT package")
+            }
+            TypeDefKind::Future(ty) => {
+                source.push_str("Future<");
+                self.print_optional_type(ty.as_ref(), self_type, trie, source)?;
+                source.push('>');
+            }
+            TypeDefKind::Stream(stream) => {
+                source.push_str("Stream<");
+                self.print_optional_type(stream.element.as_ref(), self_type, trie, source)?;
+                source.push_str(", ");
+                self.print_optional_type(stream.end.as_ref(), self_type, trie, source)?;
+                source.push('>');
+            }
+            TypeDefKind::Type(ty) => self.print_type(ty, self_type, trie, source)?,
+            TypeDefKind::Handle(Handle::Own(id)) => {
+                self.print_type_id(*id, self_type, trie, source)?
+            }
+            TypeDefKind::Handle(Handle::Borrow(id)) => {
+                source.push('&');
+                self.print_type_id(*id, self_type, trie, source)?
+            }
+            TypeDefKind::Resource => {
+                bail!("unsupported anonymous resource type found in WIT package")
+            }
+            TypeDefKind::Unknown => unreachable!(),
+        }
+
+        Ok(())
+    }
+
+    fn print_type_path(&self, ty: &TypeDef, trie: &mut UseTrie, source: &mut String) {
+        if let TypeOwner::Interface(id) = ty.owner {
+            let interface = &self.resolve.interfaces[id];
+            if interface.package.is_some() {
+                write!(
+                    source,
+                    "{name}",
+                    name = trie.insert_interface_type(
+                        self.resolve,
+                        interface,
+                        ty.name.as_deref().unwrap()
+                    )
+                )
+                .unwrap();
+                return;
+            }
+        }
+
+        write!(
+            source,
+            "{name}",
+            name = trie.insert(["bindings"], ty.name.as_deref().unwrap())
+        )
+        .unwrap();
+    }
+
+    fn print_optional_type(
+        &self,
+        ty: Option<&Type>,
+        self_type: Option<TypeId>,
+        trie: &mut UseTrie,
+        source: &mut String,
+    ) -> Result<()> {
+        match ty {
+            Some(ty) => self.print_type(ty, self_type, trie, source)?,
+            None => source.push_str("()"),
+        }
+
+        Ok(())
+    }
+}
+
+/// Information about a resource type.
+struct Resource<'a> {
+    ty: &'a TypeDef,
+    impl_name: String,
+    functions: Vec<&'a Function>,
+}
+
+/// A generator for implementing the interface exports of a world.
+struct InterfaceGenerator<'a> {
+    resolve: &'a Resolve,
+    key: &'a WorldKey,
+    interface: &'a Interface,
+    functions: Vec<&'a Function>,
+    resources: IndexMap<TypeId, Resource<'a>>,
+}
+
+impl<'a> InterfaceGenerator<'a> {
+    fn new(
+        resolve: &'a Resolve,
+        key: &'a WorldKey,
+        interface: &'a Interface,
+        names: &mut ReservedNames,
+    ) -> Self {
+        let mut functions = Vec::new();
+        let mut resources: IndexMap<_, Resource> = IndexMap::new();
+
+        // Search for resource-related functions in this interface
+        for (_, func) in interface.functions.iter() {
+            let id = match func.kind {
+                FunctionKind::Freestanding => {
+                    functions.push(func);
+                    continue;
+                }
+                FunctionKind::Method(id)
+                | FunctionKind::Static(id)
+                | FunctionKind::Constructor(id) => id,
+            };
+
+            // Create a resource entry for this resource
+            match resources.entry(id) {
+                Entry::Occupied(mut entry) => entry.get_mut().functions.push(func),
+                Entry::Vacant(entry) => {
+                    let ty = &resolve.types[id];
+                    let name = ty.name.as_deref().expect("unnamed resource type");
+                    let impl_name = names.reserve(name);
+
+                    entry.insert(Resource {
+                        ty,
+                        impl_name,
+                        functions: vec![func],
+                    });
+                }
+            }
+        }
+
+        Self {
+            resolve,
+            key,
+            interface,
+            functions,
+            resources,
+        }
+    }
+
+    fn generate(&self, trie: &mut UseTrie) -> Result<String> {
+        let mut source: String = String::new();
+
+        for resource in self.resources.values() {
+            writeln!(
+                &mut source,
+                "struct {impl_name};\n\nimpl {impl_trait} for {impl_name} {{",
+                impl_name = resource.impl_name,
+                impl_trait = trie.insert_interface_type(
+                    self.resolve,
+                    self.interface,
+                    &format!("guest-{name}", name = resource.ty.name.as_deref().unwrap())
+                )
+            )?;
+
+            for func in &resource.functions {
+                UnimplementedFunction::new(self.resolve, func).print(trie, &mut source)?;
+            }
+
+            source.push_str("}\n");
+        }
+
+        if !self.resources.is_empty() {
+            source.push('\n');
+        }
+
+        writeln!(
+            &mut source,
+            "impl {name} for {IMPLEMENTER} {{",
+            name = trie.insert_export_trait(self.resolve, self.key),
+        )?;
+
+        for resource in self.resources.values() {
+            writeln!(
+                &mut source,
+                "    type {name} = {impl_name};",
+                name = resource
+                    .ty
+                    .name
+                    .as_deref()
+                    .expect("unnamed resource type")
+                    .to_upper_camel_case(),
+                impl_name = resource.impl_name,
+            )?;
+        }
+
+        if !self.resources.is_empty() && !self.functions.is_empty() {
+            source.push('\n');
+        }
+
+        for (i, func) in self.functions.iter().enumerate() {
+            if i > 0 {
+                source.push('\n');
+            }
+
+            UnimplementedFunction::new(self.resolve, func).print(trie, &mut source)?;
+        }
+
+        source.push_str("}\n");
+        Ok(source)
+    }
+}
+
+/// A generator for implementing the export traits of a world.
+struct ImplementationGenerator<'a> {
+    resolve: &'a Resolve,
+    functions: Vec<&'a Function>,
+    interfaces: Vec<InterfaceGenerator<'a>>,
+}
+
+impl<'a> ImplementationGenerator<'a> {
+    fn new(resolve: &'a Resolve, world: &'a World, names: &mut ReservedNames) -> Self {
+        let mut functions = Vec::new();
+        let mut interfaces = Vec::new();
+
+        for (key, item) in &world.exports {
+            match item {
+                WorldItem::Function(f) => {
+                    functions.push(f);
+                }
+                WorldItem::Interface(iface) => {
+                    let interface = &resolve.interfaces[*iface];
+                    interfaces.push(InterfaceGenerator::new(resolve, key, interface, names));
+                }
+                WorldItem::Type(_) => continue,
+            }
+        }
+
+        Self {
+            resolve,
+            functions,
+            interfaces,
+        }
+    }
+
+    fn generate(&self, trie: &mut UseTrie) -> Result<Vec<String>> {
+        let mut impls = Vec::new();
+        if !self.functions.is_empty() {
+            let mut source = String::new();
+
+            writeln!(
+                &mut source,
+                "\nimpl {name} for {IMPLEMENTER} {{",
+                name = trie.insert(["bindings"], "Guest")
+            )?;
+
+            for (i, func) in self.functions.iter().enumerate() {
+                if i > 0 {
+                    source.push('\n');
+                }
+
+                UnimplementedFunction::new(self.resolve, func).print(trie, &mut source)?;
+            }
+
+            source.push_str("}\n");
+            impls.push(source);
+        }
+
+        for interface in &self.interfaces {
+            impls.push(interface.generate(trie)?);
+        }
+
+        Ok(impls)
+    }
+}
+
+/// Represents a Rust source code generator for targeting a given WIT package.
 ///
 /// The generated source defines a component that will implement the expected
 /// export traits for the given world.
@@ -217,60 +691,13 @@ impl<'a> SourceGenerator<'a> {
     /// Generates the Rust source code for the given world.
     pub fn generate(&self, world: Option<&str>) -> Result<String> {
         let (resolve, world) = self.decode(world)?;
+        let mut names = ReservedNames::default();
+        let generator = ImplementationGenerator::new(&resolve, &resolve.worlds[world], &mut names);
+
         let mut trie = UseTrie::default();
-        let mut impls = Vec::new();
-        let world = &resolve.worlds[world];
+        trie.reserve_names(&names);
 
-        let mut function_exports = Vec::new();
-        for (key, item) in &world.exports {
-            match item {
-                WorldItem::Function(f) => {
-                    function_exports.push(f);
-                }
-                WorldItem::Interface(i) => {
-                    let interface = &resolve.interfaces[*i];
-                    let mut imp: String = String::new();
-                    writeln!(
-                        &mut imp,
-                        "\nimpl {name} for Component {{",
-                        name = trie.insert_export_trait(&resolve, key),
-                    )
-                    .unwrap();
-
-                    for (i, (_, func)) in interface.functions.iter().enumerate() {
-                        if i > 0 {
-                            imp.push('\n');
-                        }
-                        Self::print_unimplemented_func(&resolve, func, &mut imp, &mut trie)?;
-                    }
-
-                    imp.push_str("}\n");
-                    impls.push(imp);
-                }
-                WorldItem::Type(_) => continue,
-            }
-        }
-
-        if !function_exports.is_empty() {
-            let mut imp = String::new();
-
-            writeln!(
-                &mut imp,
-                "\nimpl {name} for Component {{",
-                name = trie.insert(["bindings"], "Guest")
-            )
-            .unwrap();
-
-            for (i, func) in function_exports.iter().enumerate() {
-                if i > 0 {
-                    imp.push('\n');
-                }
-                Self::print_unimplemented_func(&resolve, func, &mut imp, &mut trie)?;
-            }
-
-            imp.push_str("}\n");
-            impls.push(imp);
-        }
+        let impls = generator.generate(&mut trie)?;
 
         let mut source = String::new();
         writeln!(&mut source, "#[allow(warnings)]\nmod bindings;")?;
@@ -281,11 +708,11 @@ impl<'a> SourceGenerator<'a> {
             nl = if trie.is_empty() { "" } else { "\n" }
         )?;
 
-        source.push_str("struct Component;\n");
+        writeln!(&mut source, "struct {IMPLEMENTER};\n")?;
 
         for (i, imp) in impls.iter().enumerate() {
             if i > 0 {
-                source.push_str("\n\n");
+                source.push('\n');
             }
 
             source.push_str(imp);
@@ -293,7 +720,7 @@ impl<'a> SourceGenerator<'a> {
 
         writeln!(
             &mut source,
-            "\n\nbindings::export!(Component with_types_in bindings);"
+            "\nbindings::export!({IMPLEMENTER} with_types_in bindings);"
         )?;
 
         if self.format {
@@ -350,194 +777,5 @@ impl<'a> SourceGenerator<'a> {
             }
             DecodedWasm::Component(..) => bail!("target is not a WIT package"),
         }
-    }
-
-    fn print_unimplemented_func(
-        resolve: &Resolve,
-        func: &Function,
-        source: &mut String,
-        trie: &mut UseTrie,
-    ) -> Result<()> {
-        // TODO: it would be nice to share the printing of the signature of the function
-        // with wit-bindgen, but right now it's tightly coupled with interface generation.
-        write!(source, "    fn {name}(", name = to_rust_ident(&func.name)).unwrap();
-        for (i, (name, param)) in func.params.iter().enumerate() {
-            if i > 0 {
-                source.push_str(", ");
-            }
-            source.push_str(&to_rust_ident(name));
-            source.push_str(": ");
-            Self::print_type(resolve, param, source, trie)?;
-        }
-        source.push(')');
-        match func.results.len() {
-            0 => {}
-            1 => {
-                source.push_str(" -> ");
-                Self::print_type(
-                    resolve,
-                    func.results.iter_types().next().unwrap(),
-                    source,
-                    trie,
-                )?;
-            }
-            _ => {
-                source.push_str(" -> (");
-                for (i, ty) in func.results.iter_types().enumerate() {
-                    if i > 0 {
-                        source.push_str(", ");
-                    }
-                    Self::print_type(resolve, ty, source, trie)?;
-                }
-                source.push(')');
-            }
-        }
-        source.push_str(" {\n        unimplemented!()\n    }\n");
-        Ok(())
-    }
-
-    fn print_type(
-        resolve: &Resolve,
-        ty: &Type,
-        source: &mut String,
-        trie: &mut UseTrie,
-    ) -> Result<()> {
-        match ty {
-            Type::Bool => source.push_str("bool"),
-            Type::U8 => source.push_str("u8"),
-            Type::U16 => source.push_str("u16"),
-            Type::U32 => source.push_str("u32"),
-            Type::U64 => source.push_str("u64"),
-            Type::S8 => source.push_str("i8"),
-            Type::S16 => source.push_str("i16"),
-            Type::S32 => source.push_str("i32"),
-            Type::S64 => source.push_str("i64"),
-            Type::Float32 => source.push_str("f32"),
-            Type::Float64 => source.push_str("f64"),
-            Type::Char => source.push_str("char"),
-            Type::String => source.push_str("String"),
-            Type::Id(id) => Self::print_type_id(resolve, *id, source, trie)?,
-        }
-
-        Ok(())
-    }
-
-    fn print_type_id(
-        resolve: &Resolve,
-        id: TypeId,
-        source: &mut String,
-        trie: &mut UseTrie,
-    ) -> Result<()> {
-        let ty = &resolve.types[id];
-
-        if ty.name.is_some() {
-            Self::print_type_path(resolve, ty, source, trie);
-            return Ok(());
-        }
-
-        match &ty.kind {
-            TypeDefKind::List(ty) => {
-                source.push_str("Vec<");
-                Self::print_type(resolve, ty, source, trie)?;
-                source.push('>');
-            }
-            TypeDefKind::Option(ty) => {
-                source.push_str("Option<");
-                Self::print_type(resolve, ty, source, trie)?;
-                source.push('>');
-            }
-            TypeDefKind::Result(r) => {
-                source.push_str("Result<");
-                Self::print_optional_type(resolve, r.ok.as_ref(), source, trie)?;
-                source.push_str(", ");
-                Self::print_optional_type(resolve, r.err.as_ref(), source, trie)?;
-                source.push('>');
-            }
-            TypeDefKind::Variant(_) => {
-                bail!("unsupported anonymous variant type found in WIT package")
-            }
-            TypeDefKind::Tuple(t) => {
-                source.push('(');
-                for (i, ty) in t.types.iter().enumerate() {
-                    if i > 0 {
-                        source.push_str(", ");
-                    }
-                    Self::print_type(resolve, ty, source, trie)?;
-                }
-                source.push(')');
-            }
-            TypeDefKind::Record(_) => {
-                bail!("unsupported anonymous record type found in WIT package")
-            }
-            TypeDefKind::Flags(_) => {
-                bail!("unsupported anonymous flags type found in WIT package")
-            }
-            TypeDefKind::Enum(_) => {
-                bail!("unsupported anonymous enum type found in WIT package")
-            }
-            TypeDefKind::Future(ty) => {
-                source.push_str("Future<");
-                Self::print_optional_type(resolve, ty.as_ref(), source, trie)?;
-                source.push('>');
-            }
-            TypeDefKind::Stream(stream) => {
-                source.push_str("Stream<");
-                Self::print_optional_type(resolve, stream.element.as_ref(), source, trie)?;
-                source.push_str(", ");
-                Self::print_optional_type(resolve, stream.end.as_ref(), source, trie)?;
-                source.push('>');
-            }
-            TypeDefKind::Type(ty) => Self::print_type(resolve, ty, source, trie)?,
-            TypeDefKind::Handle(Handle::Own(id)) => {
-                Self::print_type_id(resolve, *id, source, trie)?
-            }
-            TypeDefKind::Handle(Handle::Borrow(id)) => {
-                source.push('&');
-                Self::print_type_id(resolve, *id, source, trie)?
-            }
-            TypeDefKind::Resource => {
-                bail!("unsupported anonymous resource type found in WIT package")
-            }
-            TypeDefKind::Unknown => unreachable!(),
-        }
-
-        Ok(())
-    }
-
-    fn print_type_path(resolve: &Resolve, ty: &TypeDef, source: &mut String, trie: &mut UseTrie) {
-        if let TypeOwner::Interface(id) = ty.owner {
-            let interface = &resolve.interfaces[id];
-            if interface.package.is_some() {
-                write!(
-                    source,
-                    "{name}",
-                    name =
-                        trie.insert_interface_type(resolve, interface, ty.name.as_deref().unwrap())
-                )
-                .unwrap();
-                return;
-            }
-        }
-
-        write!(
-            source,
-            "{name}",
-            name = trie.insert(["bindings"], ty.name.as_deref().unwrap())
-        )
-        .unwrap();
-    }
-
-    fn print_optional_type(
-        resolve: &Resolve,
-        ty: Option<&Type>,
-        source: &mut String,
-        trie: &mut UseTrie,
-    ) -> Result<()> {
-        match ty {
-            Some(ty) => Self::print_type(resolve, ty, source, trie)?,
-            None => source.push_str("()"),
-        }
-
-        Ok(())
     }
 }
