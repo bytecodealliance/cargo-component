@@ -88,7 +88,17 @@ impl UseTrie {
     ///
     /// Any conflicting insert into the tree will use a qualified path instead.
     fn reserve_names(&mut self, names: &ReservedNames) {
-        self.types.extend(names.0.keys().cloned());
+        for (name, count) in &names.0 {
+            for i in 0..*count {
+                let name = if i > 0 {
+                    format!("{name}{i}", i = i + 1)
+                } else {
+                    name.clone()
+                };
+
+                self.types.insert(name);
+            }
+        }
     }
 
     /// Gets the used types at a given path.

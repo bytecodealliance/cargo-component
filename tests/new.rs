@@ -162,6 +162,8 @@ interface bar {
 }
 
 interface baz {
+    use bar.{a as a2};
+
     resource a {
         constructor(a: borrow<a>);
         a: static func(a: borrow<a>) -> a;
@@ -174,6 +176,7 @@ interface baz {
         b: func(a: a);
     }
 
+    v: func(a2: borrow<a2>) -> a2;
     w: func(a: a) -> a;
     x: func(b: b) -> b;
     y: func(a: borrow<a>);
