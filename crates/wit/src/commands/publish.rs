@@ -3,9 +3,9 @@ use crate::{
     publish_wit_package, PublishOptions,
 };
 use anyhow::{Context, Result};
-use cargo_component_core::{command::CommonOptions, keyring::get_signing_key, registry::find_url};
+use cargo_component_core::{command::CommonOptions, registry::find_url};
 use clap::Args;
-use warg_client::RegistryUrl;
+use warg_credentials::keyring::get_signing_key;
 use warg_crypto::signing::PrivateKey;
 use warg_protocol::registry::PackageName;
 
@@ -29,10 +29,6 @@ pub struct PublishCommand {
     #[clap(long = "registry", value_name = "REGISTRY")]
     pub registry: Option<String>,
 
-    /// The key name to use for the signing key.
-    #[clap(long, short, value_name = "KEY", default_value = "default")]
-    pub key_name: String,
-
     /// Override the package name to publish.
     #[clap(long, value_name = "NAME")]
     pub package: Option<PackageName>,
@@ -52,7 +48,7 @@ impl PublishCommand {
         let url = find_url(
             self.registry.as_deref(),
             &config.registries,
-            warg_config.default_url.as_deref(),
+            warg_config.home_url.as_deref(),
         )?;
 
         let signing_key = if let Ok(key) = std::env::var("WIT_PUBLISH_KEY") {
@@ -60,11 +56,11 @@ impl PublishCommand {
                 "failed to parse signing key from `WIT_PUBLISH_KEY` environment variable",
             )?
         } else {
-            let url: RegistryUrl = url
-                .parse()
-                .with_context(|| format!("failed to parse registry URL `{url}`"))?;
-
-            get_signing_key(&url, &self.key_name)?
+            get_signing_key(
+                self.registry.as_deref(),
+                &warg_config.keys,
+                warg_config.home_url.as_deref(),
+            )?
         };
 
         publish_wit_package(

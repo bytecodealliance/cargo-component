@@ -11,13 +11,13 @@ repository = { workspace = true }
 
 [dependencies]
 anyhow = { workspace = true }
-keyring = { workspace = true }
 libc = { workspace = true }
 owo-colors = { workspace = true }
 unicode-width = { workspace = true }
 warg-crypto = { workspace = true }
 warg-protocol = { workspace = true }
 warg-client = { workspace = true }
+warg-credentials = { workspace = true }
 toml_edit = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }
@@ -28,6 +28,7 @@ wit-component = { workspace = true }
 wit-parser = { workspace = true }
 log = { workspace = true }
 tokio = { workspace = true }
+secrecy = { workspace = true }
 clap = { workspace = true }
 
 [target.'cfg(windows)'.dependencies.windows-sys]

@@ -8,7 +8,6 @@ use std::str::FromStr;
 use warg_protocol::registry::PackageName;
 
 pub mod command;
-pub mod keyring;
 pub mod lock;
 pub mod progress;
 pub mod registry;

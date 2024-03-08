@@ -328,7 +328,8 @@ async fn publish_wit_package(options: PublishOptions<'_>, terminal: &Terminal) -
 
     let bytes = add_registry_metadata(options.config, &bytes)?;
     let name = options.package.unwrap_or(&name);
-    let client = create_client(options.warg_config, options.url, terminal)?;
+    let mut client = create_client(options.warg_config, options.url, terminal)?;
+    client.refresh_namespace(name.namespace()).await?;
 
     let content = client
         .content()

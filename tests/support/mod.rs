@@ -2,6 +2,7 @@
 
 use anyhow::{bail, Context, Result};
 use assert_cmd::prelude::OutputAssertExt;
+use indexmap::IndexSet;
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -66,7 +67,7 @@ pub async fn publish(
     content: Vec<u8>,
     init: bool,
 ) -> Result<()> {
-    let client = FileSystemClient::new_with_config(None, config)?;
+    let client = FileSystemClient::new_with_config(None, config, None)?;
 
     let digest = client
         .content()
@@ -187,9 +188,12 @@ pub async fn spawn_server(root: &Path) -> Result<(ServerInstance, warg_client::C
     };
 
     let config = warg_client::Config {
-        default_url: Some(format!("http://{addr}")),
+        home_url: Some(format!("http://{addr}")),
         registries_dir: Some(root.join("registries")),
         content_dir: Some(root.join("content")),
+        namespace_map_path: Some(root.join("namespaces")),
+        keys: IndexSet::new(),
+        keyring_auth: false,
     };
 
     Ok((instance, config))

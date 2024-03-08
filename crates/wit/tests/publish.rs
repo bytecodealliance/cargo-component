@@ -69,7 +69,7 @@ async fn it_does_a_dry_run_publish() -> Result<()> {
         ))
         .success();
 
-    let client = FileSystemClient::new_with_config(None, &config)?;
+    let client = FileSystemClient::new_with_config(None, &config, None)?;
 
     assert!(client
         .download(&"test:qux".parse().unwrap(), &"0.1.0".parse().unwrap())
@@ -116,7 +116,7 @@ async fn it_publishes_with_registry_metadata() -> Result<()> {
         .stderr(contains("Published package `test:qux` v0.1.0"))
         .success();
 
-    let client = Client::new_with_config(None, &config)?;
+    let client = Client::new_with_config(None, &config, None)?;
     let download = client
         .download_exact(&PackageName::new("test:qux")?, &Version::parse("0.1.0")?)
         .await?;
