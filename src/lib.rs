@@ -793,6 +793,14 @@ async fn generate_package_bindings(
     last_modified_exe: SystemTime,
     cwd: &Path,
 ) -> Result<HashMap<String, String>> {
+    if !resolution.metadata.section_present && resolution.metadata.target_path().is_none() {
+        log::debug!(
+            "skipping generating bindings for package `{name}`",
+            name = resolution.metadata.name
+        );
+        return Ok(HashMap::new());
+    }
+
     // TODO: make the output path configurable
     let output_dir = resolution
         .metadata
