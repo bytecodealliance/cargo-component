@@ -2,7 +2,7 @@ use crate::support::*;
 use anyhow::{Context, Result};
 use assert_cmd::prelude::*;
 use predicates::{prelude::PredicateBooleanExt, str::contains};
-use std::{fs, rc::Rc};
+use std::{fs, process::Command, rc::Rc};
 use tempfile::TempDir;
 use toml_edit::{value, Array, Item, Table};
 
@@ -847,6 +847,27 @@ fn it_builds_with_proxy_adapter() -> Result<()> {
         !text.contains("wasi:cli/environment"),
         "proxy wasm should have no reference to `wasi:cli/environment`"
     );
+
+    Ok(())
+}
+
+#[test]
+fn it_does_not_generate_bindings_for_cargo_projects() -> Result<()> {
+    let dir = TempDir::new()?;
+
+    for (name, args) in [("foo", &["new", "--lib"] as &[_]), ("bar", &["new"])] {
+        let mut cmd = Command::new("cargo");
+        cmd.current_dir(dir.path());
+        cmd.args(args);
+        cmd.arg(name);
+        cmd.assert().stderr(contains("Created")).success();
+
+        let mut cmd = cargo_component("build");
+        cmd.current_dir(dir.path().join(name));
+        cmd.assert()
+            .stderr(contains("Generating bindings").not())
+            .success();
+    }
 
     Ok(())
 }
