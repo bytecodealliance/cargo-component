@@ -10,7 +10,7 @@ use cargo_component_core::command::CommonOptions;
 use futures::TryStreamExt;
 use semver::Version;
 use tokio_util::io::{StreamReader, SyncIoBridge};
-use warg_loader::PackageRef;
+use warg_loader::{ClientConfig, PackageRef};
 use wit_parser::UnresolvedPackage;
 
 /// Pull WIT package(s) to a local "deps" directory.
@@ -71,9 +71,13 @@ impl PullCommand {
                 .collect::<Result<Vec<_>>>()?
         };
 
-        let mut client = match warg_loader::Client::from_default_config_file()? {
-            Some(client) => client,
-            None => warg_loader::Client::new(Default::default()),
+        let mut client = {
+            let mut config = ClientConfig::default();
+            config.namespace_registry("wasi", "bytecodealliance.org");
+            if let Some(file_config) = ClientConfig::from_default_file()? {
+                config.merge_config(file_config);
+            }
+            config.to_client()
         };
 
         if !deps_dir.exists() {
