@@ -14,13 +14,13 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Configure sccache
       run: |
         echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
         echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
     - name: Run sccache-cache
-      uses: mozilla-actions/sccache-action@v0.0.3
+      uses: mozilla-actions/sccache-action@v0.0.4
     - name: Install Rust
       run: |
         rustup set profile minimal
@@ -37,7 +37,7 @@ jobs:
       uses: bytecodealliance/actions/wasmtime/setup@v1
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
-        version: "v18.0.1"
+        version: "v19.0.1"
     - name: Run all tests
       run: cargo test --all
 
@@ -45,7 +45,7 @@ jobs:
     name: Build example component
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Install Rust
       run: rustup update stable --no-self-update && rustup default stable && rustup target add wasm32-wasi && rustup target add wasm32-unknown-unknown
     - name: Install cargo-component (debug)
@@ -57,7 +57,7 @@ jobs:
     name: Install cargo-component
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Install Rust
       run: rustup update stable --no-self-update && rustup default stable
     - name: Install cargo-component
@@ -67,7 +67,7 @@ jobs:
     name: Format source code
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Install Rust
       run: rustup update stable && rustup default stable && rustup component add rustfmt
     - name: Run `cargo fmt`
