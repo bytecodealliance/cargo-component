@@ -18,7 +18,6 @@ use toml_edit::{table, value, Document, Item, Table, Value};
 use url::Url;
 
 const WIT_BINDGEN_RT_CRATE: &str = "wit-bindgen-rt";
-const BITFLAGS_CRATE: &str = "bitflags";
 
 fn escape_wit(s: &str) -> Cow<str> {
     match s {
@@ -304,13 +303,14 @@ impl NewCommand {
         cargo_add_command.arg("add");
         cargo_add_command.arg("--quiet");
         cargo_add_command.arg(WIT_BINDGEN_RT_CRATE);
-        cargo_add_command.arg(BITFLAGS_CRATE);
+        cargo_add_command.arg("--features");
+        cargo_add_command.arg("bitflags");
         cargo_add_command.current_dir(out_dir);
         let status = cargo_add_command
             .status()
             .context("failed to execute `cargo add` command")?;
         if !status.success() {
-            bail!("`cargo add {WIT_BINDGEN_RT_CRATE} {BITFLAGS_CRATE}` command exited with non-zero status");
+            bail!("`cargo add {WIT_BINDGEN_RT_CRATE} --features bitflags` command exited with non-zero status");
         }
 
         config.terminal().status(
