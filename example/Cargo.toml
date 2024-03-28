@@ -7,8 +7,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-bitflags = "2.4.2"
-wit-bindgen-rt = "0.20.0"
+wit-bindgen-rt = { version = "0.23.0", features = ["bitflags"] }
 
 [package.metadata.component]
 package = "example:component"
