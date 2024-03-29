@@ -161,12 +161,17 @@ impl PullCommand {
         let deps_dir = self.wit_dir.join("deps");
         if deps_dir.is_dir() {
             for entry in deps_dir.read_dir()? {
-                let path = entry?.path();
-                if path.extension().unwrap_or_default() != "wit" {
+                let entry = entry?;
+                let path = entry.path();
+                let pkg = if entry.file_type()?.is_dir() {
+                    UnresolvedPackage::parse_dir(&path)
+                } else if path.extension().unwrap_or_default() == "wit" {
+                    UnresolvedPackage::parse_file(&path)
+                } else {
                     continue;
                 }
-                let pkg = UnresolvedPackage::parse_file(&path)
-                    .with_context(|| format!("Error parsing {path:?}"))?;
+                .with_context(|| format!("Error parsing {path:?}"))?;
+
                 pkgs.insert(pkg.name);
                 deps.extend(pkg.foreign_deps.into_keys());
             }
