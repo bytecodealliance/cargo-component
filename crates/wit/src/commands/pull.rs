@@ -219,13 +219,7 @@ impl PullCommand {
             .name
             .version
             .as_ref()
-            .map(
-                |version| match (version.major, version.minor, version.patch) {
-                    (0, 0, patch) => format!("@0.0.{patch}"),
-                    (0, minor, _) => format!("@0.{minor}"),
-                    (major, _, _) => format!("@{major}"),
-                },
-            )
+            .map(|version| format!("@{version}"))
             .unwrap_or_default();
         let file_name = format!(
             "{namespace}-{name}{file_version}.wit",
