@@ -42,3 +42,13 @@ impl FromStr for VersionedPackageName {
         }
     }
 }
+
+impl std::fmt::Display for VersionedPackageName {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.name)?;
+        if let Some(version) = &self.version {
+            write!(f, "@{version}")?;
+        }
+        Ok(())
+    }
+}
