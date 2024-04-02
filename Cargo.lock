@@ -4051,9 +4051,9 @@ dependencies = [
 
 [[package]]
 name = "warg-loader"
-version = "0.0.4"
+version = "0.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cac86f76b2635e0a4e21c562aec94b8041bb8408c7047e16ed0fff34593ca019"
+checksum = "77b65953b2a5c881de1208e05e12e1683902a3895d1e62891599da2401244edc"
 dependencies = [
  "anyhow",
  "async-trait",

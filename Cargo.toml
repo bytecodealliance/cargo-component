@@ -110,7 +110,7 @@ predicates = "3.1.0"
 wasmparser = "0.202.0"
 wat = "1.202.0"
 wasmprinter = "0.202.0"
-warg-loader = "0.0.4"
+warg-loader = "0.0.5"
 
 [profile.release]
 panic = "abort"
