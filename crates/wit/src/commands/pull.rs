@@ -1,7 +1,7 @@
 use std::{
-    collections::{BTreeSet, HashSet},
+    collections::BTreeSet,
     io::Write,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 use anyhow::{bail, Context, Result};
@@ -48,27 +48,28 @@ impl PullCommand {
 
         let terminal = self.common.new_terminal();
 
-        let (mut existing_pkgs, deps) = self.parse_packages_state()?;
-        log::debug!("Packages state: pkgs={existing_pkgs:?} deps={deps:?}");
+        let mut pkgs_state = PackagesState::parse_dir(&self.wit_dir)?;
+        log::debug!("Packages state: {pkgs_state:?}");
 
+        // Determine set of packages to pull
         let packages = if self.packages.is_empty() {
-            // No packages specified; look for missing dependencies
-            deps.into_iter()
-                .filter(|pkg| !existing_pkgs.contains(pkg))
-                .map(|pkg| VersionedPackageName {
-                    name: wit_to_warg_package_name(&pkg),
-                    version: pkg.version.map(|ver| ver.to_string().parse().unwrap()),
+            // No packages specified; pull missing dependencies
+            pkgs_state
+                .missing_deps()
+                .map(|pkg| {
+                    let name = format!("{}:{}", pkg.namespace, pkg.name).parse().unwrap();
+                    let version = pkg
+                        .version
+                        .as_ref()
+                        .map(|ver| ver.to_string().parse().unwrap());
+                    VersionedPackageName { name, version }
                 })
                 .collect::<Vec<_>>()
         } else {
             // Remove existing packages from given list
             self.packages
                 .iter()
-                .filter(|pkg| {
-                    !existing_pkgs
-                        .iter()
-                        .any(|existing| version_satisfied(pkg, existing))
-                })
+                .filter(|pkg| !pkgs_state.satisfies(pkg))
                 .cloned()
                 .collect()
         };
@@ -77,6 +78,7 @@ impl PullCommand {
             terminal.status("Finished", "no missing packages; nothing to do")?;
             return Ok(());
         }
+        log::debug!("Packages to pull: {packages:?}");
 
         let mut client = {
             let mut config = ClientConfig::default();
@@ -87,10 +89,9 @@ impl PullCommand {
             config.to_client()
         };
 
-        let mut pulled = HashSet::new();
         for pkg in packages {
-            let name = &pkg.name;
-            if !pulled.insert(name.clone()) {
+            if pkgs_state.satisfies(&pkg) {
+                log::info!("Skipping {pkg}; resolved by previous pull?");
                 continue;
             }
             terminal.status("Resolving", format!("package {pkg}"))?;
@@ -99,6 +100,7 @@ impl PullCommand {
                 Some((release, decoded)) => {
                     let root_pkg = &decoded.resolve().packages[decoded.package()];
 
+                    let name = &pkg.name;
                     let release_pkg = PackageName {
                         namespace: name.namespace().to_string(),
                         name: name.name().to_string(),
@@ -116,7 +118,7 @@ impl PullCommand {
 
                     for (package_id, package) in &decoded.resolve().packages {
                         let name = &package.name;
-                        if !existing_pkgs.insert(name.clone()) {
+                        if !pkgs_state.insert(name.clone()) {
                             continue;
                         }
                         let path = self.write_package(decoded.resolve(), package_id)?;
@@ -132,51 +134,6 @@ impl PullCommand {
             }
         }
         Ok(())
-    }
-
-    fn parse_packages_state(&self) -> Result<(BTreeSet<PackageName>, BTreeSet<PackageName>)> {
-        let mut resolve = Resolve::new();
-
-        // If Resolve::push_dir succeeds there are no unresolved deps
-        match resolve.push_dir(&self.wit_dir) {
-            Ok(_) => {
-                return Ok((
-                    resolve.package_names.into_keys().collect(),
-                    Default::default(),
-                ))
-            }
-            Err(err) => log::debug!("Couldn't resolve packages: {err:#}"),
-        }
-
-        // Approximate the Resolve::push_dir process
-        // TODO: Try to expose this logic from wit-parser instead
-        let mut pkgs = match UnresolvedPackage::parse_dir(&self.wit_dir) {
-            Ok(pkg) => BTreeSet::from([pkg.name]),
-            Err(err) => {
-                log::debug!("Couldn't parse root package: {err:?}");
-                Default::default()
-            }
-        };
-        let mut deps = BTreeSet::new();
-        let deps_dir = self.wit_dir.join("deps");
-        if deps_dir.is_dir() {
-            for entry in deps_dir.read_dir()? {
-                let entry = entry?;
-                let path = entry.path();
-                let pkg = if entry.file_type()?.is_dir() {
-                    UnresolvedPackage::parse_dir(&path)
-                } else if path.extension().unwrap_or_default() == "wit" {
-                    UnresolvedPackage::parse_file(&path)
-                } else {
-                    continue;
-                }
-                .with_context(|| format!("Error parsing {path:?}"))?;
-
-                pkgs.insert(pkg.name);
-                deps.extend(pkg.foreign_deps.into_keys());
-            }
-        }
-        Ok((pkgs, deps))
     }
 
     async fn pull(
@@ -257,17 +214,88 @@ impl PullCommand {
     }
 }
 
-fn version_satisfied(expected: &VersionedPackageName, actual: &PackageName) -> bool {
-    if expected.name.namespace() != actual.namespace || expected.name.name() != actual.name {
-        return false;
-    }
-    match (&expected.version, &actual.version) {
-        (Some(expected), Some(actual)) => expected.matches(actual),
-        (None, _) => true,
-        _ => false,
-    }
+#[derive(Debug)]
+struct PackagesState {
+    // Packages currently present in the wit dir
+    present: BTreeSet<PackageName>,
+    // All deps, present or not
+    deps: BTreeSet<PackageName>,
 }
 
-fn wit_to_warg_package_name(wit: &PackageName) -> warg_protocol::registry::PackageName {
-    format!("{}:{}", wit.namespace, wit.name).parse().unwrap()
+impl PackagesState {
+    fn parse_dir(wit_dir: &Path) -> Result<Self> {
+        let mut resolve = Resolve::new();
+
+        // If Resolve::push_dir succeeds there are no unresolved deps
+        match resolve.push_dir(wit_dir) {
+            Ok(_) => {
+                return Ok(Self {
+                    present: resolve.package_names.into_keys().collect(),
+                    deps: Default::default(),
+                })
+            }
+            Err(err) => log::debug!("Couldn't resolve packages: {err:#}"),
+        }
+
+        let mut present = BTreeSet::new();
+        let mut deps = BTreeSet::new();
+
+        // Root package
+        match UnresolvedPackage::parse_dir(wit_dir) {
+            Ok(pkg) => {
+                present.insert(pkg.name);
+                deps.extend(pkg.foreign_deps.into_keys());
+            }
+            Err(err) => {
+                log::debug!("Couldn't parse root package: {err:?}");
+            }
+        };
+
+        // Approximate the Resolve::push_dir process
+        // TODO: Try to expose this logic from wit-parser instead
+        let deps_dir = wit_dir.join("deps");
+        if deps_dir.is_dir() {
+            for entry in deps_dir.read_dir()? {
+                let entry = entry?;
+                let path = entry.path();
+                let pkg = if entry.file_type()?.is_dir() {
+                    UnresolvedPackage::parse_dir(&path)
+                } else if path.extension().unwrap_or_default() == "wit" {
+                    UnresolvedPackage::parse_file(&path)
+                } else {
+                    continue;
+                }
+                .with_context(|| format!("Error parsing {path:?}"))?;
+
+                present.insert(pkg.name);
+                deps.extend(pkg.foreign_deps.into_keys());
+            }
+        }
+        Ok(Self { present, deps })
+    }
+
+    fn insert(&mut self, name: PackageName) -> bool {
+        self.present.insert(name)
+    }
+
+    fn missing_deps(&self) -> impl Iterator<Item = &PackageName> {
+        self.deps.difference(&self.present)
+    }
+
+    fn satisfies(&self, need: &VersionedPackageName) -> bool {
+        let need_name = &need.name;
+        for candidate in &self.present {
+            if need_name.namespace() != candidate.namespace || need_name.name() != candidate.name {
+                continue;
+            }
+            match (&need.version, &candidate.version) {
+                // Requested version satisfied by candidate?
+                (Some(req), Some(ver)) if req.matches(ver) => return true,
+                // No requested version; any matching name works
+                (None, _) => return true,
+                _ => (),
+            }
+        }
+        false
+    }
 }

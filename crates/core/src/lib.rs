@@ -14,7 +14,7 @@ pub mod registry;
 pub mod terminal;
 
 /// Represents a versioned component package name.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct VersionedPackageName {
     /// The package name.
     pub name: PackageName,
