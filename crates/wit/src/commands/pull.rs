@@ -23,6 +23,8 @@ pub struct PullCommand {
     pub common: CommonOptions,
 
     /// Use the specified registry name as the default when pulling package(s).
+    /// Note: Currently 'wasi:' packages will be pulled from
+    /// 'bytecodealliance.org' regardless of this flag.
     #[clap(long, value_name = "REGISTRY")]
     pub registry: Option<String>,
 
@@ -111,8 +113,7 @@ impl PullCommand {
                     };
                     terminal.status("Downloaded", format!("release {release_pkg}"))?;
 
-                    let version = root_pkg.name.version.clone();
-                    if let Some(wit_version) = &version {
+                    if let Some(wit_version) = &root_pkg.name.version {
                         let release_version = &release.version;
                         if wit_version != release_version {
                             terminal.warn(format!("Release version {release_version} doesn't match WIT package version {wit_version}"))?;
