@@ -205,7 +205,6 @@ impl PullCommand {
     }
 }
 
-#[derive(Debug)]
 struct PackagesState {
     // Packages currently present in the wit dir
     present: BTreeSet<PackageName>,
@@ -234,6 +233,11 @@ impl PackagesState {
         // Root package
         match UnresolvedPackage::parse_dir(wit_dir) {
             Ok(pkg) => {
+                log::debug!(
+                    "Parsed root package '{name}' deps = {deps:?}",
+                    name = pkg.name,
+                    deps = debug_pkg_names(pkg.foreign_deps.keys()),
+                );
                 present.insert(pkg.name);
                 deps.extend(pkg.foreign_deps.into_keys());
             }
@@ -258,6 +262,11 @@ impl PackagesState {
                 }
                 .with_context(|| format!("Error parsing {path:?}"))?;
 
+                log::debug!(
+                    "Parsed deps package '{name}' deps = {deps:?}",
+                    name = pkg.name,
+                    deps = debug_pkg_names(pkg.foreign_deps.keys()),
+                );
                 present.insert(pkg.name);
                 deps.extend(pkg.foreign_deps.into_keys());
             }
@@ -289,4 +298,20 @@ impl PackagesState {
         }
         false
     }
+}
+
+impl std::fmt::Debug for PackagesState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PackagesState")
+            .field("present", &debug_pkg_names(&self.present))
+            .field("deps", &debug_pkg_names(&self.deps))
+            .finish()
+    }
+}
+
+fn debug_pkg_names<'a>(names: impl IntoIterator<Item = &'a PackageName>) -> Vec<String> {
+    names
+        .into_iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
 }
