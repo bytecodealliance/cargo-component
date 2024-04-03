@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use clap::Args;
 
 use cargo_component_core::{command::CommonOptions, VersionedPackageName};
@@ -30,10 +30,6 @@ pub struct PullCommand {
     /// be written to e.g. "<wit-dir>/deps/<namespace>.<package>.wit".
     #[clap(long, value_name = "WIT_DIR", default_value = "wit")]
     pub wit_dir: PathBuf,
-
-    /// Create "<wit-dir>" and "<wit-dir>/deps" directories if needed.
-    #[clap(long)]
-    pub create_dirs: bool,
 
     /// Pull the packages specified. If empty, the list of packages to pull
     /// will be inferred from missing dependencies.
@@ -188,7 +184,7 @@ impl PullCommand {
             namespace = pkg.name.namespace,
             name = pkg.name.name,
         );
-        let path = self.deps_dir()?.join(file_name);
+        let path = self.ensure_deps_dir()?.join(file_name);
         log::debug!("Writing to {path:?}");
 
         let mut file =
@@ -200,15 +196,10 @@ impl PullCommand {
         Ok(path)
     }
 
-    fn deps_dir(&self) -> Result<PathBuf> {
+    fn ensure_deps_dir(&self) -> Result<PathBuf> {
         let path = self.wit_dir.join("deps");
         if !path.exists() {
-            if self.create_dirs {
-                log::info!("Creating {path:?}");
-                std::fs::create_dir_all(&path)?;
-            } else {
-                bail!("Deps dir does not exist at {path:?}");
-            }
+            std::fs::create_dir(&path).with_context(|| format!("couldn't create {path:?}"))?;
         }
         Ok(path)
     }
