@@ -22,7 +22,7 @@ pub struct PullCommand {
     #[clap(flatten)]
     pub common: CommonOptions,
 
-    /// Use the specified registry name when pulling the package(s).
+    /// Use the specified registry name as the default when pulling package(s).
     #[clap(long, value_name = "REGISTRY")]
     pub registry: Option<String>,
 
@@ -85,6 +85,9 @@ impl PullCommand {
             config.namespace_registry("wasi", "bytecodealliance.org");
             if let Some(file_config) = ClientConfig::from_default_file()? {
                 config.merge_config(file_config);
+            }
+            if let Some(registry) = self.registry.clone() {
+                config.default_registry(registry);
             }
             config.to_client()
         };
