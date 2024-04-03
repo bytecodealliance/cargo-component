@@ -49,6 +49,10 @@ impl PullCommand {
 
         // Determine set of packages to pull
         let packages = if self.packages.is_empty() {
+            // Warn on unparsable root package; might unexpectedly be missing deps
+            if let Err(err) = UnresolvedPackage::parse_dir(&self.wit_dir) {
+                terminal.warn(format!("Couldn't parse root package: {err}"))?;
+            }
             // No packages specified; pull missing dependencies
             pkgs_state
                 .missing_deps()
