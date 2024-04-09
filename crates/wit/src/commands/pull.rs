@@ -4,7 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{Context, Result};
+use anyhow::{ensure, Context, Result};
 use clap::Args;
 
 use cargo_component_core::{command::CommonOptions, VersionedPackageName};
@@ -115,9 +115,7 @@ impl PullCommand {
 
                     if let Some(wit_version) = &root_pkg.name.version {
                         let release_version = &release.version;
-                        if wit_version != release_version {
-                            terminal.warn(format!("Release version {release_version} doesn't match WIT package version {wit_version}"))?;
-                        }
+                        ensure!(wit_version == release_version, "release version {release_version} doesn't match WIT package version {wit_version}");
                     }
 
                     for (package_id, package) in &decoded.resolve().packages {
