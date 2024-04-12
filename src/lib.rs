@@ -1003,14 +1003,7 @@ fn componentize(
         )
     })?;
 
-    file.as_file_mut().sync_all().with_context(|| {
-        format!(
-            "failed to sync output component `{path}`",
-            path = file.path().display()
-        )
-    })?;
-
-    file.persist(path).with_context(|| {
+    file.into_temp_path().persist(path).with_context(|| {
         format!(
             "failed to persist output component `{path}`",
             path = path.display()
