@@ -26,7 +26,7 @@ use semver::Version;
 use std::fmt;
 use std::str::FromStr;
 use std::{collections::BTreeMap, fmt::Display, path::PathBuf};
-use toml_edit::Document;
+use toml_edit::DocumentMut;
 
 /// Represents a cargo package specifier.
 ///
@@ -68,7 +68,7 @@ impl CargoPackageSpec {
     /// Loads Cargo.toml in the current directory, attempts to find the matching package from metadata.
     pub fn find_current_package_spec(metadata: &Metadata) -> Option<Self> {
         let current_manifest = std::fs::read_to_string("Cargo.toml").ok()?;
-        let document: Document = current_manifest.parse().ok()?;
+        let document: DocumentMut = current_manifest.parse().ok()?;
         let name = document["package"]["name"].as_str()?;
         let version = metadata
             .packages

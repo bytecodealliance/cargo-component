@@ -14,7 +14,7 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
-use toml_edit::{table, value, Document, Item, Table, Value};
+use toml_edit::{table, value, DocumentMut, Item, Table, Value};
 use url::Url;
 
 const WIT_BINDGEN_RT_CRATE: &str = "wit-bindgen-rt";
@@ -233,7 +233,7 @@ impl NewCommand {
             )
         })?;
 
-        let mut doc: Document = manifest.parse().with_context(|| {
+        let mut doc: DocumentMut = manifest.parse().with_context(|| {
             format!(
                 "failed to parse manifest file `{path}`",
                 path = manifest_path.display()
