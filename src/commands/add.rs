@@ -17,7 +17,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
-use toml_edit::{value, Document, InlineTable, Item, Table, Value};
+use toml_edit::{value, DocumentMut, InlineTable, Item, Table, Value};
 use warg_protocol::registry::PackageName;
 
 /// Add a dependency for a WebAssembly component
@@ -169,7 +169,7 @@ impl AddCommand {
             )
         })?;
 
-        let mut document: Document = manifest.parse().with_context(|| {
+        let mut document: DocumentMut = manifest.parse().with_context(|| {
             format!(
                 "failed to parse manifest file `{path}`",
                 path = pkg.manifest_path

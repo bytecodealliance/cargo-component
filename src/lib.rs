@@ -30,6 +30,7 @@ use std::{
     process::{Command, Stdio},
     time::{Duration, SystemTime},
 };
+use tempfile::NamedTempFile;
 use warg_client::storage::{ContentStorage, PublishEntry, PublishInfo};
 use warg_crypto::signing::PrivateKey;
 use warg_protocol::registry::PackageName;
@@ -386,6 +387,9 @@ fn componentize_artifacts(
     let cwd =
         env::current_dir().with_context(|| "couldn't get the current directory of the process")?;
 
+    // Acquire the lock file to ensure any other cargo-component process waits for this to complete
+    let _file_lock = acquire_lock_file_ro(config.terminal(), cargo_metadata)?;
+
     for artifact in artifacts {
         for path in artifact
             .filenames
@@ -410,7 +414,7 @@ fn componentize_artifacts(
                 ArtifactKind::Componentizable(bytes) => {
                     componentize(
                         config,
-                        metadata,
+                        (cargo_metadata, metadata),
                         import_name_map
                             .get(&package.name)
                             .expect("package already processed"),
@@ -914,7 +918,7 @@ fn adapter_bytes(
 
 fn componentize(
     config: &Config,
-    metadata: &ComponentMetadata,
+    (cargo_metadata, metadata): (&Metadata, &ComponentMetadata),
     import_name_map: &HashMap<String, String>,
     artifact: &Artifact,
     path: &Path,
@@ -983,12 +987,30 @@ fn componentize(
         )
     })?;
 
-    fs::write(path, component).with_context(|| {
+    // To make the write atomic, first write to a temp file and then rename the file
+    let temp_dir = cargo_metadata.target_directory.join("tmp");
+    fs::create_dir_all(&temp_dir)
+        .with_context(|| format!("failed to create directory `{temp_dir}`"))?;
+
+    let mut file = NamedTempFile::new_in(&temp_dir)
+        .with_context(|| format!("failed to create temp file in `{temp_dir}`"))?;
+
+    use std::io::Write;
+    file.write_all(&component).with_context(|| {
         format!(
             "failed to write output component `{path}`",
+            path = file.path().display()
+        )
+    })?;
+
+    file.into_temp_path().persist(path).with_context(|| {
+        format!(
+            "failed to persist output component `{path}`",
             path = path.display()
         )
-    })
+    })?;
+
+    Ok(())
 }
 
 /// Represents options for a publish operation.
