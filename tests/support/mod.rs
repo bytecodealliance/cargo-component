@@ -13,7 +13,7 @@ use std::{
 use tempfile::TempDir;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
-use toml_edit::Document;
+use toml_edit::DocumentMut;
 use warg_client::{
     storage::{ContentStorage, PublishEntry, PublishInfo},
     FileSystemClient,
@@ -264,13 +264,16 @@ impl Project {
         Ok(self)
     }
 
-    pub fn read_manifest(&self) -> Result<Document> {
+    pub fn read_manifest(&self) -> Result<DocumentMut> {
         let manifest_path = self.root.join("Cargo.toml");
         let manifest_text = fs::read_to_string(manifest_path)?;
         Ok(manifest_text.parse()?)
     }
 
-    pub fn update_manifest(&self, f: impl FnOnce(Document) -> Result<Document>) -> Result<()> {
+    pub fn update_manifest(
+        &self,
+        f: impl FnOnce(DocumentMut) -> Result<DocumentMut>,
+    ) -> Result<()> {
         let manifest = self.read_manifest()?;
         let manifest_path = self.root.join("Cargo.toml");
         fs::write(manifest_path, f(manifest)?.to_string())?;

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use cargo_component_core::{
-    registry::WargError,
+    registry::CommandError,
     terminal::{Color, Terminal, Verbosity},
 };
 use clap::Parser;
@@ -47,7 +47,6 @@ async fn main() -> Result<()> {
         let app = Wit::parse();
         if let Err(e) = match app.command {
             Command::Init(cmd) => cmd.exec(),
-
             Command::Add(cmd) => cmd.exec(retry).await,
             Command::Build(cmd) => cmd.exec(retry).await,
             Command::Publish(cmd) => cmd.exec(retry).await,
@@ -56,17 +55,17 @@ async fn main() -> Result<()> {
         }
         {
             match e {
-                WargError::General(e) => {
+                CommandError::General(e) => {
                     let terminal = Terminal::new(Verbosity::Normal, Color::Auto);
                     terminal.error(e)?;
                     exit(1);
                 }
-                WargError::WargClient(e) => {
+                CommandError::WargClient(e) => {
                     let terminal = Terminal::new(Verbosity::Normal, Color::Auto);
                     terminal.error(e)?;
                     exit(1);
                 }
-                WargError::WargHint(e) => {
+                CommandError::WargHint(e) => {
                     if let ClientError::PackageDoesNotExistWithHint { name, hint } = e {
                         let hint_reg = hint.to_str().unwrap();
                         let mut terms = hint_reg.split('=');

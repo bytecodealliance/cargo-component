@@ -8,7 +8,7 @@ use bindings::BindingsGenerator;
 use bytes::Bytes;
 use cargo_component_core::{
     lock::{LockFile, LockFileResolver, LockedPackage, LockedPackageVersion},
-    registry::{create_client, WargClientError, WargError},
+    registry::{create_client, CommandError, WargClientError},
     terminal::Colors,
 };
 use cargo_config2::{PathAndArgs, TargetTripleRef};
@@ -30,6 +30,7 @@ use std::{
     process::{Command, Stdio},
     time::{Duration, SystemTime},
 };
+use tempfile::NamedTempFile;
 use warg_client::{
     storage::{ContentStorage, PublishEntry, PublishInfo},
     Retry,
@@ -138,7 +139,7 @@ pub async fn run_cargo_command(
     cargo_args: &CargoArguments,
     spawn_args: &[String],
     retry: Option<&Retry>,
-) -> Result<Vec<PathBuf>, WargError> {
+) -> Result<Vec<PathBuf>, CommandError> {
     let import_name_map = generate_bindings(config, metadata, packages, cargo_args, retry).await?;
 
     let cargo_path = std::env::var("CARGO")
@@ -390,6 +391,9 @@ fn componentize_artifacts(
     let cwd =
         env::current_dir().with_context(|| "couldn't get the current directory of the process")?;
 
+    // Acquire the lock file to ensure any other cargo-component process waits for this to complete
+    let _file_lock = acquire_lock_file_ro(config.terminal(), cargo_metadata)?;
+
     for artifact in artifacts {
         for path in artifact
             .filenames
@@ -414,7 +418,7 @@ fn componentize_artifacts(
                 ArtifactKind::Componentizable(bytes) => {
                     componentize(
                         config,
-                        metadata,
+                        (cargo_metadata, metadata),
                         import_name_map
                             .get(&package.name)
                             .expect("package already processed"),
@@ -720,7 +724,7 @@ async fn generate_bindings(
     packages: &[PackageComponentMetadata<'_>],
     cargo_args: &CargoArguments,
     retry: Option<&Retry>,
-) -> Result<HashMap<String, HashMap<String, String>>, WargError> {
+) -> Result<HashMap<String, HashMap<String, String>>, CommandError> {
     let last_modified_exe = last_modified_time(&std::env::current_exe().unwrap())?;
     let file_lock = acquire_lock_file_ro(config.terminal(), metadata)?;
     let lock_file = file_lock
@@ -787,7 +791,7 @@ async fn create_resolution_map<'a>(
     lock_file: Option<LockFileResolver<'_>>,
     network_allowed: bool,
     retry: Option<&Retry>,
-) -> Result<PackageResolutionMap<'a>, WargError> {
+) -> Result<PackageResolutionMap<'a>, CommandError> {
     let mut map = PackageResolutionMap::default();
 
     for PackageComponentMetadata { package, metadata } in packages {
@@ -928,7 +932,7 @@ fn adapter_bytes(
 
 fn componentize(
     config: &Config,
-    metadata: &ComponentMetadata,
+    (cargo_metadata, metadata): (&Metadata, &ComponentMetadata),
     import_name_map: &HashMap<String, String>,
     artifact: &Artifact,
     path: &Path,
@@ -997,12 +1001,30 @@ fn componentize(
         )
     })?;
 
-    fs::write(path, component).with_context(|| {
+    // To make the write atomic, first write to a temp file and then rename the file
+    let temp_dir = cargo_metadata.target_directory.join("tmp");
+    fs::create_dir_all(&temp_dir)
+        .with_context(|| format!("failed to create directory `{temp_dir}`"))?;
+
+    let mut file = NamedTempFile::new_in(&temp_dir)
+        .with_context(|| format!("failed to create temp file in `{temp_dir}`"))?;
+
+    use std::io::Write;
+    file.write_all(&component).with_context(|| {
         format!(
             "failed to write output component `{path}`",
+            path = file.path().display()
+        )
+    })?;
+
+    file.into_temp_path().persist(path).with_context(|| {
+        format!(
+            "failed to persist output component `{path}`",
             path = path.display()
         )
-    })
+    })?;
+
+    Ok(())
 }
 
 /// Represents options for a publish operation.
@@ -1083,7 +1105,7 @@ pub async fn publish(
     config: &Config,
     options: &PublishOptions<'_>,
     retry: Option<&Retry>,
-) -> Result<(), WargError> {
+) -> Result<(), CommandError> {
     if options.dry_run {
         config
             .terminal()
@@ -1166,7 +1188,7 @@ pub async fn update_lockfile(
     locked: bool,
     dry_run: bool,
     retry: Option<&Retry>,
-) -> Result<(), WargError> {
+) -> Result<(), CommandError> {
     // Read the current lock file and generate a new one
     let map = create_resolution_map(config, packages, None, network_allowed, retry).await?;
 

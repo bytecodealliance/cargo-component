@@ -1,6 +1,6 @@
 use crate::config::Config;
 use anyhow::{Context, Result};
-use cargo_component_core::{command::CommonOptions, registry::WargError, terminal::Colors};
+use cargo_component_core::{command::CommonOptions, registry::CommandError, terminal::Colors};
 use clap::{Args, Subcommand};
 use p256::ecdsa::SigningKey;
 use rand_core::OsRng;
@@ -24,7 +24,7 @@ pub struct KeyCommand {
 
 impl KeyCommand {
     /// Executes the command.
-    pub async fn exec(self) -> Result<(), WargError> {
+    pub async fn exec(self) -> Result<(), CommandError> {
         log::debug!("executing key command");
 
         let mut config = Config::new(self.common.new_terminal())?;
@@ -61,7 +61,7 @@ pub struct KeyIdCommand {
 
 impl KeyIdCommand {
     /// Executes the command.
-    pub async fn exec(self, config: &Config) -> Result<(), WargError> {
+    pub async fn exec(self, config: &Config) -> Result<(), CommandError> {
         let key = get_signing_key(
             Some(&self.url),
             &config.warg.keys,
@@ -86,7 +86,7 @@ pub struct KeyNewCommand {
 
 impl KeyNewCommand {
     /// Executes the command.
-    pub async fn exec(self, config: &mut Config) -> Result<(), WargError> {
+    pub async fn exec(self, config: &mut Config) -> Result<(), CommandError> {
         let key = SigningKey::random(&mut OsRng).into();
         set_signing_key(
             Some(&self.url),
@@ -119,7 +119,7 @@ pub struct KeySetCommand {
 
 impl KeySetCommand {
     /// Executes the command.
-    pub async fn exec(self, config: &mut Config) -> Result<(), WargError> {
+    pub async fn exec(self, config: &mut Config) -> Result<(), CommandError> {
         let key = PrivateKey::decode(
             rpassword::prompt_password("input signing key (expected format is `<alg>:<base64>`): ")
                 .context("failed to read signing key")?,
@@ -160,7 +160,7 @@ pub struct KeyDeleteCommand {
 
 impl KeyDeleteCommand {
     /// Executes the command.
-    pub async fn exec(self, config: &Config) -> Result<(), WargError> {
+    pub async fn exec(self, config: &Config) -> Result<(), CommandError> {
         config.terminal().write_stdout(
             "⚠️  WARNING: this operation cannot be undone and the key will be permanently deleted ⚠️",
             Some(Colors::Yellow),

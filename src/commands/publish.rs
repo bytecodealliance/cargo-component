@@ -6,7 +6,7 @@ use crate::{
 use anyhow::{anyhow, Context, Result};
 use cargo_component_core::{
     command::CommonOptions,
-    registry::{find_url, WargError},
+    registry::{find_url, CommandError},
 };
 use clap::Args;
 use std::path::PathBuf;
@@ -81,7 +81,7 @@ pub struct PublishCommand {
 
 impl PublishCommand {
     /// Executes the command.
-    pub async fn exec(self, retry: Option<Retry>) -> Result<(), WargError> {
+    pub async fn exec(self, retry: Option<Retry>) -> Result<(), CommandError> {
         log::debug!("executing publish command");
 
         let config = Config::new(self.common.new_terminal())?;

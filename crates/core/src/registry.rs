@@ -34,8 +34,8 @@ use wit_component::DecodedWasm;
 use wit_parser::{PackageId, PackageName, Resolve, UnresolvedPackage, WorldId};
 
 #[derive(Debug, Error)]
-/// Error for WIT commands
-pub enum WargError {
+/// Error for CLI commands
+pub enum CommandError {
     /// General errors
     #[error("Error: `{0}`")]
     General(anyhow::Error),
@@ -56,17 +56,19 @@ impl std::fmt::Debug for WargClientError {
     }
 }
 
-impl From<anyhow::Error> for WargError {
+impl From<anyhow::Error> for CommandError {
     fn from(value: anyhow::Error) -> Self {
-        WargError::General(value)
+        CommandError::General(value)
     }
 }
 
-impl From<WargClientError> for WargError {
+impl From<WargClientError> for CommandError {
     fn from(value: WargClientError) -> Self {
         match &value.0 {
-            ClientError::PackageDoesNotExistWithHint { .. } => WargError::WargHint(value.0.into()),
-            _ => WargError::WargClient(value.0.into()),
+            ClientError::PackageDoesNotExistWithHint { .. } => {
+                CommandError::WargHint(value.0.into())
+            }
+            _ => CommandError::WargClient(value.0.into()),
         }
     }
 }
@@ -517,7 +519,7 @@ impl<'a> DependencyResolver<'a> {
         name: &'a registry::PackageName,
         dependency: &'a Dependency,
         retry: Option<&Retry>,
-    ) -> Result<(), WargError> {
+    ) -> Result<(), CommandError> {
         match dependency {
             Dependency::Package(package) => {
                 // Dependency comes from a registry, add a dependency to the resolver
@@ -532,7 +534,7 @@ impl<'a> DependencyResolver<'a> {
                 }) {
                     Some(Ok(locked)) => Some(locked),
                     Some(Err(e)) => {
-                        return Err(WargError::General(e));
+                        return Err(CommandError::General(e));
                     }
                     _ => None,
                 };
@@ -574,7 +576,7 @@ impl<'a> DependencyResolver<'a> {
     /// This will download all dependencies that are not already present in client storage.
     ///
     /// Returns the dependency resolution map.
-    pub async fn resolve(self) -> Result<DependencyResolutionMap, WargError> {
+    pub async fn resolve(self) -> Result<DependencyResolutionMap, CommandError> {
         let Self {
             mut registries,
             mut resolutions,
@@ -586,7 +588,6 @@ impl<'a> DependencyResolver<'a> {
         // Start by updating the packages that need updating
         // This will determine the contents that need to be downloaded
         let downloads = Self::update_packages(&mut registries, terminal, network_allowed).await?;
-
         // Finally, download and resolve the dependencies
         for resolution in
             Self::download_and_resolve(registries, downloads, terminal, network_allowed).await?
@@ -602,7 +603,7 @@ impl<'a> DependencyResolver<'a> {
         registries: &mut IndexMap<&'a str, Registry<'a>>,
         terminal: &Terminal,
         network_allowed: bool,
-    ) -> Result<DownloadMap<'a>, WargError> {
+    ) -> Result<DownloadMap<'a>, CommandError> {
         let task_count = registries
             .iter()
             .filter(|(_, r)| !r.upserts.is_empty())
@@ -655,7 +656,7 @@ impl<'a> DependencyResolver<'a> {
                 .get_index_mut(index)
                 .expect("out of bounds registry index");
 
-            res.map_err(|e| WargError::WargClient(e.0))?;
+            res.map_err(|e| CommandError::from(e))?;
 
             log::info!("package logs successfully updated for component registry `{name}`");
             finished += 1;

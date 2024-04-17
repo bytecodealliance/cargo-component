@@ -9,7 +9,7 @@ repository = { workspace = true }
 readme = "README.md"
 
 [workspace.package]
-version = "0.10.1"
+version = "0.11.0"
 edition = "2021"
 authors = ["Peter Huene <peter@huene.dev>"]
 license = "Apache-2.0 WITH LLVM-exception"
@@ -55,6 +55,7 @@ which = { workspace = true }
 shell-escape = "0.1.5"
 secrecy = { workspace = true }
 dialoguer = { wokerspace = true }
+tempfile = { workspace = true }
 
 [dev-dependencies]
 assert_cmd = { workspace = true }
@@ -68,24 +69,24 @@ wasmprinter = { workspace = true }
 members = ["crates/core", "crates/wit"]
 
 [workspace.dependencies]
-cargo-component-core = { path = "crates/core", version = "0.10.1" }
+cargo-component-core = { path = "crates/core", version = "0.11.0" }
 warg-protocol = { git = "https://github.com/bytecodealliance/registry", branch = "namespace-enhancements" }
 warg-crypto = { git = "https://github.com/bytecodealliance/registry", branch = "namespace-enhancements" }
 warg-client = { git = "https://github.com/bytecodealliance/registry", branch = "namespace-enhancements" }
 warg-credentials = { git = "https://github.com/bytecodealliance/registry", branch = "namespace-enhancements" }
 warg-server = { git = "https://github.com/bytecodealliance/registry", branch = "namespace-enhancements" }
-anyhow = "1.0.80"
-clap = { version = "4.5.1", features = ["derive"] }
-toml_edit = { version = "0.22.6", features = ["serde"] }
+anyhow = "1.0.82"
+clap = { version = "4.5.4", features = ["derive"] }
+toml_edit = { version = "0.22.9", features = ["serde"] }
 pretty_env_logger = "0.5.0"
 log = "0.4.21"
-tokio = { version = "1.36.0", default-features = false, features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.37.0", default-features = false, features = ["macros", "rt-multi-thread"] }
 tokio-util = "0.7.10"
-heck = "0.4.1"
+heck = "0.5.0"
 semver = "1.0.22"
 serde = { version = "1.0.197", features = ["derive"] }
-serde_json = "1.0.114"
-indexmap = "2.2.5"
+serde_json = "1.0.115"
+indexmap = "2.2.6"
 url = { version = "2.5.0", features = ["serde"] }
 wit-parser = "0.202.0"
 wit-component = "0.202.0"
@@ -93,7 +94,7 @@ wasm-metadata = "0.202.0"
 parse_arg = "0.1.4"
 dialoguer = "0.11.0"
 cargo_metadata = "0.18.1"
-cargo-config2 = "0.1.19"
+cargo-config2 = "0.1.24"
 libc = "0.2.153"
 owo-colors = "4.0.0"
 unicode-width = "0.1.11"
@@ -101,11 +102,11 @@ p256 = "0.13.2"
 rand_core = "0.6.4"
 rpassword = "7.3.1"
 futures = "0.3.30"
-bytes = "1.5.0"
-which = "6.0.0"
+bytes = "1.6.0"
+which = "6.0.1"
 secrecy = "0.8.0"
-wit-bindgen-rust = "0.23.0"
-wit-bindgen-core = "0.23.0"
+wit-bindgen-rust = "0.24.0"
+wit-bindgen-core = "0.24.0"
 tempfile = "3.10.1"
 assert_cmd = "2.0.14"
 predicates = "3.1.0"

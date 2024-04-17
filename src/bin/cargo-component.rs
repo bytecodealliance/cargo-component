@@ -7,7 +7,7 @@ use cargo_component::{
     load_component_metadata, load_metadata, run_cargo_command,
 };
 use cargo_component_core::{
-    registry::WargError,
+    registry::CommandError,
     terminal::{Color, Terminal, Verbosity},
 };
 use clap::{CommandFactory, Parser};
@@ -127,17 +127,17 @@ async fn main() -> Result<()> {
                     },
                 } {
                     match e {
-                        WargError::General(e) => {
+                        CommandError::General(e) => {
                             let terminal = Terminal::new(Verbosity::Normal, Color::Auto);
                             terminal.error(e)?;
                             exit(1);
                         }
-                        WargError::WargClient(e) => {
+                        CommandError::WargClient(e) => {
                             let terminal = Terminal::new(Verbosity::Normal, Color::Auto);
                             terminal.error(e)?;
                             exit(1);
                         }
-                        WargError::WargHint(e) => {
+                        CommandError::WargHint(e) => {
                             if let ClientError::PackageDoesNotExistWithHint { name, hint } = e {
                                 let hint_reg = hint.to_str().unwrap();
                                 let mut terms = hint_reg.split('=');
@@ -265,17 +265,17 @@ async fn main() -> Result<()> {
                 .await
                 {
                     match e {
-                        WargError::General(e) => {
+                        CommandError::General(e) => {
                             let terminal = Terminal::new(Verbosity::Normal, Color::Auto);
                             terminal.error(e)?;
                             exit(1);
                         }
-                        WargError::WargClient(e) => {
+                        CommandError::WargClient(e) => {
                             let terminal = Terminal::new(Verbosity::Normal, Color::Auto);
                             terminal.error(e)?;
                             exit(1);
                         }
-                        WargError::WargHint(e) => {
+                        CommandError::WargHint(e) => {
                             if let ClientError::PackageDoesNotExistWithHint { name, hint } = e {
                                 let hint_reg = hint.to_str().unwrap();
                                 let mut terms = hint_reg.split('=');

@@ -1,6 +1,6 @@
 use crate::{
     config::{Config, CONFIG_FILE_NAME},
-    WargError,
+    CommandError,
 };
 use anyhow::{Context, Result};
 use cargo_component_core::command::CommonOptions;
@@ -22,7 +22,7 @@ pub struct UpdateCommand {
 
 impl UpdateCommand {
     /// Executes the command.
-    pub async fn exec(self, retry: Option<Retry>) -> Result<(), WargError> {
+    pub async fn exec(self, retry: Option<Retry>) -> Result<(), CommandError> {
         log::debug!("executing update command");
 
         let (config, config_path) = Config::from_default_file()?

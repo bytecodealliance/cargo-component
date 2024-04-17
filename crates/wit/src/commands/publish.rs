@@ -1,6 +1,6 @@
 use crate::{
     config::{Config, CONFIG_FILE_NAME},
-    publish_wit_package, PublishOptions, WargError,
+    publish_wit_package, CommandError, PublishOptions,
 };
 use anyhow::{Context, Result};
 use cargo_component_core::command::CommonOptions;
@@ -37,7 +37,7 @@ pub struct PublishCommand {
 
 impl PublishCommand {
     /// Executes the command.
-    pub async fn exec(self, retry: Option<Retry>) -> Result<(), WargError> {
+    pub async fn exec(self, retry: Option<Retry>) -> Result<(), CommandError> {
         log::debug!("executing publish command");
 
         let (config, config_path) = Config::from_default_file()?

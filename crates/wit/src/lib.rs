@@ -7,8 +7,8 @@ use bytes::Bytes;
 use cargo_component_core::{
     lock::{LockFile, LockFileResolver, LockedPackage, LockedPackageVersion},
     registry::{
-        create_client, DecodedDependency, DependencyResolutionMap, DependencyResolver,
-        WargClientError, WargError,
+        create_client, CommandError, DecodedDependency, DependencyResolutionMap,
+        DependencyResolver, WargClientError,
     },
     terminal::{Colors, Terminal},
 };
@@ -36,7 +36,7 @@ async fn resolve_dependencies(
     terminal: &Terminal,
     update_lock_file: bool,
     retry: Option<&Retry>,
-) -> Result<DependencyResolutionMap, WargError> {
+) -> Result<DependencyResolutionMap, CommandError> {
     let file_lock = acquire_lock_file_ro(terminal, config_path)?;
     let lock_file = file_lock
         .as_ref()
@@ -86,7 +86,7 @@ async fn resolve_dependencies(
 fn parse_wit_package(
     dir: &Path,
     dependencies: &DependencyResolutionMap,
-) -> Result<(Resolve, PackageId), WargError> {
+) -> Result<(Resolve, PackageId), CommandError> {
     let mut merged = Resolve::default();
 
     // Start by decoding all of the dependencies
@@ -164,7 +164,7 @@ fn parse_wit_package(
         deps: &'a IndexMap<PackageName, DecodedDependency>,
         order: &mut IndexSet<PackageName>,
         visiting: &mut HashSet<&'a PackageName>,
-    ) -> Result<(), WargError> {
+    ) -> Result<(), CommandError> {
         if order.contains(dep.package_name()) {
             return Ok(());
         }
@@ -231,7 +231,7 @@ async fn build_wit_package(
     warg_config: &warg_client::Config,
     terminal: &Terminal,
     retry: Option<&Retry>,
-) -> Result<(registry::PackageName, Vec<u8>), WargError> {
+) -> Result<(registry::PackageName, Vec<u8>), CommandError> {
     let dependencies =
         resolve_dependencies(config, config_path, warg_config, terminal, true, retry).await?;
     let dir = config_path.parent().unwrap_or_else(|| Path::new("."));
@@ -321,7 +321,7 @@ async fn publish_wit_package(
     options: PublishOptions<'_>,
     terminal: &Terminal,
     retry: Option<Retry>,
-) -> Result<(), WargError> {
+) -> Result<(), CommandError> {
     let (name, bytes) = build_wit_package(
         options.config,
         options.config_path,

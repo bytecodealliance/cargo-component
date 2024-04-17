@@ -3,7 +3,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use cargo_component_core::{
     command::CommonOptions,
     registry::{
-        Dependency, DependencyResolution, DependencyResolver, RegistryResolution, WargError,
+        CommandError, Dependency, DependencyResolution, DependencyResolver, RegistryResolution,
     },
 };
 use clap::Args;
@@ -16,7 +16,7 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
 };
-use toml_edit::{table, value, Document, Item, Table, Value};
+use toml_edit::{table, value, DocumentMut, Item, Table, Value};
 use url::Url;
 use warg_client::Retry;
 
@@ -143,7 +143,7 @@ impl<'a> PackageName<'a> {
 
 impl NewCommand {
     /// Executes the command.
-    pub async fn exec(self, retry: Option<Retry>) -> Result<(), WargError> {
+    pub async fn exec(self, retry: Option<Retry>) -> Result<(), CommandError> {
         log::debug!("executing new command");
 
         let config = Config::new(self.common.new_terminal())?;
@@ -237,7 +237,7 @@ impl NewCommand {
             )
         })?;
 
-        let mut doc: Document = manifest.parse().with_context(|| {
+        let mut doc: DocumentMut = manifest.parse().with_context(|| {
             format!(
                 "failed to parse manifest file `{path}`",
                 path = manifest_path.display()
@@ -519,7 +519,7 @@ world example {{
         target: Option<metadata::Target>,
         network_allowed: bool,
         retry: Option<Retry>,
-    ) -> Result<Option<(RegistryResolution, Option<String>)>, WargError> {
+    ) -> Result<Option<(RegistryResolution, Option<String>)>, CommandError> {
         match target {
             Some(metadata::Target::Package {
                 name,

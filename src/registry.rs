@@ -4,7 +4,7 @@ use crate::{config::Config, metadata::ComponentMetadata};
 use anyhow::Result;
 use cargo_component_core::{
     lock::{LockFile, LockFileResolver, LockedPackage, LockedPackageVersion},
-    registry::{DependencyResolution, DependencyResolutionMap, DependencyResolver, WargError},
+    registry::{CommandError, DependencyResolution, DependencyResolutionMap, DependencyResolver},
 };
 use cargo_metadata::PackageId;
 use semver::Version;
@@ -34,7 +34,7 @@ impl<'a> PackageDependencyResolution<'a> {
         lock_file: Option<LockFileResolver<'_>>,
         network_allowed: bool,
         retry: Option<&Retry>,
-    ) -> Result<PackageDependencyResolution<'a>, WargError> {
+    ) -> Result<PackageDependencyResolution<'a>, CommandError> {
         Ok(Self {
             metadata,
             target_resolutions: Self::resolve_target_deps(
@@ -63,7 +63,7 @@ impl<'a> PackageDependencyResolution<'a> {
         lock_file: Option<LockFileResolver<'_>>,
         network_allowed: bool,
         retry: Option<&Retry>,
-    ) -> Result<DependencyResolutionMap, WargError> {
+    ) -> Result<DependencyResolutionMap, CommandError> {
         let target_deps = metadata.section.target.dependencies();
         if target_deps.is_empty() {
             return Ok(Default::default());
@@ -85,7 +85,7 @@ impl<'a> PackageDependencyResolution<'a> {
         lock_file: Option<LockFileResolver<'_>>,
         network_allowed: bool,
         retry: Option<&Retry>,
-    ) -> Result<DependencyResolutionMap, WargError> {
+    ) -> Result<DependencyResolutionMap, CommandError> {
         if metadata.section.dependencies.is_empty() {
             return Ok(Default::default());
         }

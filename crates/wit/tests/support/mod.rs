@@ -13,7 +13,7 @@ use std::{
 use tempfile::TempDir;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
-use toml_edit::Document;
+use toml_edit::DocumentMut;
 use warg_crypto::signing::PrivateKey;
 use warg_protocol::operator::NamespaceState;
 use warg_server::{policy::content::WasmContentPolicy, Config, Server};
@@ -177,7 +177,10 @@ impl Project {
         cmd
     }
 
-    pub fn update_manifest(&self, f: impl FnOnce(Document) -> Result<Document>) -> Result<()> {
+    pub fn update_manifest(
+        &self,
+        f: impl FnOnce(DocumentMut) -> Result<DocumentMut>,
+    ) -> Result<()> {
         let manifest_path = self.root.join("wit.toml");
         let manifest = fs::read_to_string(&manifest_path)?;
         fs::write(manifest_path, f(manifest.parse()?)?.to_string())?;

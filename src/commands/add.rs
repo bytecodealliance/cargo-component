@@ -7,7 +7,9 @@ use crate::{
 use anyhow::{bail, Context, Result};
 use cargo_component_core::{
     command::CommonOptions,
-    registry::{Dependency, DependencyResolution, DependencyResolver, RegistryPackage, WargError},
+    registry::{
+        CommandError, Dependency, DependencyResolution, DependencyResolver, RegistryPackage,
+    },
     VersionedPackageName,
 };
 use cargo_metadata::Package;
@@ -17,7 +19,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
-use toml_edit::{value, Document, InlineTable, Item, Table, Value};
+use toml_edit::{value, DocumentMut, InlineTable, Item, Table, Value};
 use warg_client::Retry;
 use warg_protocol::registry::PackageName;
 
@@ -64,7 +66,7 @@ pub struct AddCommand {
 
 impl AddCommand {
     /// Executes the command
-    pub async fn exec(self, retry: Option<Retry>) -> Result<(), WargError> {
+    pub async fn exec(self, retry: Option<Retry>) -> Result<(), CommandError> {
         let config = Config::new(self.common.new_terminal())?;
         let metadata = load_metadata(self.manifest_path.as_deref())?;
 
@@ -167,7 +169,7 @@ impl AddCommand {
             )
         })?;
 
-        let mut document: Document = manifest.parse().with_context(|| {
+        let mut document: DocumentMut = manifest.parse().with_context(|| {
             format!(
                 "failed to parse manifest file `{path}`",
                 path = pkg.manifest_path

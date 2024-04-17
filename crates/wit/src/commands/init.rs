@@ -1,6 +1,6 @@
 use crate::{
     config::{ConfigBuilder, CONFIG_FILE_NAME},
-    WargError,
+    CommandError,
 };
 use anyhow::anyhow;
 use cargo_component_core::{command::CommonOptions, registry::DEFAULT_REGISTRY_NAME};
@@ -27,7 +27,7 @@ pub struct InitCommand {
 
 impl InitCommand {
     /// Executes the command.
-    pub fn exec(self) -> Result<(), WargError> {
+    pub fn exec(self) -> Result<(), CommandError> {
         log::debug!("executing init command");
 
         let path = self.path.join(CONFIG_FILE_NAME);

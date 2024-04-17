@@ -7,6 +7,7 @@ use crate::{
 };
 use anyhow::{bail, Context, Result};
 use cargo_component_core::registry::DecodedDependency;
+use heck::ToKebabCase;
 use indexmap::{IndexMap, IndexSet};
 use semver::Version;
 use std::{
@@ -161,7 +162,21 @@ impl<'a> BindingsGenerator<'a> {
             std_feature: settings.std_feature,
             runtime_path: Some("wit_bindgen_rt".to_string()),
             bitflags_path: Some("wit_bindgen_rt::bitflags".to_string()),
-            ..Default::default()
+            raw_strings: settings.raw_strings,
+            skip: settings.skip.clone(),
+            stubs: settings.stubs,
+            export_prefix: settings.export_prefix.clone(),
+            with: settings
+                .with
+                .iter()
+                .map(|(key, value)| (key.clone(), value.clone()))
+                .collect(),
+            type_section_suffix: settings.type_section_suffix.clone(),
+            disable_run_ctors_once_workaround: settings.disable_run_ctors_once_workaround,
+            default_bindings_module: settings.default_bindings_module.clone(),
+            export_macro_name: settings.export_macro_name.clone(),
+            pub_export_macro: settings.pub_export_macro,
+            generate_unused_types: settings.generate_unused_types,
         };
 
         let mut files = Files::default();
@@ -431,7 +446,7 @@ impl<'a> BindingsGenerator<'a> {
 
     fn target_empty_world(resolution: &PackageDependencyResolution) -> (Resolve, WorldId) {
         let mut resolve = Resolve::default();
-        let name = resolution.metadata.name.clone();
+        let name = resolution.metadata.name.to_kebab_case();
         let pkg_name = PackageName {
             namespace: "component".to_string(),
             name: name.clone(),

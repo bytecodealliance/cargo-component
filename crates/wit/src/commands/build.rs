@@ -1,7 +1,7 @@
 use crate::{
     build_wit_package,
     config::{Config, CONFIG_FILE_NAME},
-    WargError,
+    CommandError,
 };
 use anyhow::{Context, Result};
 use cargo_component_core::command::CommonOptions;
@@ -24,7 +24,7 @@ pub struct BuildCommand {
 
 impl BuildCommand {
     /// Executes the command.
-    pub async fn exec(self, retry: Option<Retry>) -> Result<(), WargError> {
+    pub async fn exec(self, retry: Option<Retry>) -> Result<(), CommandError> {
         log::debug!("executing build command");
 
         let (config, config_path) = Config::from_default_file()?

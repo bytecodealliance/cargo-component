@@ -9,7 +9,7 @@ use std::{
     io::{self, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
 };
-use toml_edit::{Document, Item, Value};
+use toml_edit::{DocumentMut, Item, Value};
 use warg_crypto::hash::AnyHash;
 use warg_protocol::registry::PackageName;
 
@@ -140,7 +140,7 @@ impl LockFile {
         let mut contents = String::new();
         file.read_to_string(&mut contents)?;
 
-        let document: Document = contents.parse()?;
+        let document: DocumentMut = contents.parse()?;
 
         match document.as_table().get("version") {
             Some(Item::Value(Value::Integer(v))) => {

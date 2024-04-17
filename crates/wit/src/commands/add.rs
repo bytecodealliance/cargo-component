@@ -2,7 +2,9 @@ use crate::config::{Config, CONFIG_FILE_NAME};
 use anyhow::{anyhow, Context, Result};
 use cargo_component_core::{
     command::CommonOptions,
-    registry::{Dependency, DependencyResolution, DependencyResolver, RegistryPackage, WargError},
+    registry::{
+        CommandError, Dependency, DependencyResolution, DependencyResolver, RegistryPackage,
+    },
     terminal::Terminal,
     VersionedPackageName,
 };
@@ -18,7 +20,7 @@ async fn resolve_version(
     registry: &Option<String>,
     terminal: &Terminal,
     retry: Option<Retry>,
-) -> Result<String, WargError> {
+) -> Result<String, CommandError> {
     let mut resolver = DependencyResolver::new(warg_config, None, terminal, true)?;
     let dependency = Dependency::Package(RegistryPackage {
         name: Some(package.name.clone()),
@@ -78,7 +80,7 @@ pub struct AddCommand {
 
 impl AddCommand {
     /// Executes the command.
-    pub async fn exec(self, retry: Option<Retry>) -> Result<(), WargError> {
+    pub async fn exec(self, retry: Option<Retry>) -> Result<(), CommandError> {
         log::debug!("executing add command");
 
         let (mut config, config_path) = Config::from_default_file()?

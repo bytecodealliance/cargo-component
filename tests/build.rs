@@ -28,6 +28,21 @@ fn it_builds_debug() -> Result<()> {
 }
 
 #[test]
+fn it_builds_a_bin_project_with_snake_case() -> Result<()> {
+    let project = Project::new_bin("hello_world")?;
+
+    project
+        .cargo_component("build --release")
+        .assert()
+        .stderr(contains("Finished release [optimized] target(s)"))
+        .success();
+
+    validate_component(&project.release_wasm("hello_world"))?;
+
+    Ok(())
+}
+
+#[test]
 fn it_builds_a_bin_project() -> Result<()> {
     let project = Project::new_bin("foo")?;
 
