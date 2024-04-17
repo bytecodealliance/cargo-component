@@ -1,25 +1,25 @@
 use crate::config::{Config, CONFIG_FILE_NAME};
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, Context, Result};
 use cargo_component_core::{
     command::CommonOptions,
-    registry::{Dependency, DependencyResolution, DependencyResolver, RegistryPackage},
+    registry::{Dependency, DependencyResolution, DependencyResolver, RegistryPackage, WargError},
     terminal::Terminal,
     VersionedPackageName,
 };
 use clap::Args;
 use semver::VersionReq;
 use std::path::PathBuf;
+use warg_client::Retry;
 use warg_protocol::registry::PackageName;
 
 async fn resolve_version(
-    config: &Config,
     warg_config: &warg_client::Config,
     package: &VersionedPackageName,
     registry: &Option<String>,
     terminal: &Terminal,
-) -> Result<String> {
-    let mut resolver =
-        DependencyResolver::new(warg_config, &config.registries, None, terminal, true)?;
+    retry: Option<Retry>,
+) -> Result<String, WargError> {
+    let mut resolver = DependencyResolver::new(warg_config, None, terminal, true)?;
     let dependency = Dependency::Package(RegistryPackage {
         name: Some(package.name.clone()),
         version: package
@@ -30,7 +30,9 @@ async fn resolve_version(
         registry: registry.clone(),
     });
 
-    resolver.add_dependency(&package.name, &dependency).await?;
+    resolver
+        .add_dependency(&package.name, &dependency, retry.as_ref())
+        .await?;
 
     let dependencies = resolver.resolve().await?;
     assert_eq!(dependencies.len(), 1);
@@ -76,7 +78,7 @@ pub struct AddCommand {
 
 impl AddCommand {
     /// Executes the command.
-    pub async fn exec(self) -> Result<()> {
+    pub async fn exec(self, retry: Option<Retry>) -> Result<(), WargError> {
         log::debug!("executing add command");
 
         let (mut config, config_path) = Config::from_default_file()?
@@ -84,7 +86,10 @@ impl AddCommand {
 
         let name = self.name.as_ref().unwrap_or(&self.package.name);
         if config.dependencies.contains_key(name) {
-            bail!("cannot add dependency `{name}` as it conflicts with an existing dependency");
+            return Err(anyhow!(
+                "cannot add dependency `{name}` as it conflicts with an existing dependency"
+            )
+            .into());
         }
 
         let warg_config = warg_client::Config::from_default_file()?.unwrap_or_default();
@@ -103,11 +108,11 @@ impl AddCommand {
             }
             None => {
                 let version = resolve_version(
-                    &config,
                     &warg_config,
                     &self.package,
                     &self.registry,
                     &terminal,
+                    retry,
                 )
                 .await?;
 

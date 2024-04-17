@@ -7,7 +7,7 @@ use crate::{
 use anyhow::{bail, Context, Result};
 use cargo_component_core::{
     command::CommonOptions,
-    registry::{Dependency, DependencyResolution, DependencyResolver, RegistryPackage},
+    registry::{Dependency, DependencyResolution, DependencyResolver, RegistryPackage, WargError},
     VersionedPackageName,
 };
 use cargo_metadata::Package;
@@ -18,6 +18,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use toml_edit::{value, Document, InlineTable, Item, Table, Value};
+use warg_client::Retry;
 use warg_protocol::registry::PackageName;
 
 /// Add a dependency for a WebAssembly component
@@ -63,7 +64,7 @@ pub struct AddCommand {
 
 impl AddCommand {
     /// Executes the command
-    pub async fn exec(self) -> Result<()> {
+    pub async fn exec(self, retry: Option<Retry>) -> Result<(), WargError> {
         let config = Config::new(self.common.new_terminal())?;
         let metadata = load_metadata(self.manifest_path.as_deref())?;
 
@@ -104,7 +105,7 @@ impl AddCommand {
                 ),
             )?;
         } else {
-            let version = self.resolve_version(&config, &metadata, name, true).await?;
+            let version = self.resolve_version(&config, name, true, retry).await?;
             let version = version.trim_start_matches('^');
             self.add(package, version)?;
 
@@ -120,17 +121,12 @@ impl AddCommand {
     async fn resolve_version(
         &self,
         config: &Config,
-        metadata: &ComponentMetadata,
         name: &PackageName,
         network_allowed: bool,
+        retry: Option<Retry>,
     ) -> Result<String> {
-        let mut resolver = DependencyResolver::new(
-            config.warg(),
-            &metadata.section.registries,
-            None,
-            config.terminal(),
-            network_allowed,
-        )?;
+        let mut resolver =
+            DependencyResolver::new(config.warg(), None, config.terminal(), network_allowed)?;
         let dependency = Dependency::Package(RegistryPackage {
             name: Some(self.package.name.clone()),
             version: self
@@ -142,7 +138,9 @@ impl AddCommand {
             registry: self.registry.clone(),
         });
 
-        resolver.add_dependency(name, &dependency).await?;
+        resolver
+            .add_dependency(name, &dependency, retry.as_ref())
+            .await?;
 
         let dependencies = resolver.resolve().await?;
         assert_eq!(dependencies.len(), 1);

@@ -2,24 +2,29 @@
 
 #![deny(missing_docs)]
 
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, Context, Result};
 use bytes::Bytes;
 use cargo_component_core::{
     lock::{LockFile, LockFileResolver, LockedPackage, LockedPackageVersion},
-    registry::{create_client, DecodedDependency, DependencyResolutionMap, DependencyResolver},
+    registry::{
+        create_client, DecodedDependency, DependencyResolutionMap, DependencyResolver,
+        WargClientError, WargError,
+    },
     terminal::{Colors, Terminal},
 };
 use config::Config;
 use indexmap::{IndexMap, IndexSet};
 use lock::{acquire_lock_file_ro, acquire_lock_file_rw, to_lock_file};
 use std::{collections::HashSet, path::Path, time::Duration};
-use warg_client::storage::{ContentStorage, PublishEntry, PublishInfo};
+use warg_client::{
+    storage::{ContentStorage, PublishEntry, PublishInfo},
+    Retry,
+};
 use warg_crypto::signing::PrivateKey;
 use warg_protocol::registry;
 use wasm_metadata::{Link, LinkType, RegistryMetadata};
 use wit_component::DecodedWasm;
 use wit_parser::{PackageId, PackageName, Resolve, UnresolvedPackage};
-
 pub mod commands;
 pub mod config;
 mod lock;
@@ -30,7 +35,8 @@ async fn resolve_dependencies(
     warg_config: &warg_client::Config,
     terminal: &Terminal,
     update_lock_file: bool,
-) -> Result<DependencyResolutionMap> {
+    retry: Option<&Retry>,
+) -> Result<DependencyResolutionMap, WargError> {
     let file_lock = acquire_lock_file_ro(terminal, config_path)?;
     let lock_file = file_lock
         .as_ref()
@@ -46,14 +52,13 @@ async fn resolve_dependencies(
 
     let mut resolver = DependencyResolver::new(
         warg_config,
-        &config.registries,
         lock_file.as_ref().map(LockFileResolver::new),
         terminal,
         true,
     )?;
 
     for (name, dep) in &config.dependencies {
-        resolver.add_dependency(name, dep).await?;
+        resolver.add_dependency(name, dep, retry).await?;
     }
 
     let map = resolver.resolve().await?;
@@ -81,7 +86,7 @@ async fn resolve_dependencies(
 fn parse_wit_package(
     dir: &Path,
     dependencies: &DependencyResolutionMap,
-) -> Result<(Resolve, PackageId)> {
+) -> Result<(Resolve, PackageId), WargError> {
     let mut merged = Resolve::default();
 
     // Start by decoding all of the dependencies
@@ -89,10 +94,11 @@ fn parse_wit_package(
     for (name, resolution) in dependencies {
         let decoded = resolution.decode()?;
         if let Some(prev) = deps.insert(decoded.package_name().clone(), decoded) {
-            bail!(
-                "duplicate definitions of package `{prev}` found while decoding dependency `{name}`",
-                prev = prev.package_name()
-            );
+            return Err(anyhow!(
+            "duplicate definitions of package `{prev}` found while decoding dependency `{name}`",
+            prev = prev.package_name()
+        )
+            .into());
         }
     }
 
@@ -149,12 +155,7 @@ fn parse_wit_package(
         };
     }
 
-    let package = merged.push(root).with_context(|| {
-        format!(
-            "failed to merge package from directory `{dir}`",
-            dir = dir.display()
-        )
-    })?;
+    let package = merged.push(root)?;
 
     return Ok((merged, package));
 
@@ -163,7 +164,7 @@ fn parse_wit_package(
         deps: &'a IndexMap<PackageName, DecodedDependency>,
         order: &mut IndexSet<PackageName>,
         visiting: &mut HashSet<&'a PackageName>,
-    ) -> Result<()> {
+    ) -> Result<(), WargError> {
         if order.contains(dep.package_name()) {
             return Ok(());
         }
@@ -180,7 +181,10 @@ fn parse_wit_package(
                     // the package is resolved
                     if let Some(dep) = deps.get(name) {
                         if !visiting.insert(name) {
-                            bail!("foreign dependency `{name}` forms a dependency cycle while parsing dependency `{other}`", other = resolution.name());
+                            return Err(anyhow!(
+                              "foreign dependency `{name}` forms a dependency cycle while parsing dependency `{other}`", other = resolution.name()
+                            )
+                            .into());
                         }
 
                         visit(dep, deps, order, visiting)?;
@@ -202,7 +206,9 @@ fn parse_wit_package(
 
                     if let Some(dep) = deps.get(&package.name) {
                         if !visiting.insert(&package.name) {
-                            bail!("foreign dependency `{name}` forms a dependency cycle while parsing dependency `{other}`", name = package.name, other = resolution.name());
+                            return Err(anyhow!(
+                              "foreign dependency `{name}` forms a dependency cycle while parsing dependency `{other}`", name = package.name, other = resolution.name()
+                            ).into());
                         }
 
                         visit(dep, deps, order, visiting)?;
@@ -224,10 +230,10 @@ async fn build_wit_package(
     config_path: &Path,
     warg_config: &warg_client::Config,
     terminal: &Terminal,
-) -> Result<(registry::PackageName, Vec<u8>)> {
+    retry: Option<&Retry>,
+) -> Result<(registry::PackageName, Vec<u8>), WargError> {
     let dependencies =
-        resolve_dependencies(config, config_path, warg_config, terminal, true).await?;
-
+        resolve_dependencies(config, config_path, warg_config, terminal, true, retry).await?;
     let dir = config_path.parent().unwrap_or_else(|| Path::new("."));
 
     let (mut resolve, package) = parse_wit_package(dir, &dependencies)?;
@@ -255,7 +261,6 @@ struct PublishOptions<'a> {
     config: &'a Config,
     config_path: &'a Path,
     warg_config: &'a warg_client::Config,
-    url: &'a str,
     signing_key: &'a PrivateKey,
     package: Option<&'a registry::PackageName>,
     init: bool,
@@ -312,12 +317,17 @@ fn add_registry_metadata(config: &Config, bytes: &[u8]) -> Result<Vec<u8>> {
         .context("failed to add registry metadata to component")
 }
 
-async fn publish_wit_package(options: PublishOptions<'_>, terminal: &Terminal) -> Result<()> {
+async fn publish_wit_package(
+    options: PublishOptions<'_>,
+    terminal: &Terminal,
+    retry: Option<Retry>,
+) -> Result<(), WargError> {
     let (name, bytes) = build_wit_package(
         options.config,
         options.config_path,
         options.warg_config,
         terminal,
+        retry.as_ref(),
     )
     .await?;
 
@@ -328,8 +338,7 @@ async fn publish_wit_package(options: PublishOptions<'_>, terminal: &Terminal) -
 
     let bytes = add_registry_metadata(options.config, &bytes)?;
     let name = options.package.unwrap_or(&name);
-    let mut client = create_client(options.warg_config, options.url, terminal)?;
-    client.refresh_namespace(name.namespace()).await?;
+    let client = create_client(options.warg_config, terminal, retry.as_ref()).await?;
 
     let content = client
         .content()
@@ -356,10 +365,15 @@ async fn publish_wit_package(options: PublishOptions<'_>, terminal: &Terminal) -
         content,
     });
 
-    let record_id = client.publish_with_info(options.signing_key, info).await?;
+    let record_id = client
+        .publish_with_info(options.signing_key, info)
+        .await
+        .map_err(|e| WargClientError(e))?;
+
     client
         .wait_for_publish(name, &record_id, Duration::from_secs(1))
-        .await?;
+        .await
+        .map_err(|e| WargClientError(e))?;
 
     terminal.status(
         "Published",
@@ -379,12 +393,12 @@ pub async fn update_lockfile(
     warg_config: &warg_client::Config,
     terminal: &Terminal,
     dry_run: bool,
+    retry: Option<Retry>,
 ) -> Result<()> {
     // Resolve all dependencies as if the lock file does not exist
-    let mut resolver =
-        DependencyResolver::new(warg_config, &config.registries, None, terminal, true)?;
+    let mut resolver = DependencyResolver::new(warg_config, None, terminal, true)?;
     for (name, dep) in &config.dependencies {
-        resolver.add_dependency(name, dep).await?;
+        resolver.add_dependency(name, dep, retry.as_ref()).await?;
     }
 
     let map = resolver.resolve().await?;

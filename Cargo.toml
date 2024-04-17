@@ -54,6 +54,7 @@ bytes = { workspace = true }
 which = { workspace = true }
 shell-escape = "0.1.5"
 secrecy = { workspace = true }
+dialoguer = { wokerspace = true }
 
 [dev-dependencies]
 assert_cmd = { workspace = true }
@@ -68,11 +69,11 @@ members = ["crates/core", "crates/wit"]
 
 [workspace.dependencies]
 cargo-component-core = { path = "crates/core", version = "0.10.1" }
-warg-protocol = "0.4.1"
-warg-crypto = "0.4.1"
-warg-client = "0.4.1"
-warg-credentials = "0.4.1"
-warg-server = "0.4.1"
+warg-protocol = { git = "https://github.com/bytecodealliance/registry", branch = "namespace-enhancements" }
+warg-crypto = { git = "https://github.com/bytecodealliance/registry", branch = "namespace-enhancements" }
+warg-client = { git = "https://github.com/bytecodealliance/registry", branch = "namespace-enhancements" }
+warg-credentials = { git = "https://github.com/bytecodealliance/registry", branch = "namespace-enhancements" }
+warg-server = { git = "https://github.com/bytecodealliance/registry", branch = "namespace-enhancements" }
 anyhow = "1.0.80"
 clap = { version = "4.5.1", features = ["derive"] }
 toml_edit = { version = "0.22.6", features = ["serde"] }
@@ -90,6 +91,7 @@ wit-parser = "0.202.0"
 wit-component = "0.202.0"
 wasm-metadata = "0.202.0"
 parse_arg = "0.1.4"
+dialoguer = "0.11.0"
 cargo_metadata = "0.18.1"
 cargo-config2 = "0.1.19"
 libc = "0.2.153"

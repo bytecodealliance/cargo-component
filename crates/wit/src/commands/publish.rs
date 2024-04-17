@@ -1,10 +1,11 @@
 use crate::{
     config::{Config, CONFIG_FILE_NAME},
-    publish_wit_package, PublishOptions,
+    publish_wit_package, PublishOptions, WargError,
 };
 use anyhow::{Context, Result};
-use cargo_component_core::{command::CommonOptions, registry::find_url};
+use cargo_component_core::command::CommonOptions;
 use clap::Args;
+use warg_client::Retry;
 use warg_credentials::keyring::get_signing_key;
 use warg_crypto::signing::PrivateKey;
 use warg_protocol::registry::PackageName;
@@ -36,7 +37,7 @@ pub struct PublishCommand {
 
 impl PublishCommand {
     /// Executes the command.
-    pub async fn exec(self) -> Result<()> {
+    pub async fn exec(self, retry: Option<Retry>) -> Result<(), WargError> {
         log::debug!("executing publish command");
 
         let (config, config_path) = Config::from_default_file()?
@@ -44,12 +45,6 @@ impl PublishCommand {
 
         let terminal = self.common.new_terminal();
         let warg_config = warg_client::Config::from_default_file()?.unwrap_or_default();
-
-        let url = find_url(
-            self.registry.as_deref(),
-            &config.registries,
-            warg_config.home_url.as_deref(),
-        )?;
 
         let signing_key = if let Ok(key) = std::env::var("WIT_PUBLISH_KEY") {
             PrivateKey::decode(key).context(
@@ -68,13 +63,13 @@ impl PublishCommand {
                 config: &config,
                 config_path: &config_path,
                 warg_config: &warg_config,
-                url,
                 signing_key: &signing_key,
                 package: self.package.as_ref(),
                 init: self.init,
                 dry_run: self.dry_run,
             },
             &terminal,
+            retry,
         )
         .await
     }

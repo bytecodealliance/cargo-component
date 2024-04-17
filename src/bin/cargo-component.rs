@@ -1,11 +1,18 @@
+use std::process::exit;
+
 use anyhow::{bail, Result};
 use cargo_component::{
     commands::{AddCommand, KeyCommand, NewCommand, PublishCommand, UpdateCommand},
     config::{CargoArguments, Config},
     load_component_metadata, load_metadata, run_cargo_command,
 };
-use cargo_component_core::terminal::{Color, Terminal, Verbosity};
+use cargo_component_core::{
+    registry::WargError,
+    terminal::{Color, Terminal, Verbosity},
+};
 use clap::{CommandFactory, Parser};
+use dialoguer::{theme::ColorfulTheme, Confirm};
+use warg_client::{with_interactive_retry, ClientError, Retry};
 
 fn version() -> &'static str {
     option_env!("CARGO_VERSION_INFO").unwrap_or(env!("CARGO_PKG_VERSION"))
@@ -109,19 +116,90 @@ async fn main() -> Result<()> {
     match subcommand.as_deref() {
         // Check for built-in command or no command (shows help)
         Some(cmd) if BUILTIN_COMMANDS.contains(&cmd) => {
-            if let Err(e) = match CargoComponent::parse() {
-                CargoComponent::Component(cmd) | CargoComponent::Command(cmd) => match cmd {
-                    Command::Add(cmd) => cmd.exec().await,
-                    Command::Key(cmd) => cmd.exec().await,
-                    Command::New(cmd) => cmd.exec().await,
-                    Command::Update(cmd) => cmd.exec().await,
-                    Command::Publish(cmd) => cmd.exec().await,
-                },
-            } {
-                let terminal = Terminal::new(Verbosity::Normal, Color::Auto);
-                terminal.error(format!("{e:?}"))?;
-                std::process::exit(1);
-            }
+            with_interactive_retry(|retry: Option<Retry>| async {
+                if let Err(e) = match CargoComponent::parse() {
+                    CargoComponent::Component(cmd) | CargoComponent::Command(cmd) => match cmd {
+                        Command::Add(cmd) => cmd.exec(retry).await,
+                        Command::Key(cmd) => cmd.exec().await,
+                        Command::New(cmd) => cmd.exec(retry).await,
+                        Command::Update(cmd) => cmd.exec(retry).await,
+                        Command::Publish(cmd) => cmd.exec(retry).await,
+                    },
+                } {
+                    match e {
+                        WargError::General(e) => {
+                            let terminal = Terminal::new(Verbosity::Normal, Color::Auto);
+                            terminal.error(e)?;
+                            exit(1);
+                        }
+                        WargError::WargClient(e) => {
+                            let terminal = Terminal::new(Verbosity::Normal, Color::Auto);
+                            terminal.error(e)?;
+                            exit(1);
+                        }
+                        WargError::WargHint(e) => {
+                            if let ClientError::PackageDoesNotExistWithHint { name, hint } = e {
+                                let hint_reg = hint.to_str().unwrap();
+                                let mut terms = hint_reg.split('=');
+                                let namespace = terms.next();
+                                let registry = terms.next();
+                                if let (Some(namespace), Some(registry)) = (namespace, registry) {
+                                    let prompt = format!(
+                                "The package `{}`, does not exist in the registry you're using.\nHowever, the package namespace `{namespace}` does exist in the registry at {registry}.\nWould you like to configure your warg cli to use this registry for packages with this namespace in the future? y/N\n",
+                                name.name()
+                              );
+                                    if Confirm::with_theme(&ColorfulTheme::default())
+                                        .with_prompt(prompt)
+                                        .interact()
+                                        .unwrap()
+                                    {
+                                        if let Err(e) = match CargoComponent::parse() {
+                                            CargoComponent::Component(cmd)
+                                            | CargoComponent::Command(cmd) => match cmd {
+                                                Command::Add(cmd) => {
+                                                    cmd.exec(Some(Retry::new(
+                                                        namespace.to_string(),
+                                                        registry.to_string(),
+                                                    )))
+                                                    .await
+                                                }
+                                                Command::Key(cmd) => cmd.exec().await,
+                                                Command::New(cmd) => {
+                                                    cmd.exec(Some(Retry::new(
+                                                        namespace.to_string(),
+                                                        registry.to_string(),
+                                                    )))
+                                                    .await
+                                                }
+                                                Command::Update(cmd) => {
+                                                    cmd.exec(Some(Retry::new(
+                                                        namespace.to_string(),
+                                                        registry.to_string(),
+                                                    )))
+                                                    .await
+                                                }
+                                                Command::Publish(cmd) => {
+                                                    cmd.exec(Some(Retry::new(
+                                                        namespace.to_string(),
+                                                        registry.to_string(),
+                                                    )))
+                                                    .await
+                                                }
+                                            },
+                                        } {
+                                            let terminal =
+                                                Terminal::new(Verbosity::Normal, Color::Auto);
+                                            terminal.error(e)?;
+                                            exit(1);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    };
+                }
+                Ok(())
+            }).await?;
         }
 
         // Check for explicitly unsupported commands (e.g. those that deal with crates.io)
@@ -146,8 +224,9 @@ async fn main() -> Result<()> {
 
         _ => {
             // Not a built-in command, run the cargo command
-            let cargo_args = CargoArguments::parse()?;
-            let config = Config::new(Terminal::new(
+            with_interactive_retry(|retry: Option<Retry>| async move {
+              let cargo_args = CargoArguments::parse()?;
+              let config = Config::new(Terminal::new(
                 if cargo_args.quiet {
                     Verbosity::Quiet
                 } else {
@@ -157,36 +236,82 @@ async fn main() -> Result<()> {
                     }
                 },
                 cargo_args.color.unwrap_or_default(),
-            ))?;
+              ))?;
 
-            let metadata = load_metadata(cargo_args.manifest_path.as_deref())?;
-            let packages = load_component_metadata(
-                &metadata,
-                cargo_args.packages.iter(),
-                cargo_args.workspace,
-            )?;
+              let metadata = load_metadata(cargo_args.manifest_path.as_deref())?;
+              let packages = load_component_metadata(
+                  &metadata,
+                  cargo_args.packages.iter(),
+                  cargo_args.workspace,
+              )?;
 
-            if packages.is_empty() {
-                bail!(
-                    "manifest `{path}` contains no package or the workspace has no members",
-                    path = metadata.workspace_root.join("Cargo.toml")
-                );
-            }
+              if packages.is_empty() {
+                  bail!(
+                      "manifest `{path}` contains no package or the workspace has no members",
+                      path = metadata.workspace_root.join("Cargo.toml")
+                  );
+              }
 
             let spawn_args: Vec<_> = std::env::args().skip(1).collect();
-            if let Err(e) = run_cargo_command(
-                &config,
-                &metadata,
-                &packages,
-                subcommand.as_deref(),
-                &cargo_args,
-                &spawn_args,
-            )
-            .await
-            {
-                config.terminal().error(format!("{e:?}"))?;
-                std::process::exit(1);
-            }
+                if let Err(e) = run_cargo_command(
+                    &config,
+                    &metadata,
+                    &packages,
+                    detect_subcommand().as_deref(),
+                    &cargo_args,
+                    &spawn_args,
+                    retry.as_ref(),
+                )
+                .await
+                {
+                    match e {
+                        WargError::General(e) => {
+                            let terminal = Terminal::new(Verbosity::Normal, Color::Auto);
+                            terminal.error(e)?;
+                            exit(1);
+                        }
+                        WargError::WargClient(e) => {
+                            let terminal = Terminal::new(Verbosity::Normal, Color::Auto);
+                            terminal.error(e)?;
+                            exit(1);
+                        }
+                        WargError::WargHint(e) => {
+                            if let ClientError::PackageDoesNotExistWithHint { name, hint } = e {
+                                let hint_reg = hint.to_str().unwrap();
+                                let mut terms = hint_reg.split('=');
+                                let namespace = terms.next();
+                                let registry = terms.next();
+                                if let (Some(namespace), Some(registry)) = (namespace, registry) {
+                                    let prompt = format!(
+                              "The package `{}`, does not exist in the registry you're using.\nHowever, the package namespace `{namespace}` does exist in the registry at {registry}.\nWould you like to configure your warg cli to use this registry for packages with this namespace in the future? y/N\n",
+                              name.name()
+                            );
+                                    if Confirm::with_theme(&ColorfulTheme::default())
+                                        .with_prompt(prompt)
+                                        .interact()
+                                        .unwrap()
+                                    {
+                                        run_cargo_command(
+                                          &config,
+                                          &metadata,
+                                          &packages,
+                                          detect_subcommand().as_deref(),
+                                          &cargo_args,
+                                          &spawn_args,
+                                          Some(&Retry::new(
+                                            namespace.to_string(),
+                                            registry.to_string(),
+                                        )),
+                                      )
+                                      .await?;
+                                    }
+                                }
+                            }
+                        }
+                    };
+                }
+                Ok(())
+            }).await?;
         }
     }
 

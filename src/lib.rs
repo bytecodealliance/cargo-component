@@ -3,12 +3,12 @@
 #![deny(missing_docs)]
 
 use crate::target::install_wasm32_wasi;
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use bindings::BindingsGenerator;
 use bytes::Bytes;
 use cargo_component_core::{
     lock::{LockFile, LockFileResolver, LockedPackage, LockedPackageVersion},
-    registry::create_client,
+    registry::{create_client, WargClientError, WargError},
     terminal::Colors,
 };
 use cargo_config2::{PathAndArgs, TargetTripleRef};
@@ -30,7 +30,10 @@ use std::{
     process::{Command, Stdio},
     time::{Duration, SystemTime},
 };
-use warg_client::storage::{ContentStorage, PublishEntry, PublishInfo};
+use warg_client::{
+    storage::{ContentStorage, PublishEntry, PublishInfo},
+    Retry,
+};
 use warg_crypto::signing::PrivateKey;
 use warg_protocol::registry::PackageName;
 use wasm_metadata::{Link, LinkType, RegistryMetadata};
@@ -134,8 +137,9 @@ pub async fn run_cargo_command(
     subcommand: Option<&str>,
     cargo_args: &CargoArguments,
     spawn_args: &[String],
-) -> Result<Vec<PathBuf>> {
-    let import_name_map = generate_bindings(config, metadata, packages, cargo_args).await?;
+    retry: Option<&Retry>,
+) -> Result<Vec<PathBuf>, WargError> {
+    let import_name_map = generate_bindings(config, metadata, packages, cargo_args, retry).await?;
 
     let cargo_path = std::env::var("CARGO")
         .map(PathBuf::from)
@@ -194,7 +198,7 @@ pub async fn run_cargo_command(
 
         if let Some(format) = &cargo_args.message_format {
             if format != "json-render-diagnostics" {
-                bail!("unsupported cargo message format `{format}`");
+                return Err(anyhow!("unsupported cargo message format `{format}`").into());
             }
         }
 
@@ -636,7 +640,8 @@ fn read_artifact(path: &Path, mut componentizable: bool) -> Result<ArtifactKind>
 }
 
 fn last_modified_time(path: &Path) -> Result<SystemTime> {
-    path.metadata()
+    Ok(path
+        .metadata()
         .with_context(|| {
             format!(
                 "failed to read file metadata for `{path}`",
@@ -649,7 +654,7 @@ fn last_modified_time(path: &Path) -> Result<SystemTime> {
                 "failed to retrieve last modified time for `{path}`",
                 path = path.display()
             )
-        })
+        })?)
 }
 
 /// Loads the workspace metadata based on the given manifest path.
@@ -714,8 +719,9 @@ async fn generate_bindings(
     metadata: &Metadata,
     packages: &[PackageComponentMetadata<'_>],
     cargo_args: &CargoArguments,
-) -> Result<HashMap<String, HashMap<String, String>>> {
-    let last_modified_exe = last_modified_time(&std::env::current_exe()?)?;
+    retry: Option<&Retry>,
+) -> Result<HashMap<String, HashMap<String, String>>, WargError> {
+    let last_modified_exe = last_modified_time(&std::env::current_exe().unwrap())?;
     let file_lock = acquire_lock_file_ro(config.terminal(), metadata)?;
     let lock_file = file_lock
         .as_ref()
@@ -733,8 +739,14 @@ async fn generate_bindings(
         env::current_dir().with_context(|| "couldn't get the current directory of the process")?;
 
     let resolver = lock_file.as_ref().map(LockFileResolver::new);
-    let resolution_map =
-        create_resolution_map(config, packages, resolver, cargo_args.network_allowed()).await?;
+    let resolution_map = create_resolution_map(
+        config,
+        packages,
+        resolver,
+        cargo_args.network_allowed(),
+        retry,
+    )
+    .await?;
     let mut import_name_map = HashMap::new();
     for PackageComponentMetadata { package, .. } in packages {
         let resolution = resolution_map.get(&package.id).expect("missing resolution");
@@ -774,12 +786,14 @@ async fn create_resolution_map<'a>(
     packages: &'a [PackageComponentMetadata<'_>],
     lock_file: Option<LockFileResolver<'_>>,
     network_allowed: bool,
-) -> Result<PackageResolutionMap<'a>> {
+    retry: Option<&Retry>,
+) -> Result<PackageResolutionMap<'a>, WargError> {
     let mut map = PackageResolutionMap::default();
 
     for PackageComponentMetadata { package, metadata } in packages {
         let resolution =
-            PackageDependencyResolution::new(config, metadata, lock_file, network_allowed).await?;
+            PackageDependencyResolution::new(config, metadata, lock_file, network_allowed, retry)
+                .await?;
 
         map.insert(package.id.clone(), resolution);
     }
@@ -1065,7 +1079,11 @@ fn add_registry_metadata(package: &Package, bytes: &[u8], path: &Path) -> Result
 }
 
 /// Publish a component for the given workspace and publish options.
-pub async fn publish(config: &Config, options: &PublishOptions<'_>) -> Result<()> {
+pub async fn publish(
+    config: &Config,
+    options: &PublishOptions<'_>,
+    retry: Option<&Retry>,
+) -> Result<(), WargError> {
     if options.dry_run {
         config
             .terminal()
@@ -1073,8 +1091,7 @@ pub async fn publish(config: &Config, options: &PublishOptions<'_>) -> Result<()
         return Ok(());
     }
 
-    let mut client = create_client(config.warg(), options.registry_url, config.terminal())?;
-    client.refresh_namespace(options.name.namespace()).await?;
+    let client = create_client(config.warg(), config.terminal(), retry).await?;
 
     let bytes = fs::read(options.path).with_context(|| {
         format!(
@@ -1116,10 +1133,14 @@ pub async fn publish(config: &Config, options: &PublishOptions<'_>) -> Result<()
         content,
     });
 
-    let record_id = client.publish_with_info(options.signing_key, info).await?;
+    let record_id = client
+        .publish_with_info(options.signing_key, info)
+        .await
+        .map_err(|e| WargClientError(e))?;
     client
         .wait_for_publish(options.name, &record_id, Duration::from_secs(1))
-        .await?;
+        .await
+        .map_err(|e| WargClientError(e))?;
 
     config.terminal().status(
         "Published",
@@ -1144,9 +1165,10 @@ pub async fn update_lockfile(
     lock_update_allowed: bool,
     locked: bool,
     dry_run: bool,
-) -> Result<()> {
+    retry: Option<&Retry>,
+) -> Result<(), WargError> {
     // Read the current lock file and generate a new one
-    let map = create_resolution_map(config, packages, None, network_allowed).await?;
+    let map = create_resolution_map(config, packages, None, network_allowed, retry).await?;
 
     let file_lock = acquire_lock_file_ro(config.terminal(), metadata)?;
     let orig_lock_file = file_lock

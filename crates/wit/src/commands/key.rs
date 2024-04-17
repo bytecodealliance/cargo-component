@@ -1,3 +1,4 @@
+use crate::WargError;
 use anyhow::{Context, Result};
 use cargo_component_core::{
     command::CommonOptions,
@@ -27,7 +28,7 @@ pub struct KeyCommand {
 
 impl KeyCommand {
     /// Executes the command.
-    pub async fn exec(self) -> Result<()> {
+    pub async fn exec(self) -> Result<(), WargError> {
         let terminal = self.common.new_terminal();
         let config = warg_client::Config::from_default_file()?.unwrap_or_default();
 
@@ -63,7 +64,7 @@ pub struct KeyIdCommand {
 
 impl KeyIdCommand {
     /// Executes the command.
-    pub async fn exec(self, config: Config) -> Result<()> {
+    pub async fn exec(self, config: Config) -> Result<(), WargError> {
         let key = get_signing_key(Some(&self.url), &config.keys, config.home_url.as_deref())?;
         println!(
             "{fingerprint}",
@@ -84,7 +85,7 @@ pub struct KeyNewCommand {
 
 impl KeyNewCommand {
     /// Executes the command.
-    pub async fn exec(self, terminal: &Terminal, mut config: Config) -> Result<()> {
+    pub async fn exec(self, terminal: &Terminal, mut config: Config) -> Result<(), WargError> {
         let key = SigningKey::random(&mut OsRng).into();
         set_signing_key(
             Some(&self.url),
@@ -117,7 +118,7 @@ pub struct KeySetCommand {
 
 impl KeySetCommand {
     /// Executes the command.
-    pub async fn exec(self, terminal: &Terminal, mut config: Config) -> Result<()> {
+    pub async fn exec(self, terminal: &Terminal, mut config: Config) -> Result<(), WargError> {
         let key = PrivateKey::decode(
             rpassword::prompt_password("input signing key (expected format is `<alg>:<base64>`): ")
                 .context("failed to read signing key")?,
@@ -155,7 +156,7 @@ pub struct KeyDeleteCommand {
 
 impl KeyDeleteCommand {
     /// Executes the command.
-    pub async fn exec(self, terminal: &Terminal, config: Config) -> Result<()> {
+    pub async fn exec(self, terminal: &Terminal, config: Config) -> Result<(), WargError> {
         terminal.write_stdout(
             "⚠️  WARNING: this operation cannot be undone and the key will be permanently deleted ⚠️",
             Some(Colors::Yellow),

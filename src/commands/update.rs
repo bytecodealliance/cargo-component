@@ -1,8 +1,9 @@
 use crate::{load_component_metadata, load_metadata, Config};
 use anyhow::Result;
-use cargo_component_core::command::CommonOptions;
+use cargo_component_core::{command::CommonOptions, registry::WargError};
 use clap::Args;
 use std::path::PathBuf;
+use warg_client::Retry;
 
 /// Update dependencies as recorded in the component lock file
 #[derive(Args)]
@@ -35,7 +36,7 @@ pub struct UpdateCommand {
 
 impl UpdateCommand {
     /// Executes the command.
-    pub async fn exec(self) -> Result<()> {
+    pub async fn exec(self, retry: Option<Retry>) -> Result<(), WargError> {
         log::debug!("executing update command");
         let config = Config::new(self.common.new_terminal())?;
         let metadata = load_metadata(self.manifest_path.as_deref())?;
@@ -51,6 +52,7 @@ impl UpdateCommand {
             lock_update_allowed,
             self.locked,
             self.dry_run,
+            retry.as_ref(),
         )
         .await
     }

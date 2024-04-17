@@ -5,7 +5,7 @@ use crate::{
     progress::{ProgressBar, ProgressStyle},
     terminal::{Colors, Terminal},
 };
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use futures::{stream::FuturesUnordered, StreamExt};
 use indexmap::IndexMap;
 use secrecy::Secret;
@@ -21,16 +21,55 @@ use std::{
     str::FromStr,
     sync::Arc,
 };
+use thiserror::Error;
 use url::Url;
 use warg_client::{
     storage::{ContentStorage, PackageInfo, RegistryStorage},
-    Config, FileSystemClient, RegistryUrl, StorageLockResult,
+    ClientError, Config, FileSystemClient, RegistryUrl, Retry, StorageLockResult,
 };
 use warg_credentials::keyring::get_auth_token;
 use warg_crypto::hash::AnyHash;
 use warg_protocol::registry;
 use wit_component::DecodedWasm;
 use wit_parser::{PackageId, PackageName, Resolve, UnresolvedPackage, WorldId};
+
+#[derive(Debug, Error)]
+/// Error for WIT commands
+pub enum WargError {
+    /// General errors
+    #[error("Error: `{0}`")]
+    General(anyhow::Error),
+    /// Client Error
+    #[error("Warg Client Error: {0}")]
+    WargClient(ClientError),
+    /// Client Error With Hint
+    #[error("Warg Client Error: {0}")]
+    WargHint(ClientError),
+}
+
+/// Error from warg client
+pub struct WargClientError(pub ClientError);
+
+impl std::fmt::Debug for WargClientError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("WargClientError").field(&self.0).finish()
+    }
+}
+
+impl From<anyhow::Error> for WargError {
+    fn from(value: anyhow::Error) -> Self {
+        WargError::General(value)
+    }
+}
+
+impl From<WargClientError> for WargError {
+    fn from(value: WargClientError) -> Self {
+        match &value.0 {
+            ClientError::PackageDoesNotExistWithHint { .. } => WargError::WargHint(value.0.into()),
+            _ => WargError::WargClient(value.0.into()),
+        }
+    }
+}
 
 /// The name of the default registry.
 pub const DEFAULT_REGISTRY_NAME: &str = "default";
@@ -65,16 +104,18 @@ pub fn auth_token(config: &Config, registry: Option<String>) -> Result<Option<Se
     Ok(None)
 }
 /// Creates a registry client with the given warg configuration.
-pub fn create_client(
+pub async fn create_client(
     config: &warg_client::Config,
-    url: &str,
     terminal: &Terminal,
+    retry: Option<&Retry>,
 ) -> Result<FileSystemClient> {
-    match FileSystemClient::try_new_with_config(
-        Some(url),
+    let client = match FileSystemClient::try_new_with_config(
+        config.home_url.as_deref(),
         config,
-        auth_token(config, Some(url.to_string()))?,
-    )? {
+        auth_token(config, config.home_url.clone())?,
+    )
+    .await?
+    {
         StorageLockResult::Acquired(client) => Ok(client),
         StorageLockResult::NotAcquired(path) => {
             terminal.status_with_color(
@@ -83,13 +124,18 @@ pub fn create_client(
                 Colors::Cyan,
             )?;
 
-            Ok(FileSystemClient::new_with_config(
-                Some(url),
+            FileSystemClient::new_with_config(
+                config.home_url.as_deref(),
                 config,
-                auth_token(config, Some(url.to_string()))?,
-            )?)
+                auth_token(config, config.home_url.clone())?,
+            )
+            .await
         }
+    }?;
+    if let Some(retry) = retry {
+        retry.store_namespace(&client).await?;
     }
+    Ok(client)
 }
 
 /// Represents a WIT package dependency.
@@ -440,7 +486,6 @@ impl<'a> DecodedDependency<'a> {
 /// Used to resolve dependencies for a WIT package.
 pub struct DependencyResolver<'a> {
     terminal: &'a Terminal,
-    registry_urls: &'a HashMap<String, Url>,
     warg_config: &'a Config,
     lock_file: Option<LockFileResolver<'a>>,
     registries: IndexMap<&'a str, Registry<'a>>,
@@ -452,14 +497,12 @@ impl<'a> DependencyResolver<'a> {
     /// Creates a new dependency resolver.
     pub fn new(
         warg_config: &'a Config,
-        registry_urls: &'a HashMap<String, Url>,
         lock_file: Option<LockFileResolver<'a>>,
         terminal: &'a Terminal,
         network_allowed: bool,
     ) -> Result<Self> {
         Ok(DependencyResolver {
             terminal,
-            registry_urls,
             warg_config,
             lock_file,
             registries: Default::default(),
@@ -473,7 +516,8 @@ impl<'a> DependencyResolver<'a> {
         &mut self,
         name: &'a registry::PackageName,
         dependency: &'a Dependency,
-    ) -> Result<()> {
+        retry: Option<&Retry>,
+    ) -> Result<(), WargError> {
         match dependency {
             Dependency::Package(package) => {
                 // Dependency comes from a registry, add a dependency to the resolver
@@ -487,30 +531,28 @@ impl<'a> DependencyResolver<'a> {
                         .transpose()
                 }) {
                     Some(Ok(locked)) => Some(locked),
-                    Some(Err(e)) => return Err(e),
+                    Some(Err(e)) => {
+                        return Err(WargError::General(e));
+                    }
                     _ => None,
                 };
 
                 let registry = match self.registries.entry(registry_name) {
                     indexmap::map::Entry::Occupied(e) => e.into_mut(),
-                    indexmap::map::Entry::Vacant(e) => {
-                        let url = find_url(
-                            Some(registry_name),
-                            self.registry_urls,
-                            self.warg_config.home_url.as_deref(),
-                        )?;
-                        e.insert(Registry {
-                            client: Arc::new(create_client(self.warg_config, url, self.terminal)?),
-                            packages: HashMap::new(),
-                            dependencies: Vec::new(),
-                            upserts: HashSet::new(),
-                        })
-                    }
+                    indexmap::map::Entry::Vacant(e) => e.insert(Registry {
+                        client: Arc::new(
+                            create_client(self.warg_config, self.terminal, retry).await?,
+                        ),
+                        packages: HashMap::new(),
+                        dependencies: Vec::new(),
+                        upserts: HashSet::new(),
+                    }),
                 };
 
                 registry
                     .add_dependency(name, package_name, &package.version, registry_name, locked)
-                    .await?;
+                    .await
+                    .map_err(|e| WargClientError(e.into()))?;
             }
             Dependency::Local(p) => {
                 // A local path dependency, insert a resolution immediately
@@ -532,7 +574,7 @@ impl<'a> DependencyResolver<'a> {
     /// This will download all dependencies that are not already present in client storage.
     ///
     /// Returns the dependency resolution map.
-    pub async fn resolve(self) -> Result<DependencyResolutionMap> {
+    pub async fn resolve(self) -> Result<DependencyResolutionMap, WargError> {
         let Self {
             mut registries,
             mut resolutions,
@@ -560,7 +602,7 @@ impl<'a> DependencyResolver<'a> {
         registries: &mut IndexMap<&'a str, Registry<'a>>,
         terminal: &Terminal,
         network_allowed: bool,
-    ) -> Result<DownloadMap<'a>> {
+    ) -> Result<DownloadMap<'a>, WargError> {
         let task_count = registries
             .iter()
             .filter(|(_, r)| !r.upserts.is_empty())
@@ -570,7 +612,10 @@ impl<'a> DependencyResolver<'a> {
 
         if task_count > 0 {
             if !network_allowed {
-                bail!("a component registry update is required but network access is disabled");
+                return Err(anyhow!(
+                    "a component registry update is required but network access is disabled",
+                )
+                .into());
             }
 
             terminal.status("Updating", "component registry package logs")?;
@@ -591,7 +636,13 @@ impl<'a> DependencyResolver<'a> {
 
             let client = registry.client.clone();
             futures.push(tokio::spawn(async move {
-                (index, client.upsert(upserts.iter()).await)
+                (
+                    index,
+                    client
+                        .upsert(upserts.iter())
+                        .await
+                        .map_err(|e| WargClientError(e)),
+                )
             }))
         }
 
@@ -604,9 +655,7 @@ impl<'a> DependencyResolver<'a> {
                 .get_index_mut(index)
                 .expect("out of bounds registry index");
 
-            res.with_context(|| {
-                format!("failed to update package logs for component registry `{name}`")
-            })?;
+            res.map_err(|e| WargError::WargClient(e.0))?;
 
             log::info!("package logs successfully updated for component registry `{name}`");
             finished += 1;
@@ -875,16 +924,19 @@ impl<'a> Registry<'a> {
         packages: &'b mut HashMap<registry::PackageName, PackageInfo>,
         name: registry::PackageName,
     ) -> Result<Option<&'b PackageInfo>> {
+        let warg_reg = client.get_warg_registry(name.namespace()).await?;
         match packages.entry(name) {
             hash_map::Entry::Occupied(e) => Ok(Some(e.into_mut())),
-            hash_map::Entry::Vacant(e) => match client
-                .registry()
-                .load_package(client.get_warg_registry(), e.key())
-                .await?
-            {
-                Some(p) => Ok(Some(e.insert(p))),
-                None => Ok(None),
-            },
+            hash_map::Entry::Vacant(e) => {
+                match client
+                    .registry()
+                    .load_package(warg_reg.as_ref(), e.key())
+                    .await?
+                {
+                    Some(p) => Ok(Some(e.insert(p))),
+                    None => Ok(None),
+                }
+            }
         }
     }
 }

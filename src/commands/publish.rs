@@ -3,10 +3,14 @@ use crate::{
     is_wasm_target, load_metadata, publish, run_cargo_command, PackageComponentMetadata,
     PublishOptions,
 };
-use anyhow::{bail, Context, Result};
-use cargo_component_core::{command::CommonOptions, registry::find_url};
+use anyhow::{anyhow, Context, Result};
+use cargo_component_core::{
+    command::CommonOptions,
+    registry::{find_url, WargError},
+};
 use clap::Args;
 use std::path::PathBuf;
+use warg_client::Retry;
 use warg_credentials::keyring::get_signing_key;
 use warg_crypto::signing::PrivateKey;
 
@@ -77,14 +81,14 @@ pub struct PublishCommand {
 
 impl PublishCommand {
     /// Executes the command.
-    pub async fn exec(self) -> Result<()> {
+    pub async fn exec(self, retry: Option<Retry>) -> Result<(), WargError> {
         log::debug!("executing publish command");
 
         let config = Config::new(self.common.new_terminal())?;
 
         if let Some(target) = &self.target {
             if !is_wasm_target(target) {
-                bail!("target `{}` is not a WebAssembly target", target);
+                return Err(anyhow!("target `{}` is not a WebAssembly target", target).into());
             }
         }
 
@@ -164,13 +168,15 @@ impl PublishCommand {
             Some("build"),
             &cargo_build_args,
             &spawn_args,
+            retry.as_ref(),
         )
         .await?;
         if outputs.len() != 1 {
-            bail!(
+            return Err(anyhow!(
                 "expected one output from `cargo build`, got {len}",
                 len = outputs.len()
-            );
+            )
+            .into());
         }
 
         let options = PublishOptions {
@@ -184,7 +190,7 @@ impl PublishCommand {
             dry_run: self.dry_run,
         };
 
-        publish(&config, &options).await
+        publish(&config, &options, retry.as_ref()).await
     }
 
     fn build_args(&self) -> Result<Vec<String>> {

@@ -1,11 +1,13 @@
 use crate::{
     build_wit_package,
     config::{Config, CONFIG_FILE_NAME},
+    WargError,
 };
 use anyhow::{Context, Result};
 use cargo_component_core::command::CommonOptions;
 use clap::Args;
 use std::{fs, path::PathBuf};
+use warg_client::Retry;
 
 /// Build a binary WIT package.
 #[derive(Args)]
@@ -22,7 +24,7 @@ pub struct BuildCommand {
 
 impl BuildCommand {
     /// Executes the command.
-    pub async fn exec(self) -> Result<()> {
+    pub async fn exec(self, retry: Option<Retry>) -> Result<(), WargError> {
         log::debug!("executing build command");
 
         let (config, config_path) = Config::from_default_file()?
@@ -31,7 +33,14 @@ impl BuildCommand {
         let warg_config = warg_client::Config::from_default_file()?.unwrap_or_default();
 
         let terminal = self.common.new_terminal();
-        let (id, bytes) = build_wit_package(&config, &config_path, &warg_config, &terminal).await?;
+        let (id, bytes) = build_wit_package(
+            &config,
+            &config_path,
+            &warg_config,
+            &terminal,
+            retry.as_ref(),
+        )
+        .await?;
 
         let output = self
             .output

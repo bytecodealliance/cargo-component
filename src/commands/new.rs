@@ -1,8 +1,10 @@
 use crate::{config::Config, generator::SourceGenerator, metadata, metadata::DEFAULT_WIT_DIR};
-use anyhow::{bail, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use cargo_component_core::{
     command::CommonOptions,
-    registry::{Dependency, DependencyResolution, DependencyResolver, RegistryResolution},
+    registry::{
+        Dependency, DependencyResolution, DependencyResolver, RegistryResolution, WargError,
+    },
 };
 use clap::Args;
 use heck::ToKebabCase;
@@ -16,6 +18,7 @@ use std::{
 };
 use toml_edit::{table, value, Document, Item, Table, Value};
 use url::Url;
+use warg_client::Retry;
 
 const WIT_BINDGEN_RT_CRATE: &str = "wit-bindgen-rt";
 
@@ -140,7 +143,7 @@ impl<'a> PackageName<'a> {
 
 impl NewCommand {
     /// Executes the command.
-    pub async fn exec(self) -> Result<()> {
+    pub async fn exec(self, retry: Option<Retry>) -> Result<(), WargError> {
         log::debug!("executing new command");
 
         let config = Config::new(self.common.new_terminal())?;
@@ -159,8 +162,9 @@ impl NewCommand {
         };
 
         let target = self
-            .resolve_target(&config, &registries, target, true)
-            .await?;
+            .resolve_target(&config, target, true, retry)
+            .await
+            .map_err(|e| e)?;
         let source = self.generate_source(&target)?;
 
         let mut command = self.new_command();
@@ -171,7 +175,7 @@ impl NewCommand {
                 }
             }
             Err(e) => {
-                bail!("failed to execute `cargo new` command: {e}")
+                return Err(anyhow!("failed to execute `cargo new` command: {e}").into());
             }
         }
 
@@ -512,10 +516,10 @@ world example {{
     async fn resolve_target(
         &self,
         config: &Config,
-        registries: &HashMap<String, Url>,
         target: Option<metadata::Target>,
         network_allowed: bool,
-    ) -> Result<Option<(RegistryResolution, Option<String>)>> {
+        retry: Option<Retry>,
+    ) -> Result<Option<(RegistryResolution, Option<String>)>, WargError> {
         match target {
             Some(metadata::Target::Package {
                 name,
@@ -524,14 +528,15 @@ world example {{
             }) => {
                 let mut resolver = DependencyResolver::new(
                     config.warg(),
-                    registries,
                     None,
                     config.terminal(),
                     network_allowed,
                 )?;
                 let dependency = Dependency::Package(package);
 
-                resolver.add_dependency(&name, &dependency).await?;
+                resolver
+                    .add_dependency(&name, &dependency, retry.as_ref())
+                    .await?;
 
                 let dependencies = resolver.resolve().await?;
                 assert_eq!(dependencies.len(), 1);

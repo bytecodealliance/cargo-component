@@ -549,6 +549,7 @@ dependencies = [
  "cargo-config2",
  "cargo_metadata",
  "clap",
+ "dialoguer",
  "futures",
  "heck",
  "indexmap 2.2.5",
@@ -600,6 +601,7 @@ dependencies = [
  "secrecy",
  "semver",
  "serde 1.0.197",
+ "thiserror",
  "tokio",
  "toml_edit 0.22.6",
  "unicode-width",
@@ -754,6 +756,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "console"
+version = "0.15.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e1f83fc076bd6dd27517eacdf25fef6c4dfe5f1d7448bafaaf3a26f13b5e4eb"
+dependencies = [
+ "encode_unicode",
+ "lazy_static 1.4.0",
+ "libc",
+ "unicode-width",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
 name = "const-oid"
 version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -880,6 +895,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "dialoguer"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "658bce805d770f407bc62102fca7c2c64ceef2fbcb2b8bd19d2765ce093980de"
+dependencies = [
+ "console",
+ "shell-words",
+ "tempfile",
+ "thiserror",
+ "zeroize",
+]
+
+[[package]]
 name = "difflib"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -983,6 +1011,12 @@ dependencies = [
  "subtle",
  "zeroize",
 ]
+
+[[package]]
+name = "encode_unicode"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a357d28ed41a50f9c765dbfe56cbc04a64e53e5fc58ba79fbc34c10ef3df831f"
 
 [[package]]
 name = "encoding_rs"
@@ -3173,6 +3207,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "45bb67a18fa91266cc7807181f62f9178a6873bfad7dc788c42e6430db40184f"
 
 [[package]]
+name = "shell-words"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24188a676b6ae68c3b2cb3a01be17fbf7240ce009799bb56d5b1409051e78fde"
+
+[[package]]
 name = "signal-hook-registry"
 version = "1.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3357,18 +3397,18 @@ checksum = "3369f5ac52d5eb6ab48c6b4ffdc8efbcad6b89c765749064ba298f2c68a16a76"
 
 [[package]]
 name = "thiserror"
-version = "1.0.57"
+version = "1.0.58"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1e45bcbe8ed29775f228095caf2cd67af7a4ccf756ebff23a306bf3e8b47b24b"
+checksum = "03468839009160513471e86a034bb2c5c0e4baae3b43f79ffc55c4a5427b3297"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.57"
+version = "1.0.58"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a953cb265bef375dae3de6663da4d3804eee9682ea80d8e2542529b73c531c81"
+checksum = "c61f3ba182994efc43764a46c018c347bc492c79f024e705f46567b418f6d4f7"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -3808,9 +3848,8 @@ dependencies = [
 
 [[package]]
 name = "warg-api"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12bf1e22e1e396b98a2181219b06d1a49a3478c1b9d87a29cd9cd819d714e6c3"
+version = "0.5.0-dev"
+source = "git+https://github.com/bytecodealliance/registry?branch=namespace-enhancements#00819c6d45730316432eacf2b3fa5df63a08584a"
 dependencies = [
  "indexmap 2.2.5",
  "itertools 0.12.1",
@@ -3823,9 +3862,8 @@ dependencies = [
 
 [[package]]
 name = "warg-client"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d56cfaf9781ca2d084468bbdd8bbc1e35947bb2a19f8d3940d899852f6dd78aa"
+version = "0.5.0-dev"
+source = "git+https://github.com/bytecodealliance/registry?branch=namespace-enhancements#00819c6d45730316432eacf2b3fa5df63a08584a"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -3867,9 +3905,8 @@ dependencies = [
 
 [[package]]
 name = "warg-credentials"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "626224ba1a00965282b669d2611654fd6292a15396ed8c850ce91684678fe19f"
+version = "0.5.0-dev"
+source = "git+https://github.com/bytecodealliance/registry?branch=namespace-enhancements#00819c6d45730316432eacf2b3fa5df63a08584a"
 dependencies = [
  "anyhow",
  "indexmap 2.2.5",
@@ -3881,9 +3918,8 @@ dependencies = [
 
 [[package]]
 name = "warg-crypto"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2a8c47e96a7f1903931b34db9a1f0d22bcb3761a203ee6861db686daaedcb4b"
+version = "0.5.0-dev"
+source = "git+https://github.com/bytecodealliance/registry?branch=namespace-enhancements#00819c6d45730316432eacf2b3fa5df63a08584a"
 dependencies = [
  "anyhow",
  "base64",
@@ -3902,9 +3938,8 @@ dependencies = [
 
 [[package]]
 name = "warg-protobuf"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ceed0e698efd0fab8bb747efd452156a65149eb389f7fe2a6b6b3ced4e25ab24"
+version = "0.5.0-dev"
+source = "git+https://github.com/bytecodealliance/registry?branch=namespace-enhancements#00819c6d45730316432eacf2b3fa5df63a08584a"
 dependencies = [
  "anyhow",
  "pbjson",
@@ -3921,9 +3956,8 @@ dependencies = [
 
 [[package]]
 name = "warg-protocol"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69be98a2e9e0aeace7cbd62184b11462d259c5e391e6208d59506c9a2d33571c"
+version = "0.5.0-dev"
+source = "git+https://github.com/bytecodealliance/registry?branch=namespace-enhancements#00819c6d45730316432eacf2b3fa5df63a08584a"
 dependencies = [
  "anyhow",
  "base64",
@@ -3944,9 +3978,8 @@ dependencies = [
 
 [[package]]
 name = "warg-server"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07f15457ced83df5c2298f225fc83b6700e93c7bf320a2e4ef01114c0b34d7ce"
+version = "0.5.0-dev"
+source = "git+https://github.com/bytecodealliance/registry?branch=namespace-enhancements#00819c6d45730316432eacf2b3fa5df63a08584a"
 dependencies = [
  "anyhow",
  "axum",
@@ -3975,9 +4008,8 @@ dependencies = [
 
 [[package]]
 name = "warg-transparency"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d272b3002b9e5f6f636817089ba091e1ba7b85858e72529f96e24bc9827f530"
+version = "0.5.0-dev"
+source = "git+https://github.com/bytecodealliance/registry?branch=namespace-enhancements#00819c6d45730316432eacf2b3fa5df63a08584a"
 dependencies = [
  "anyhow",
  "indexmap 2.2.5",
@@ -4436,6 +4468,7 @@ dependencies = [
  "bytes",
  "cargo-component-core",
  "clap",
+ "dialoguer",
  "futures",
  "indexmap 2.2.5",
  "log",

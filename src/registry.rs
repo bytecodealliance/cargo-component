@@ -4,11 +4,12 @@ use crate::{config::Config, metadata::ComponentMetadata};
 use anyhow::Result;
 use cargo_component_core::{
     lock::{LockFile, LockFileResolver, LockedPackage, LockedPackageVersion},
-    registry::{DependencyResolution, DependencyResolutionMap, DependencyResolver},
+    registry::{DependencyResolution, DependencyResolutionMap, DependencyResolver, WargError},
 };
 use cargo_metadata::PackageId;
 use semver::Version;
 use std::collections::HashMap;
+use warg_client::Retry;
 use warg_crypto::hash::AnyHash;
 use warg_protocol::registry::PackageName;
 
@@ -32,7 +33,8 @@ impl<'a> PackageDependencyResolution<'a> {
         metadata: &'a ComponentMetadata,
         lock_file: Option<LockFileResolver<'_>>,
         network_allowed: bool,
-    ) -> Result<PackageDependencyResolution<'a>> {
+        retry: Option<&Retry>,
+    ) -> Result<PackageDependencyResolution<'a>, WargError> {
         Ok(Self {
             metadata,
             target_resolutions: Self::resolve_target_deps(
@@ -40,9 +42,11 @@ impl<'a> PackageDependencyResolution<'a> {
                 metadata,
                 lock_file,
                 network_allowed,
+                retry,
             )
             .await?,
-            resolutions: Self::resolve_deps(config, metadata, lock_file, network_allowed).await?,
+            resolutions: Self::resolve_deps(config, metadata, lock_file, network_allowed, retry)
+                .await?,
         })
     }
 
@@ -58,22 +62,18 @@ impl<'a> PackageDependencyResolution<'a> {
         metadata: &ComponentMetadata,
         lock_file: Option<LockFileResolver<'_>>,
         network_allowed: bool,
-    ) -> Result<DependencyResolutionMap> {
+        retry: Option<&Retry>,
+    ) -> Result<DependencyResolutionMap, WargError> {
         let target_deps = metadata.section.target.dependencies();
         if target_deps.is_empty() {
             return Ok(Default::default());
         }
 
-        let mut resolver = DependencyResolver::new(
-            config.warg(),
-            &metadata.section.registries,
-            lock_file,
-            config.terminal(),
-            network_allowed,
-        )?;
+        let mut resolver =
+            DependencyResolver::new(config.warg(), lock_file, config.terminal(), network_allowed)?;
 
         for (name, dependency) in target_deps.iter() {
-            resolver.add_dependency(name, dependency).await?;
+            resolver.add_dependency(name, dependency, retry).await?;
         }
 
         resolver.resolve().await
@@ -84,21 +84,17 @@ impl<'a> PackageDependencyResolution<'a> {
         metadata: &ComponentMetadata,
         lock_file: Option<LockFileResolver<'_>>,
         network_allowed: bool,
-    ) -> Result<DependencyResolutionMap> {
+        retry: Option<&Retry>,
+    ) -> Result<DependencyResolutionMap, WargError> {
         if metadata.section.dependencies.is_empty() {
             return Ok(Default::default());
         }
 
-        let mut resolver = DependencyResolver::new(
-            config.warg(),
-            &metadata.section.registries,
-            lock_file,
-            config.terminal(),
-            network_allowed,
-        )?;
+        let mut resolver =
+            DependencyResolver::new(config.warg(), lock_file, config.terminal(), network_allowed)?;
 
         for (name, dependency) in &metadata.section.dependencies {
-            resolver.add_dependency(name, dependency).await?;
+            resolver.add_dependency(name, dependency, retry).await?;
         }
 
         resolver.resolve().await

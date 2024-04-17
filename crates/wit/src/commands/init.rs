@@ -1,5 +1,8 @@
-use crate::config::{ConfigBuilder, CONFIG_FILE_NAME};
-use anyhow::{bail, Result};
+use crate::{
+    config::{ConfigBuilder, CONFIG_FILE_NAME},
+    WargError,
+};
+use anyhow::anyhow;
 use cargo_component_core::{command::CommonOptions, registry::DEFAULT_REGISTRY_NAME};
 use clap::Args;
 use std::path::PathBuf;
@@ -24,15 +27,16 @@ pub struct InitCommand {
 
 impl InitCommand {
     /// Executes the command.
-    pub async fn exec(self) -> Result<()> {
+    pub fn exec(self) -> Result<(), WargError> {
         log::debug!("executing init command");
 
         let path = self.path.join(CONFIG_FILE_NAME);
         if path.is_file() {
-            bail!(
-                "WIT package configuration file `{path}` already exists",
-                path = path.display()
-            );
+            return Err(anyhow!(
+                "WIT package configuration file `{0}` already exists",
+                path.display(),
+            )
+            .into());
         }
 
         let terminal = self.common.new_terminal();

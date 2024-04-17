@@ -30,6 +30,7 @@ log = { workspace = true }
 tokio = { workspace = true }
 secrecy = { workspace = true }
 clap = { workspace = true }
+thiserror = "1.0.58"
 
 [target.'cfg(windows)'.dependencies.windows-sys]
 version = "0.52"

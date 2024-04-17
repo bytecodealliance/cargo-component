@@ -1,7 +1,11 @@
-use crate::config::{Config, CONFIG_FILE_NAME};
+use crate::{
+    config::{Config, CONFIG_FILE_NAME},
+    WargError,
+};
 use anyhow::{Context, Result};
 use cargo_component_core::command::CommonOptions;
 use clap::Args;
+use warg_client::Retry;
 
 /// Update dependencies as recorded in the lock file.
 #[derive(Args)]
@@ -18,7 +22,7 @@ pub struct UpdateCommand {
 
 impl UpdateCommand {
     /// Executes the command.
-    pub async fn exec(self) -> Result<()> {
+    pub async fn exec(self, retry: Option<Retry>) -> Result<(), WargError> {
         log::debug!("executing update command");
 
         let (config, config_path) = Config::from_default_file()?
@@ -27,6 +31,15 @@ impl UpdateCommand {
         let warg_config = warg_client::Config::from_default_file()?.unwrap_or_default();
 
         let terminal = self.common.new_terminal();
-        crate::update_lockfile(&config, &config_path, &warg_config, &terminal, self.dry_run).await
+        crate::update_lockfile(
+            &config,
+            &config_path,
+            &warg_config,
+            &terminal,
+            self.dry_run,
+            retry,
+        )
+        .await
+        .map_err(|e| e.into())
     }
 }

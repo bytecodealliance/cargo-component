@@ -67,7 +67,7 @@ pub async fn publish(
     content: Vec<u8>,
     init: bool,
 ) -> Result<()> {
-    let client = FileSystemClient::new_with_config(None, config, None)?;
+    let client = FileSystemClient::new_with_config(None, config, None).await?;
 
     let digest = client
         .content()

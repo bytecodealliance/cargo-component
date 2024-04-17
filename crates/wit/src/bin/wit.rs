@@ -1,7 +1,12 @@
 use anyhow::Result;
-use cargo_component_core::terminal::{Color, Terminal, Verbosity};
+use cargo_component_core::{
+    registry::WargError,
+    terminal::{Color, Terminal, Verbosity},
+};
 use clap::Parser;
+use dialoguer::{theme::ColorfulTheme, Confirm};
 use std::process::exit;
+use warg_client::{with_interactive_retry, ClientError, Retry};
 use wit::commands::{
     AddCommand, BuildCommand, InitCommand, KeyCommand, PublishCommand, UpdateCommand,
 };
@@ -38,20 +43,88 @@ pub enum Command {
 async fn main() -> Result<()> {
     pretty_env_logger::init();
 
-    let app = Wit::parse();
+    with_interactive_retry(|retry: Option<Retry>| async {
+        let app = Wit::parse();
+        if let Err(e) = match app.command {
+            Command::Init(cmd) => cmd.exec(),
 
-    if let Err(e) = match app.command {
-        Command::Init(cmd) => cmd.exec().await,
-        Command::Add(cmd) => cmd.exec().await,
-        Command::Build(cmd) => cmd.exec().await,
-        Command::Publish(cmd) => cmd.exec().await,
-        Command::Key(cmd) => cmd.exec().await,
-        Command::Update(cmd) => cmd.exec().await,
-    } {
-        let terminal = Terminal::new(Verbosity::Normal, Color::Auto);
-        terminal.error(format!("{e:?}"))?;
-        exit(1);
-    }
-
+            Command::Add(cmd) => cmd.exec(retry).await,
+            Command::Build(cmd) => cmd.exec(retry).await,
+            Command::Publish(cmd) => cmd.exec(retry).await,
+            Command::Key(cmd) => cmd.exec().await,
+            Command::Update(cmd) => cmd.exec(retry).await,
+        }
+        {
+            match e {
+                WargError::General(e) => {
+                    let terminal = Terminal::new(Verbosity::Normal, Color::Auto);
+                    terminal.error(e)?;
+                    exit(1);
+                }
+                WargError::WargClient(e) => {
+                    let terminal = Terminal::new(Verbosity::Normal, Color::Auto);
+                    terminal.error(e)?;
+                    exit(1);
+                }
+                WargError::WargHint(e) => {
+                    if let ClientError::PackageDoesNotExistWithHint { name, hint } = e {
+                        let hint_reg = hint.to_str().unwrap();
+                        let mut terms = hint_reg.split('=');
+                        let namespace = terms.next();
+                        let registry = terms.next();
+                        if let (Some(namespace), Some(registry)) = (namespace, registry) {
+                            let prompt = format!(
+                          "The package `{}`, does not exist in the registry you're using.\nHowever, the package namespace `{namespace}` does exist in the registry at {registry}.\nWould you like to configure your warg cli to use this registry for packages with this namespace in the future? y/N\n",
+                          name.name()
+                        );
+                            if Confirm::with_theme(&ColorfulTheme::default())
+                                .with_prompt(prompt)
+                                .interact()
+                                .unwrap()
+                            {
+                                if let Err(e) = match Wit::parse().command {
+                                    Command::Init(cmd) => cmd.exec(),
+                                    Command::Add(cmd) => {
+                                        cmd.exec(Some(Retry::new(
+                                            namespace.to_string(),
+                                            registry.to_string(),
+                                        )))
+                                        .await
+                                    }
+                                    Command::Build(cmd) => {
+                                        cmd.exec(Some(Retry::new(
+                                            namespace.to_string(),
+                                            registry.to_string(),
+                                        )))
+                                        .await
+                                    }
+                                    Command::Publish(cmd) => {
+                                        cmd.exec(Some(Retry::new(
+                                            namespace.to_string(),
+                                            registry.to_string(),
+                                        )))
+                                        .await
+                                    }
+                                    Command::Key(cmd) => cmd.exec().await,
+                                    Command::Update(cmd) => {
+                                        cmd.exec(Some(Retry::new(
+                                            namespace.to_string(),
+                                            registry.to_string(),
+                                        )))
+                                        .await
+                                    }
+                                } {
+                                    let terminal = Terminal::new(Verbosity::Normal, Color::Auto);
+                                    terminal.error(e)?;
+                                    exit(1);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        Ok(())
+    }).await?;
     Ok(())
 }
