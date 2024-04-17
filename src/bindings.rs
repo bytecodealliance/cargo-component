@@ -7,6 +7,7 @@ use crate::{
 };
 use anyhow::{bail, Context, Result};
 use cargo_component_core::registry::DecodedDependency;
+use heck::ToKebabCase;
 use indexmap::{IndexMap, IndexSet};
 use semver::Version;
 use std::{
@@ -445,7 +446,7 @@ impl<'a> BindingsGenerator<'a> {
 
     fn target_empty_world(resolution: &PackageDependencyResolution) -> (Resolve, WorldId) {
         let mut resolve = Resolve::default();
-        let name = resolution.metadata.name.clone();
+        let name = resolution.metadata.name.to_kebab_case();
         let pkg_name = PackageName {
             namespace: "component".to_string(),
             name: name.clone(),
