@@ -5,6 +5,9 @@ use clap::{ArgAction, Args};
 
 /// Common options for commands.
 #[derive(Args)]
+#[command(after_help =
+"Unrecognized subcommands will be passed to cargo verbatim after relevant component bindings are updated."
+)]
 pub struct CommonOptions {
     /// Do not print log messages
     #[clap(long = "quiet", short = 'q')]
