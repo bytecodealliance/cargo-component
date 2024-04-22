@@ -117,7 +117,7 @@ async fn main() -> Result<()> {
         // Check for built-in command or no command (shows help)
         Some(cmd) if BUILTIN_COMMANDS.contains(&cmd) => {
             with_interactive_retry(|retry: Option<Retry>| async {
-                if let Err(e) = match CargoComponent::parse() {
+                if let Err(err) = match CargoComponent::parse() {
                     CargoComponent::Component(cmd) | CargoComponent::Command(cmd) => match cmd {
                         Command::Add(cmd) => cmd.exec(retry).await,
                         Command::Key(cmd) => cmd.exec().await,
@@ -126,19 +126,19 @@ async fn main() -> Result<()> {
                         Command::Publish(cmd) => cmd.exec(retry).await,
                     },
                 } {
-                    match e {
+                  match err {
                         CommandError::General(e) => {
                             let terminal = Terminal::new(Verbosity::Normal, Color::Auto);
                             terminal.error(e)?;
                             exit(1);
                         }
-                        CommandError::WargClient(e) => {
+                    CommandError::WargClient(reason, e) => {
                             let terminal = Terminal::new(Verbosity::Normal, Color::Auto);
-                            terminal.error(e)?;
+                            terminal.error(format!("{reason}: {e}"))?;
                             exit(1);
                         }
-                        CommandError::WargHint(e) => {
-                            if let ClientError::PackageDoesNotExistWithHint { name, hint } = e {
+                    CommandError::WargHint(reason, e) => {
+                            if let ClientError::PackageDoesNotExistWithHint { name, hint } = &e {
                                 let hint_reg = hint.to_str().unwrap();
                                 let mut terms = hint_reg.split('=');
                                 let namespace = terms.next();
@@ -191,6 +191,10 @@ async fn main() -> Result<()> {
                                                 Terminal::new(Verbosity::Normal, Color::Auto);
                                             terminal.error(e)?;
                                             exit(1);
+                                        } else {
+                                          let terminal = Terminal::new(Verbosity::Normal, Color::Auto);
+                                          terminal.error(format!("{reason}: {e}"))?;
+                                          exit(1);
                                         }
                                     }
                                 }
@@ -270,13 +274,13 @@ async fn main() -> Result<()> {
                             terminal.error(e)?;
                             exit(1);
                         }
-                        CommandError::WargClient(e) => {
+                        CommandError::WargClient(reason, e) => {
                             let terminal = Terminal::new(Verbosity::Normal, Color::Auto);
-                            terminal.error(e)?;
+                            terminal.error(format!("{reason}: {e}"))?;
                             exit(1);
                         }
-                        CommandError::WargHint(e) => {
-                            if let ClientError::PackageDoesNotExistWithHint { name, hint } = e {
+                        CommandError::WargHint(reason, e) => {
+                            if let ClientError::PackageDoesNotExistWithHint { name, hint } = &e {
                                 let hint_reg = hint.to_str().unwrap();
                                 let mut terms = hint_reg.split('=');
                                 let namespace = terms.next();
@@ -304,11 +308,16 @@ async fn main() -> Result<()> {
                                         )),
                                       )
                                       .await?;
+                                    } else {
+                                      let terminal = Terminal::new(Verbosity::Normal, Color::Auto);
+                                      terminal.error(format!("{reason}: {e}"))?;
+                                      exit(1);
+
                                     }
                                 }
                             }
-                        }
-                    };
+                          }
+                        };
                 }
                 Ok(())
             }).await?;

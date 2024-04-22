@@ -37,40 +37,14 @@ use wit_parser::{PackageId, PackageName, Resolve, UnresolvedPackage, WorldId};
 /// Error for CLI commands
 pub enum CommandError {
     /// General errors
-    #[error("Error: `{0}`")]
-    General(anyhow::Error),
+    #[error(transparent)]
+    General(#[from] anyhow::Error),
     /// Client Error
-    #[error("Warg Client Error: {0}")]
-    WargClient(ClientError),
+    #[error("warg client error ({0}): {1}")]
+    WargClient(String, ClientError),
     /// Client Error With Hint
-    #[error("Warg Client Error: {0}")]
-    WargHint(ClientError),
-}
-
-/// Error from warg client
-pub struct WargClientError(pub ClientError);
-
-impl std::fmt::Debug for WargClientError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("WargClientError").field(&self.0).finish()
-    }
-}
-
-impl From<anyhow::Error> for CommandError {
-    fn from(value: anyhow::Error) -> Self {
-        CommandError::General(value)
-    }
-}
-
-impl From<WargClientError> for CommandError {
-    fn from(value: WargClientError) -> Self {
-        match &value.0 {
-            ClientError::PackageDoesNotExistWithHint { .. } => {
-                CommandError::WargHint(value.0.into())
-            }
-            _ => CommandError::WargClient(value.0.into()),
-        }
-    }
+    #[error("warg client error with hint ({0}): {1}")]
+    WargHint(String, ClientError),
 }
 
 /// The name of the default registry.
@@ -553,8 +527,7 @@ impl<'a> DependencyResolver<'a> {
 
                 registry
                     .add_dependency(name, package_name, &package.version, registry_name, locked)
-                    .await
-                    .map_err(|e| WargClientError(e.into()))?;
+                    .await?
             }
             Dependency::Local(p) => {
                 // A local path dependency, insert a resolution immediately
@@ -639,10 +612,12 @@ impl<'a> DependencyResolver<'a> {
             futures.push(tokio::spawn(async move {
                 (
                     index,
-                    client
-                        .upsert(upserts.iter())
-                        .await
-                        .map_err(|e| WargClientError(e)),
+                    client.upsert(upserts.iter()).await.map_err(|e| match &e {
+                        ClientError::PackageDoesNotExistWithHint { .. } => {
+                            CommandError::WargHint("error updating warg logs".to_string(), e)
+                        }
+                        _ => CommandError::WargClient("error updating warg logs".to_string(), e),
+                    }),
                 )
             }))
         }
@@ -656,7 +631,7 @@ impl<'a> DependencyResolver<'a> {
                 .get_index_mut(index)
                 .expect("out of bounds registry index");
 
-            res.map_err(|e| CommandError::from(e))?;
+            res?;
 
             log::info!("package logs successfully updated for component registry `{name}`");
             finished += 1;

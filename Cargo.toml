@@ -70,11 +70,11 @@ members = ["crates/core", "crates/wit"]
 
 [workspace.dependencies]
 cargo-component-core = { path = "crates/core", version = "0.11.0" }
-warg-protocol = { git = "https://github.com/bytecodealliance/registry", branch = "namespace-enhancements" }
-warg-crypto = { git = "https://github.com/bytecodealliance/registry", branch = "namespace-enhancements" }
-warg-client = { git = "https://github.com/bytecodealliance/registry", branch = "namespace-enhancements" }
-warg-credentials = { git = "https://github.com/bytecodealliance/registry", branch = "namespace-enhancements" }
-warg-server = { git = "https://github.com/bytecodealliance/registry", branch = "namespace-enhancements" }
+warg-protocol = { git = "https://github.com/bytecodealliance/registry", rev = "fd8c963" }
+warg-crypto = { git = "https://github.com/bytecodealliance/registry", rev = "fd8c963" }
+warg-client = { git = "https://github.com/bytecodealliance/registry", rev = "fd8c963" }
+warg-credentials = { git = "https://github.com/bytecodealliance/registry", rev = "fd8c963" }
+warg-server = { git = "https://github.com/bytecodealliance/registry", rev = "fd8c963" }
 anyhow = "1.0.82"
 clap = { version = "4.5.4", features = ["derive"] }
 toml_edit = { version = "0.22.9", features = ["serde"] }

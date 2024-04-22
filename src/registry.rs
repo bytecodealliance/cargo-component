@@ -28,6 +28,11 @@ impl<'a> PackageDependencyResolution<'a> {
     /// Creates a new package dependency resolution for the given package.
     ///
     /// Returns `Ok(None)` if the package is not a component package.
+    ///
+    /// The `Retry` argument indicates that this was created after an interactive retry.
+    /// This occurs when the CLI attempted to leverage a package from the wrong registry.
+    /// The server responds with a hint as to which registry is used and the client maps that package namespace to the domain provided.
+    /// After this, the CLI command is retried
     pub async fn new(
         config: &Config,
         metadata: &'a ComponentMetadata,

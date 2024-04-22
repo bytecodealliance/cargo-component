@@ -7,8 +7,7 @@ use bytes::Bytes;
 use cargo_component_core::{
     lock::{LockFile, LockFileResolver, LockedPackage, LockedPackageVersion},
     registry::{
-        create_client, CommandError, DecodedDependency, DependencyResolutionMap,
-        DependencyResolver, WargClientError,
+        create_client, CommandError, DecodedDependency, DependencyResolutionMap, DependencyResolver,
     },
     terminal::{Colors, Terminal},
 };
@@ -18,7 +17,7 @@ use lock::{acquire_lock_file_ro, acquire_lock_file_rw, to_lock_file};
 use std::{collections::HashSet, path::Path, time::Duration};
 use warg_client::{
     storage::{ContentStorage, PublishEntry, PublishInfo},
-    Retry,
+    ClientError, Retry,
 };
 use warg_crypto::signing::PrivateKey;
 use warg_protocol::registry;
@@ -368,12 +367,22 @@ async fn publish_wit_package(
     let record_id = client
         .publish_with_info(options.signing_key, info)
         .await
-        .map_err(|e| WargClientError(e))?;
+        .map_err(|e| match &e {
+            ClientError::PackageDoesNotExistWithHint { .. } => {
+                CommandError::WargHint("error publishing package".to_string(), e)
+            }
+            _ => CommandError::WargClient("error publishing package".to_string(), e),
+        })?;
 
     client
         .wait_for_publish(name, &record_id, Duration::from_secs(1))
         .await
-        .map_err(|e| WargClientError(e))?;
+        .map_err(|e| match &e {
+            ClientError::PackageDoesNotExistWithHint { .. } => {
+                CommandError::WargHint("error publishing package".to_string(), e)
+            }
+            _ => CommandError::WargClient("error publishing package".to_string(), e),
+        })?;
 
     terminal.status(
         "Published",
