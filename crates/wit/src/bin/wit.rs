@@ -6,7 +6,7 @@ use cargo_component_core::{
 use clap::Parser;
 use dialoguer::{theme::ColorfulTheme, Confirm};
 use std::process::exit;
-use warg_client::{with_interactive_retry, ClientError, Retry};
+use warg_client::{ClientError, Retry};
 use wit::commands::{
     AddCommand, BuildCommand, InitCommand, KeyCommand, PublishCommand, UpdateCommand,
 };
@@ -43,31 +43,31 @@ pub enum Command {
 async fn main() -> Result<()> {
     pretty_env_logger::init();
 
-    with_interactive_retry(|retry: Option<Retry>| async {
-        let app = Wit::parse();
-        if let Err(err) = match app.command {
-            Command::Init(cmd) => cmd.exec(),
-            Command::Add(cmd) => cmd.exec(retry).await,
-            Command::Build(cmd) => cmd.exec(retry).await,
-            Command::Publish(cmd) => cmd.exec(retry).await,
-            Command::Key(cmd) => cmd.exec().await,
-            Command::Update(cmd) => cmd.exec(retry).await,
-        }
+    let app = Wit::parse();
+    if let Err(err) = match app.command {
+        Command::Init(cmd) => cmd.exec(),
+        Command::Add(cmd) => cmd.exec(None).await,
+        Command::Build(cmd) => cmd.exec(None).await,
+        Command::Publish(cmd) => cmd.exec(None).await,
+        Command::Key(cmd) => cmd.exec().await,
+        Command::Update(cmd) => cmd.exec(None).await,
+    } {
+        if let CommandError::WargHint(_, ClientError::PackageDoesNotExistWithHint { name, hint }) =
+            &err
         {
-          if let CommandError::WargHint(_, ClientError::PackageDoesNotExistWithHint { name, hint }) = &err {
             if let Some((namespace, registry)) = hint.to_str().unwrap().split_once('=') {
-              let prompt = format!(
+                let prompt = format!(
                 "The package `{}`, does not exist in the registry you're using.
                 However, the package namespace `{namespace}` does exist in the registry at {registry}.
                 Would you like to configure your warg cli to use this registry for packages with this namespace in the future? y/N\n",
                 name.name(),
               );
-              if Confirm::with_theme(&ColorfulTheme::default())
-                        .with_prompt(prompt)
-                        .interact()
-                        .unwrap()
-                    {
-                      if let Err(e) = match Wit::parse().command {
+                if Confirm::with_theme(&ColorfulTheme::default())
+                    .with_prompt(prompt)
+                    .interact()
+                    .unwrap()
+                {
+                    if let Err(e) = match Wit::parse().command {
                         Command::Init(cmd) => cmd.exec(),
                         Command::Add(cmd) => {
                             cmd.exec(Some(Retry::new(
@@ -97,24 +97,21 @@ async fn main() -> Result<()> {
                                 registry.to_string(),
                             )))
                             .await
-                                    }
-                      } {
+                        }
+                    } {
                         let terminal = Terminal::new(Verbosity::Normal, Color::Auto);
                         terminal.error(e)?;
                         exit(1);
-                      } else {
-                        return Ok(())
-                      }
+                    } else {
+                        return Ok(());
                     }
+                }
             }
-          }
-          else {
+        } else {
             let terminal = Terminal::new(Verbosity::Normal, Color::Auto);
             terminal.error(err)?;
             exit(1);
-          }
         }
-        Ok(())
-    }).await?;
+    }
     Ok(())
 }
