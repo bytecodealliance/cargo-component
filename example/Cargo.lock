@@ -12,12 +12,14 @@ checksum = "ed570934406eb16438a4e976b1b4500774099c13b8cb96eec99f620f05090ddf"
 name = "service"
 version = "0.1.0"
 dependencies = [
- "bitflags",
  "wit-bindgen-rt",
 ]
 
 [[package]]
 name = "wit-bindgen-rt"
-version = "0.20.0"
+version = "0.24.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "781989c70b3300b1be7ffbc7095e3b56c4f208f0c109cb5d1d943b297918dd8a"
+checksum = "3b0780cf7046630ed70f689a098cd8d56c5c3b22f2a7379bbdb088879963ff96"
+dependencies = [
+ "bitflags",
+]
