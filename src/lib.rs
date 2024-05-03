@@ -1095,8 +1095,7 @@ pub async fn publish(config: &Config, options: &PublishOptions<'_>) -> Result<()
         return Ok(());
     }
 
-    let mut client = create_client(config.warg(), options.registry_url, config.terminal())?;
-    client.refresh_namespace(options.name.namespace()).await?;
+    let client = create_client(config.warg(), options.registry_url, config.terminal())?;
 
     let bytes = fs::read(options.path).with_context(|| {
         format!(
