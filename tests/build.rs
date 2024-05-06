@@ -10,8 +10,7 @@ mod support;
 
 #[test]
 fn it_builds_debug() -> Result<()> {
-    let name = "foo_debug";
-    let project = Project::new(name)?;
+    let project = Project::new("foo")?;
 
     project
         .cargo_component("build")
@@ -19,7 +18,7 @@ fn it_builds_debug() -> Result<()> {
         .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
         .success();
 
-    validate_component(&project.debug_wasm(name))?;
+    validate_component(&project.debug_wasm("foo"))?;
 
     // A lock file should only be generated for projects with
     // registry dependencies
@@ -30,8 +29,7 @@ fn it_builds_debug() -> Result<()> {
 
 #[test]
 fn it_builds_a_bin_project_with_snake_case() -> Result<()> {
-    let name = "hello_world";
-    let project = Project::new_bin(name)?;
+    let project = Project::new_bin("hello_world")?;
 
     project
         .cargo_component("build --release")
@@ -39,15 +37,14 @@ fn it_builds_a_bin_project_with_snake_case() -> Result<()> {
         .stderr(contains("Finished release [optimized] target(s)"))
         .success();
 
-    validate_component(&project.release_wasm(name))?;
+    validate_component(&project.release_wasm("hello_world"))?;
 
     Ok(())
 }
 
 #[test]
 fn it_builds_a_bin_project() -> Result<()> {
-    let name = "foo_bin_project";
-    let project = Project::new_bin(name)?;
+    let project = Project::new_bin("foo")?;
 
     project
         .cargo_component("build --release")
@@ -55,7 +52,7 @@ fn it_builds_a_bin_project() -> Result<()> {
         .stderr(contains("Finished release [optimized] target(s)"))
         .success();
 
-    validate_component(&project.release_wasm(name))?;
+    validate_component(&project.release_wasm("foo"))?;
 
     Ok(())
 }
@@ -115,8 +112,7 @@ edition = "2021"
 
 #[test]
 fn it_supports_wit_keywords() -> Result<()> {
-    let name = "interface";
-    let project = Project::new(name)?;
+    let project = Project::new("interface")?;
 
     project
         .cargo_component("build --release")
@@ -124,15 +120,14 @@ fn it_supports_wit_keywords() -> Result<()> {
         .stderr(contains("Finished release [optimized] target(s)"))
         .success();
 
-    validate_component(&project.release_wasm(name))?;
+    validate_component(&project.release_wasm("interface"))?;
 
     Ok(())
 }
 
 #[test]
 fn it_adds_a_producers_field() -> Result<()> {
-    let name = "foo_producer_section";
-    let project = Project::new(name)?;
+    let project = Project::new("foo")?;
 
     project
         .cargo_component("build --release")
@@ -140,7 +135,7 @@ fn it_adds_a_producers_field() -> Result<()> {
         .stderr(contains("Finished release [optimized] target(s)"))
         .success();
 
-    let path = project.release_wasm(name);
+    let path = project.release_wasm("foo");
 
     validate_component(&path)?;
 
@@ -162,8 +157,7 @@ fn it_adds_a_producers_field() -> Result<()> {
 
 #[test]
 fn it_builds_wasm32_unknown_unknown() -> Result<()> {
-    let name = "foo_wasm32_unknown_unknown";
-    let project = Project::new(name)?;
+    let project = Project::new("foo")?;
 
     project
         .cargo_component("build --target wasm32-unknown-unknown")
@@ -176,7 +170,7 @@ fn it_builds_wasm32_unknown_unknown() -> Result<()> {
             .build_dir()
             .join("wasm32-unknown-unknown")
             .join("debug")
-            .join(format!("{name}.wasm")),
+            .join("foo.wasm"),
     )?;
 
     Ok(())
@@ -184,8 +178,7 @@ fn it_builds_wasm32_unknown_unknown() -> Result<()> {
 
 #[test]
 fn it_regenerates_target_if_wit_changed() -> Result<()> {
-    let name = "foo_if_wit_changed";
-    let project = Project::new(name)?;
+    let project = Project::new("foo")?;
     project.update_manifest(|mut doc| {
         doc["package"]["metadata"]["component"]["target"]["world"] = value("example");
         Ok(doc)
@@ -197,7 +190,7 @@ fn it_regenerates_target_if_wit_changed() -> Result<()> {
         .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
         .success();
 
-    validate_component(&project.debug_wasm(name))?;
+    validate_component(&project.debug_wasm("foo"))?;
 
     project
         .cargo_component("build")
@@ -218,8 +211,7 @@ fn it_regenerates_target_if_wit_changed() -> Result<()> {
 
 #[test]
 fn it_builds_with_local_wit_deps() -> Result<()> {
-    let name = "foo_local_wit_deps";
-    let project = Project::new(name)?;
+    let project = Project::new("foo")?;
     project.update_manifest(|mut doc| {
         let mut dependencies = Table::new();
         dependencies["foo:bar"]["path"] = value("wit/deps/foo-bar");
@@ -304,15 +296,14 @@ bindings::export!(Component with_types_in bindings);
         .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
         .success();
 
-    validate_component(&project.debug_wasm(name))?;
+    validate_component(&project.debug_wasm("foo"))?;
 
     Ok(())
 }
 
 #[test]
 fn empty_world_with_dep_valid() -> Result<()> {
-    let name = "dep";
-    let project = Project::new(name)?;
+    let project = Project::new("dep")?;
 
     fs::write(
         project.root().join("wit/world.wit"),
@@ -349,7 +340,7 @@ fn empty_world_with_dep_valid() -> Result<()> {
 
     project.cargo_component("build").assert().success();
 
-    let dep = project.debug_wasm(name);
+    let dep = project.debug_wasm("dep");
     validate_component(&dep)?;
 
     let project = Project::with_dir(project.dir().clone(), "main", "")?;
@@ -388,8 +379,7 @@ fn empty_world_with_dep_valid() -> Result<()> {
 
 #[test]
 fn it_builds_with_resources() -> Result<()> {
-    let name = "foo_resources";
-    let project = Project::new(name)?;
+    let project = Project::new("foo")?;
 
     fs::write(
         project.root().join("wit/world.wit"),
@@ -449,7 +439,7 @@ fn it_builds_with_resources() -> Result<()> {
 
     project.cargo_component("build").assert().success();
 
-    let dep = project.debug_wasm(name);
+    let dep = project.debug_wasm("foo");
     validate_component(&dep)?;
 
     Ok(())
@@ -457,8 +447,7 @@ fn it_builds_with_resources() -> Result<()> {
 
 #[test]
 fn it_builds_resources_with_specified_ownership_model() -> Result<()> {
-    let name = "foo_resources_with_specified_ownership_model";
-    let project = Project::new(name)?;
+    let project = Project::new("foo")?;
     project.update_manifest(|mut doc| {
         doc["package"]["metadata"]["component"]["bindings"]["ownership"] =
             value("borrowing-duplicate-if-necessary");
@@ -523,7 +512,7 @@ fn it_builds_resources_with_specified_ownership_model() -> Result<()> {
 
     project.cargo_component("build").assert().success();
 
-    let dep = project.debug_wasm(name);
+    let dep = project.debug_wasm("foo");
     validate_component(&dep)?;
 
     Ok(())
@@ -649,8 +638,7 @@ bindings::export!(Component with_types_in bindings);
 
 #[test]
 fn it_builds_with_adapter() -> Result<()> {
-    let name = "foo_with_adapter";
-    let project = Project::new(name)?;
+    let project = Project::new("foo")?;
     project.update_manifest(|mut doc| {
         doc["package"]["metadata"]["component"]["adapter"] = value("not-a-valid-path");
         Ok(doc)
@@ -662,7 +650,7 @@ fn it_builds_with_adapter() -> Result<()> {
         .stderr(contains("error: failed to read module adapter"))
         .failure();
 
-    let project = Project::new(name)?;
+    let project = Project::new("foo")?;
     project.update_manifest(|mut doc| {
         doc["package"]["metadata"]["component"]["adapter"] =
             value(adapter_path().to_str().unwrap());
@@ -675,22 +663,20 @@ fn it_builds_with_adapter() -> Result<()> {
         .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
         .success();
 
-    validate_component(&project.debug_wasm(name))?;
+    validate_component(&project.debug_wasm("foo"))?;
 
     Ok(())
 }
 
 #[test]
 fn it_errors_if_adapter_is_not_wasm() -> Result<()> {
-    let name = "foo_errors_on_adapter";
-    let file_name = format!("{name}.wasm");
-    let project = Project::new(name)?;
+    let project = Project::new("foo")?;
     project.update_manifest(|mut doc| {
-        doc["package"]["metadata"]["component"]["adapter"] = value(&file_name);
+        doc["package"]["metadata"]["component"]["adapter"] = value("foo.wasm");
         Ok(doc)
     })?;
 
-    fs::write(project.root().join(file_name), "not wasm")?;
+    fs::write(project.root().join("foo.wasm"), "not wasm")?;
 
     project
         .cargo_component("build")
@@ -703,8 +689,7 @@ fn it_errors_if_adapter_is_not_wasm() -> Result<()> {
 
 #[test]
 fn it_adds_additional_derives() -> Result<()> {
-    let name = "foo_add_derives";
-    let project = Project::new(name)?;
+    let project = Project::new("foo")?;
     project.update_manifest(|mut doc| {
         doc["package"]["metadata"]["component"]["bindings"]["derives"] =
             value(Array::from_iter(["serde::Serialize", "serde::Deserialize"]));
@@ -769,15 +754,14 @@ bindings::export!(Component with_types_in bindings);
         .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
         .success();
 
-    validate_component(&project.debug_wasm(name))?;
+    validate_component(&project.debug_wasm("foo"))?;
 
     Ok(())
 }
 
 #[test]
 fn it_builds_with_versioned_wit() -> Result<()> {
-    let name = "foo_versioned_wit";
-    let project = Project::new(name)?;
+    let project = Project::new("foo")?;
 
     fs::write(
         project.root().join("wit/world.wit"),
@@ -812,7 +796,7 @@ fn it_builds_with_versioned_wit() -> Result<()> {
 
     project.cargo_component("build").assert().success();
 
-    let dep = project.debug_wasm(name);
+    let dep = project.debug_wasm("foo");
     validate_component(&dep)?;
 
     Ok(())
@@ -820,8 +804,7 @@ fn it_builds_with_versioned_wit() -> Result<()> {
 
 #[test]
 fn it_warns_on_proxy_setting_for_command() -> Result<()> {
-    let name = "foo_warn_proxy";
-    let project = Project::new_bin(name)?;
+    let project = Project::new_bin("foo")?;
     project.update_manifest(|mut doc| {
         doc["package"]["metadata"]["component"]["proxy"] = value(true);
         Ok(doc)
@@ -835,15 +818,14 @@ fn it_warns_on_proxy_setting_for_command() -> Result<()> {
         ))
         .success();
 
-    validate_component(&project.debug_wasm(name))?;
+    validate_component(&project.debug_wasm("foo"))?;
 
     Ok(())
 }
 
 #[test]
 fn it_warns_with_proxy_and_adapter_settings() -> Result<()> {
-    let name = "foo_warn_proxy_and_adapter";
-    let project = Project::new(name)?;
+    let project = Project::new("foo")?;
     project.update_manifest(|mut doc| {
         doc["package"]["metadata"]["component"]["proxy"] = value(true);
         doc["package"]["metadata"]["component"]["adapter"] =
@@ -857,16 +839,15 @@ fn it_warns_with_proxy_and_adapter_settings() -> Result<()> {
         .stderr(contains("warning: ignoring `proxy` setting due to `adapter` setting being present in `Cargo.toml`"))
         .success();
 
-    validate_component(&project.debug_wasm(name))?;
+    validate_component(&project.debug_wasm("foo"))?;
 
     Ok(())
 }
 
 #[test]
 fn it_builds_with_proxy_adapter() -> Result<()> {
-    let name = "foo_proxy";
     let dir = Rc::new(TempDir::new()?);
-    let project = Project::with_dir(dir.clone(), name, "--proxy")?;
+    let project = Project::with_dir(dir.clone(), "foo", "--proxy")?;
 
     project
         .cargo_component("build")
@@ -874,9 +855,9 @@ fn it_builds_with_proxy_adapter() -> Result<()> {
         .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
         .success();
 
-    validate_component(&project.debug_wasm(name))?;
+    validate_component(&project.debug_wasm("foo"))?;
 
-    let text = wasmprinter::print_file(project.debug_wasm(name))?;
+    let text = wasmprinter::print_file(project.debug_wasm("foo"))?;
     assert!(
         !text.contains("wasi:cli/environment"),
         "proxy wasm should have no reference to `wasi:cli/environment`"
@@ -887,10 +868,9 @@ fn it_builds_with_proxy_adapter() -> Result<()> {
 
 #[test]
 fn it_does_not_generate_bindings_for_cargo_projects() -> Result<()> {
-    let name = "foo_not_generate";
     let dir = TempDir::new()?;
 
-    for (name, args) in [(name, &["new", "--lib"] as &[_]), ("bar", &["new"])] {
+    for (name, args) in [("foo", &["new", "--lib"] as &[_]), ("bar", &["new"])] {
         let mut cmd = Command::new("cargo");
         cmd.current_dir(dir.path());
         cmd.args(args);
