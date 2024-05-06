@@ -13,7 +13,9 @@ fn it_documents() -> Result<()> {
     project
         .cargo_component("doc")
         .assert()
-        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .stderr(contains(
+            "Finished `dev` profile [unoptimized + debuginfo] target(s)",
+        ))
         .success();
 
     let doc = project.build_dir().join("doc");

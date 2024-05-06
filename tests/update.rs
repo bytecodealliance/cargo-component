@@ -44,7 +44,9 @@ world foo {
     project
         .cargo_component("build")
         .assert()
-        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .stderr(contains(
+            "Finished `dev` profile [unoptimized + debuginfo] target(s)",
+        ))
         .success();
     validate_component(&project.debug_wasm("component"))?;
 
@@ -81,7 +83,9 @@ world foo {
     project
         .cargo_component("build")
         .assert()
-        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .stderr(contains(
+            "Finished `dev` profile [unoptimized + debuginfo] target(s)",
+        ))
         .success();
     validate_component(&project.debug_wasm("component"))?;
 
@@ -106,7 +110,9 @@ world foo {
     project
         .cargo_component("build")
         .assert()
-        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .stderr(contains(
+            "Finished `dev` profile [unoptimized + debuginfo] target(s)",
+        ))
         .success();
     validate_component(&project.debug_wasm("component"))?;
 
@@ -137,7 +143,9 @@ world foo {
     project
         .cargo_component("build")
         .assert()
-        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .stderr(contains(
+            "Finished `dev` profile [unoptimized + debuginfo] target(s)",
+        ))
         .success();
     validate_component(&project.debug_wasm("component"))?;
 
@@ -180,7 +188,9 @@ bindings::export!(Component with_types_in bindings);
     project
         .cargo_component("build")
         .assert()
-        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .stderr(contains(
+            "Finished `dev` profile [unoptimized + debuginfo] target(s)",
+        ))
         .success();
     validate_component(&project.debug_wasm("component"))?;
 
@@ -211,7 +221,9 @@ world foo {
     project
         .cargo_component("build")
         .assert()
-        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .stderr(contains(
+            "Finished `dev` profile [unoptimized + debuginfo] target(s)",
+        ))
         .success();
     validate_component(&project.debug_wasm("component"))?;
 
@@ -240,7 +252,9 @@ world foo {
     project
         .cargo_component("build")
         .assert()
-        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .stderr(contains(
+            "Finished `dev` profile [unoptimized + debuginfo] target(s)",
+        ))
         .success();
 
     validate_component(&project.debug_wasm("component"))?;
@@ -262,7 +276,9 @@ async fn update_with_changed_dependencies() -> Result<()> {
     project
         .cargo_component("build")
         .assert()
-        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .stderr(contains(
+            "Finished `dev` profile [unoptimized + debuginfo] target(s)",
+        ))
         .success();
 
     validate_component(&project.debug_wasm("foo"))?;
@@ -276,7 +292,9 @@ async fn update_with_changed_dependencies() -> Result<()> {
     project
         .cargo_component("build")
         .assert()
-        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .stderr(contains(
+            "Finished `dev` profile [unoptimized + debuginfo] target(s)",
+        ))
         .success();
 
     project.update_manifest(|mut doc| {
@@ -300,7 +318,9 @@ async fn update_with_changed_dependencies() -> Result<()> {
     project
         .cargo_component("build")
         .assert()
-        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .stderr(contains(
+            "Finished `dev` profile [unoptimized + debuginfo] target(s)",
+        ))
         .success();
 
     Ok(())

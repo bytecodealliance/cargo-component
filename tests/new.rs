@@ -201,7 +201,9 @@ world foo {
     project
         .cargo_component("build")
         .assert()
-        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .stderr(contains(
+            "Finished `dev` profile [unoptimized + debuginfo] target(s)",
+        ))
         .success();
     validate_component(&project.debug_wasm("component"))?;
 
