@@ -15,7 +15,9 @@ fn it_builds_debug() -> Result<()> {
     project
         .cargo_component("build")
         .assert()
-        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .stderr(contains(
+            "Finished `dev` profile [unoptimized + debuginfo] target(s)",
+        ))
         .success();
 
     validate_component(&project.debug_wasm("foo"))?;
@@ -34,7 +36,7 @@ fn it_builds_a_bin_project_with_snake_case() -> Result<()> {
     project
         .cargo_component("build --release")
         .assert()
-        .stderr(contains("Finished release [optimized] target(s)"))
+        .stderr(contains("Finished `release` profile [optimized] target(s)"))
         .success();
 
     validate_component(&project.release_wasm("hello_world"))?;
@@ -49,7 +51,7 @@ fn it_builds_a_bin_project() -> Result<()> {
     project
         .cargo_component("build --release")
         .assert()
-        .stderr(contains("Finished release [optimized] target(s)"))
+        .stderr(contains("Finished `release` profile [optimized] target(s)"))
         .success();
 
     validate_component(&project.release_wasm("foo"))?;
@@ -101,7 +103,9 @@ edition = "2021"
     project
         .cargo_component("build")
         .assert()
-        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .stderr(contains(
+            "Finished `dev` profile [unoptimized + debuginfo] target(s)",
+        ))
         .success();
 
     validate_component(&project.debug_wasm("foo"))?;
@@ -117,7 +121,7 @@ fn it_supports_wit_keywords() -> Result<()> {
     project
         .cargo_component("build --release")
         .assert()
-        .stderr(contains("Finished release [optimized] target(s)"))
+        .stderr(contains("Finished `release` profile [optimized] target(s)"))
         .success();
 
     validate_component(&project.release_wasm("interface"))?;
@@ -132,7 +136,7 @@ fn it_adds_a_producers_field() -> Result<()> {
     project
         .cargo_component("build --release")
         .assert()
-        .stderr(contains("Finished release [optimized] target(s)"))
+        .stderr(contains("Finished `release` profile [optimized] target(s)"))
         .success();
 
     let path = project.release_wasm("foo");
@@ -162,7 +166,9 @@ fn it_builds_wasm32_unknown_unknown() -> Result<()> {
     project
         .cargo_component("build --target wasm32-unknown-unknown")
         .assert()
-        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .stderr(contains(
+            "Finished `dev` profile [unoptimized + debuginfo] target(s)",
+        ))
         .success();
 
     validate_component(
@@ -187,7 +193,9 @@ fn it_regenerates_target_if_wit_changed() -> Result<()> {
     project
         .cargo_component("build")
         .assert()
-        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .stderr(contains(
+            "Finished `dev` profile [unoptimized + debuginfo] target(s)",
+        ))
         .success();
 
     validate_component(&project.debug_wasm("foo"))?;
@@ -293,7 +301,9 @@ bindings::export!(Component with_types_in bindings);
     project
         .cargo_component("build")
         .assert()
-        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .stderr(contains(
+            "Finished `dev` profile [unoptimized + debuginfo] target(s)",
+        ))
         .success();
 
     validate_component(&project.debug_wasm("foo"))?;
@@ -580,7 +590,7 @@ bindings::export!(Component with_types_in bindings);
     comp1
         .cargo_component("build --release")
         .assert()
-        .stderr(contains("Finished release [optimized] target(s)"))
+        .stderr(contains("Finished `release` profile [optimized] target(s)"))
         .success();
 
     let dep = comp1.release_wasm("comp1");
@@ -627,7 +637,7 @@ bindings::export!(Component with_types_in bindings);
     comp2
         .cargo_component("build --release")
         .assert()
-        .stderr(contains("Finished release [optimized] target(s)"))
+        .stderr(contains("Finished `release` profile [optimized] target(s)"))
         .success();
 
     let path: std::path::PathBuf = comp2.release_wasm("comp2");
@@ -660,7 +670,9 @@ fn it_builds_with_adapter() -> Result<()> {
     project
         .cargo_component("build")
         .assert()
-        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .stderr(contains(
+            "Finished `dev` profile [unoptimized + debuginfo] target(s)",
+        ))
         .success();
 
     validate_component(&project.debug_wasm("foo"))?;
@@ -751,7 +763,9 @@ bindings::export!(Component with_types_in bindings);
     project
         .cargo_component("build")
         .assert()
-        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .stderr(contains(
+            "Finished `dev` profile [unoptimized + debuginfo] target(s)",
+        ))
         .success();
 
     validate_component(&project.debug_wasm("foo"))?;
@@ -852,7 +866,9 @@ fn it_builds_with_proxy_adapter() -> Result<()> {
     project
         .cargo_component("build")
         .assert()
-        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .stderr(contains(
+            "Finished `dev` profile [unoptimized + debuginfo] target(s)",
+        ))
         .success();
 
     validate_component(&project.debug_wasm("foo"))?;
@@ -875,7 +891,7 @@ fn it_does_not_generate_bindings_for_cargo_projects() -> Result<()> {
         cmd.current_dir(dir.path());
         cmd.args(args);
         cmd.arg(name);
-        cmd.assert().stderr(contains("Created")).success();
+        cmd.assert().stderr(contains("Creating")).success();
 
         let mut cmd = cargo_component("build");
         cmd.current_dir(dir.path().join(name));

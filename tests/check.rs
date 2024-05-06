@@ -82,7 +82,9 @@ edition = "2021"
     project
         .cargo_component("check")
         .assert()
-        .stderr(contains("Finished dev [unoptimized + debuginfo] target(s)"))
+        .stderr(contains(
+            "Finished `dev` profile [unoptimized + debuginfo] target(s)",
+        ))
         .success();
 
     Ok(())
