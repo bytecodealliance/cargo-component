@@ -754,6 +754,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "console"
+version = "0.15.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0e1f83fc076bd6dd27517eacdf25fef6c4dfe5f1d7448bafaaf3a26f13b5e4eb"
+dependencies = [
+ "encode_unicode",
+ "lazy_static 1.4.0",
+ "libc",
+ "unicode-width",
+ "windows-sys 0.52.0",
+]
+
+[[package]]
 name = "const-oid"
 version = "0.9.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -880,6 +893,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "dialoguer"
+version = "0.11.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "658bce805d770f407bc62102fca7c2c64ceef2fbcb2b8bd19d2765ce093980de"
+dependencies = [
+ "console",
+ "shell-words",
+ "tempfile",
+ "thiserror",
+ "zeroize",
+]
+
+[[package]]
 name = "difflib"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -983,6 +1009,12 @@ dependencies = [
  "subtle",
  "zeroize",
 ]
+
+[[package]]
+name = "encode_unicode"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a357d28ed41a50f9c765dbfe56cbc04a64e53e5fc58ba79fbc34c10ef3df831f"
 
 [[package]]
 name = "encoding_rs"
@@ -1538,7 +1570,7 @@ dependencies = [
  "httpdate",
  "itoa",
  "pin-project-lite",
- "socket2 0.4.10",
+ "socket2 0.5.6",
  "tokio",
  "tower-service",
  "tracing",
@@ -1856,7 +1888,16 @@ version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c000ca4d908ff18ac99b93a062cb8958d331c3220719c52e77cb19cc6ac5d2c1"
 dependencies = [
- "logos-derive",
+ "logos-derive 0.13.0",
+]
+
+[[package]]
+name = "logos"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "161971eb88a0da7ae0c333e1063467c5b5727e7fb6b710b8db4814eade3a42e8"
+dependencies = [
+ "logos-derive 0.14.0",
 ]
 
 [[package]]
@@ -1874,12 +1915,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "logos-codegen"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e31badd9de5131fdf4921f6473d457e3dd85b11b7f091ceb50e4df7c3eeb12a"
+dependencies = [
+ "beef",
+ "fnv",
+ "lazy_static 1.4.0",
+ "proc-macro2",
+ "quote",
+ "regex-syntax 0.8.3",
+ "syn 2.0.58",
+]
+
+[[package]]
 name = "logos-derive"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "dbfc0d229f1f42d790440136d941afd806bc9e949e2bcb8faa813b0f00d1267e"
 dependencies = [
- "logos-codegen",
+ "logos-codegen 0.13.0",
+]
+
+[[package]]
+name = "logos-derive"
+version = "0.14.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1c2a69b3eb68d5bd595107c9ee58d7e07fe2bb5e360cc85b0f084dedac80de0a"
+dependencies = [
+ "logos-codegen 0.14.0",
 ]
 
 [[package]]
@@ -1914,21 +1979,21 @@ dependencies = [
 
 [[package]]
 name = "miette"
-version = "5.10.0"
+version = "7.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "59bb584eaeeab6bd0226ccf3509a69d7936d148cf3d036ad350abe35e8c6856e"
+checksum = "4edc8853320c2a0dab800fbda86253c8938f6ea88510dc92c5f1ed20e794afc1"
 dependencies = [
+ "cfg-if",
  "miette-derive",
- "once_cell",
  "thiserror",
  "unicode-width",
 ]
 
 [[package]]
 name = "miette-derive"
-version = "5.10.0"
+version = "7.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "49e7bc1560b95a3c4a25d03de42fe76ca718ab92d1a22a55b9b4cf67b3ae635c"
+checksum = "dcf09caffaac8068c346b6df2a7fc27a177fd20b39421a39ce0a211bde679a6c"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2586,11 +2651,11 @@ dependencies = [
 
 [[package]]
 name = "prost-reflect"
-version = "0.12.0"
+version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "057237efdb71cf4b3f9396302a3d6599a92fa94063ba537b66130980ea9909f3"
+checksum = "6f5eec97d5d34bdd17ad2db2219aabf46b054c6c41bd5529767c9ce55be5898f"
 dependencies = [
- "logos",
+ "logos 0.14.0",
  "miette",
  "once_cell",
  "prost",
@@ -2608,9 +2673,9 @@ dependencies = [
 
 [[package]]
 name = "protox"
-version = "0.5.1"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00bb76c5f6221de491fe2c8f39b106330bbd9762c6511119c07940e10eb9ff11"
+checksum = "a29b3c5596eb23a849deba860b53ffd468199d9ad5fe4402a7d55379e16aa2d2"
 dependencies = [
  "bytes",
  "miette",
@@ -2623,11 +2688,11 @@ dependencies = [
 
 [[package]]
 name = "protox-parse"
-version = "0.5.0"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7b4581f441c58863525a3e6bec7b8de98188cf75239a56c725a3e7288450a33f"
+checksum = "033b939d76d358f7c32120c86c71f515bae45e64f2bde455200356557276276c"
 dependencies = [
- "logos",
+ "logos 0.13.0",
  "miette",
  "prost-types",
  "thiserror",
@@ -3176,6 +3241,12 @@ name = "shell-escape"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "45bb67a18fa91266cc7807181f62f9178a6873bfad7dc788c42e6430db40184f"
+
+[[package]]
+name = "shell-words"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24188a676b6ae68c3b2cb3a01be17fbf7240ce009799bb56d5b1409051e78fde"
 
 [[package]]
 name = "signal-hook-registry"
@@ -3819,9 +3890,8 @@ dependencies = [
 
 [[package]]
 name = "warg-api"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12bf1e22e1e396b98a2181219b06d1a49a3478c1b9d87a29cd9cd819d714e6c3"
+version = "0.5.0-dev"
+source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=3eb6368#3eb63685df8f485d84ffefb35216e387ea31eab7"
 dependencies = [
  "indexmap 2.2.6",
  "itertools 0.12.1",
@@ -3834,15 +3904,15 @@ dependencies = [
 
 [[package]]
 name = "warg-client"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d56cfaf9781ca2d084468bbdd8bbc1e35947bb2a19f8d3940d899852f6dd78aa"
+version = "0.5.0-dev"
+source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=3eb6368#3eb63685df8f485d84ffefb35216e387ea31eab7"
 dependencies = [
  "anyhow",
  "async-recursion",
  "async-trait",
  "bytes",
  "clap",
+ "dialoguer",
  "dirs",
  "futures-util",
  "indexmap 2.2.6",
@@ -3878,9 +3948,8 @@ dependencies = [
 
 [[package]]
 name = "warg-credentials"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "626224ba1a00965282b669d2611654fd6292a15396ed8c850ce91684678fe19f"
+version = "0.5.0-dev"
+source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=3eb6368#3eb63685df8f485d84ffefb35216e387ea31eab7"
 dependencies = [
  "anyhow",
  "indexmap 2.2.6",
@@ -3892,9 +3961,8 @@ dependencies = [
 
 [[package]]
 name = "warg-crypto"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2a8c47e96a7f1903931b34db9a1f0d22bcb3761a203ee6861db686daaedcb4b"
+version = "0.5.0-dev"
+source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=3eb6368#3eb63685df8f485d84ffefb35216e387ea31eab7"
 dependencies = [
  "anyhow",
  "base64",
@@ -3913,9 +3981,8 @@ dependencies = [
 
 [[package]]
 name = "warg-protobuf"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ceed0e698efd0fab8bb747efd452156a65149eb389f7fe2a6b6b3ced4e25ab24"
+version = "0.5.0-dev"
+source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=3eb6368#3eb63685df8f485d84ffefb35216e387ea31eab7"
 dependencies = [
  "anyhow",
  "pbjson",
@@ -3932,9 +3999,8 @@ dependencies = [
 
 [[package]]
 name = "warg-protocol"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69be98a2e9e0aeace7cbd62184b11462d259c5e391e6208d59506c9a2d33571c"
+version = "0.5.0-dev"
+source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=3eb6368#3eb63685df8f485d84ffefb35216e387ea31eab7"
 dependencies = [
  "anyhow",
  "base64",
@@ -3955,9 +4021,8 @@ dependencies = [
 
 [[package]]
 name = "warg-server"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07f15457ced83df5c2298f225fc83b6700e93c7bf320a2e4ef01114c0b34d7ce"
+version = "0.5.0-dev"
+source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=3eb6368#3eb63685df8f485d84ffefb35216e387ea31eab7"
 dependencies = [
  "anyhow",
  "axum",
@@ -3986,9 +4051,8 @@ dependencies = [
 
 [[package]]
 name = "warg-transparency"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4d272b3002b9e5f6f636817089ba091e1ba7b85858e72529f96e24bc9827f530"
+version = "0.5.0-dev"
+source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=3eb6368#3eb63685df8f485d84ffefb35216e387ea31eab7"
 dependencies = [
  "anyhow",
  "indexmap 2.2.6",

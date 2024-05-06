@@ -90,7 +90,9 @@ world foo {
         .cargo_component("publish")
         .env("CARGO_COMPONENT_PUBLISH_KEY", test_signing_key())
         .assert()
-        .stderr(contains("error: package `test:foo` does not exist"))
+        .stderr(contains(
+            "package `test:foo` must be initialized before publishing",
+        ))
         .failure();
 
     Ok(())

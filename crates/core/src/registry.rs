@@ -23,7 +23,7 @@ use std::{
 };
 use url::Url;
 use warg_client::{
-    storage::{ContentStorage, PackageInfo, RegistryStorage},
+    storage::{ContentStorage, PackageInfo},
     Config, FileSystemClient, RegistryUrl, StorageLockResult,
 };
 use warg_credentials::keyring::get_auth_token;
@@ -591,7 +591,7 @@ impl<'a> DependencyResolver<'a> {
 
             let client = registry.client.clone();
             futures.push(tokio::spawn(async move {
-                (index, client.upsert(upserts.iter()).await)
+                (index, client.fetch_packages(upserts.iter()).await)
             }))
         }
 
@@ -877,13 +877,10 @@ impl<'a> Registry<'a> {
     ) -> Result<Option<&'b PackageInfo>> {
         match packages.entry(name) {
             hash_map::Entry::Occupied(e) => Ok(Some(e.into_mut())),
-            hash_map::Entry::Vacant(e) => match client
-                .registry()
-                .load_package(client.get_warg_registry(), e.key())
-                .await?
-            {
-                Some(p) => Ok(Some(e.insert(p))),
-                None => Ok(None),
+            hash_map::Entry::Vacant(e) => match client.package(e.key()).await {
+                Ok(p) => Ok(Some(e.insert(p))),
+                Err(warg_client::ClientError::PackageDoesNotExist { .. }) => Ok(None),
+                Err(err) => Err(err.into()),
             },
         }
     }
