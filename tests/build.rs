@@ -2,6 +2,7 @@ use crate::support::*;
 use anyhow::{Context, Result};
 use assert_cmd::prelude::*;
 use predicates::{prelude::PredicateBooleanExt, str::contains};
+use serial_test::serial;
 use std::{fs, process::Command, rc::Rc};
 use tempfile::TempDir;
 use toml_edit::{value, Array, Item, Table};
@@ -9,6 +10,7 @@ use toml_edit::{value, Array, Item, Table};
 mod support;
 
 #[test]
+#[serial]
 fn it_builds_debug() -> Result<()> {
     let name = "foo_debug";
     let project = Project::new(name)?;
@@ -29,6 +31,7 @@ fn it_builds_debug() -> Result<()> {
 }
 
 #[test]
+#[serial]
 fn it_builds_a_bin_project_with_snake_case() -> Result<()> {
     let name = "hello_world";
     let project = Project::new_bin(name)?;
@@ -45,6 +48,7 @@ fn it_builds_a_bin_project_with_snake_case() -> Result<()> {
 }
 
 #[test]
+#[serial]
 fn it_builds_a_bin_project() -> Result<()> {
     let name = "foo_bin_project";
     let project = Project::new_bin(name)?;
@@ -61,6 +65,7 @@ fn it_builds_a_bin_project() -> Result<()> {
 }
 
 #[test]
+#[serial]
 fn it_builds_a_workspace() -> Result<()> {
     let dir = Rc::new(TempDir::new()?);
     let project = Project {
@@ -114,6 +119,7 @@ edition = "2021"
 }
 
 #[test]
+#[serial]
 fn it_supports_wit_keywords() -> Result<()> {
     let name = "interface";
     let project = Project::new(name)?;
@@ -130,6 +136,7 @@ fn it_supports_wit_keywords() -> Result<()> {
 }
 
 #[test]
+#[serial]
 fn it_adds_a_producers_field() -> Result<()> {
     let name = "foo_producer_section";
     let project = Project::new(name)?;
@@ -161,6 +168,7 @@ fn it_adds_a_producers_field() -> Result<()> {
 }
 
 #[test]
+#[serial]
 fn it_builds_wasm32_unknown_unknown() -> Result<()> {
     let name = "foo_wasm32_unknown_unknown";
     let project = Project::new(name)?;
@@ -183,6 +191,7 @@ fn it_builds_wasm32_unknown_unknown() -> Result<()> {
 }
 
 #[test]
+#[serial]
 fn it_regenerates_target_if_wit_changed() -> Result<()> {
     let name = "foo_if_wit_changed";
     let project = Project::new(name)?;
@@ -217,6 +226,7 @@ fn it_regenerates_target_if_wit_changed() -> Result<()> {
 }
 
 #[test]
+#[serial]
 fn it_builds_with_local_wit_deps() -> Result<()> {
     let name = "foo_local_wit_deps";
     let project = Project::new(name)?;
@@ -310,6 +320,7 @@ bindings::export!(Component with_types_in bindings);
 }
 
 #[test]
+#[serial]
 fn empty_world_with_dep_valid() -> Result<()> {
     let name = "dep";
     let project = Project::new(name)?;
@@ -387,6 +398,7 @@ fn empty_world_with_dep_valid() -> Result<()> {
 }
 
 #[test]
+#[serial]
 fn it_builds_with_resources() -> Result<()> {
     let name = "foo_resources";
     let project = Project::new(name)?;
@@ -456,6 +468,7 @@ fn it_builds_with_resources() -> Result<()> {
 }
 
 #[test]
+#[serial]
 fn it_builds_resources_with_specified_ownership_model() -> Result<()> {
     let name = "foo_resources_with_specified_ownership_model";
     let project = Project::new(name)?;
@@ -530,6 +543,7 @@ fn it_builds_resources_with_specified_ownership_model() -> Result<()> {
 }
 
 #[test]
+#[serial]
 fn it_builds_with_a_component_dependency() -> Result<()> {
     let dir = Rc::new(TempDir::new()?);
     let comp1 = Project::with_dir(dir.clone(), "comp1", "")?;
@@ -648,6 +662,7 @@ bindings::export!(Component with_types_in bindings);
 }
 
 #[test]
+#[serial]
 fn it_builds_with_adapter() -> Result<()> {
     let name = "foo_with_adapter";
     let project = Project::new(name)?;
@@ -681,6 +696,7 @@ fn it_builds_with_adapter() -> Result<()> {
 }
 
 #[test]
+#[serial]
 fn it_errors_if_adapter_is_not_wasm() -> Result<()> {
     let name = "foo_errors_on_adapter";
     let file_name = format!("{name}.wasm");
@@ -702,6 +718,7 @@ fn it_errors_if_adapter_is_not_wasm() -> Result<()> {
 }
 
 #[test]
+#[serial]
 fn it_adds_additional_derives() -> Result<()> {
     let name = "foo_add_derives";
     let project = Project::new(name)?;
@@ -775,6 +792,7 @@ bindings::export!(Component with_types_in bindings);
 }
 
 #[test]
+#[serial]
 fn it_builds_with_versioned_wit() -> Result<()> {
     let name = "foo_versioned_wit";
     let project = Project::new(name)?;
@@ -819,6 +837,7 @@ fn it_builds_with_versioned_wit() -> Result<()> {
 }
 
 #[test]
+#[serial]
 fn it_warns_on_proxy_setting_for_command() -> Result<()> {
     let name = "foo_warn_proxy";
     let project = Project::new_bin(name)?;
@@ -841,6 +860,7 @@ fn it_warns_on_proxy_setting_for_command() -> Result<()> {
 }
 
 #[test]
+#[serial]
 fn it_warns_with_proxy_and_adapter_settings() -> Result<()> {
     let name = "foo_warn_proxy_and_adapter";
     let project = Project::new(name)?;
@@ -863,6 +883,7 @@ fn it_warns_with_proxy_and_adapter_settings() -> Result<()> {
 }
 
 #[test]
+#[serial]
 fn it_builds_with_proxy_adapter() -> Result<()> {
     let name = "foo_proxy";
     let dir = Rc::new(TempDir::new()?);
@@ -886,6 +907,7 @@ fn it_builds_with_proxy_adapter() -> Result<()> {
 }
 
 #[test]
+#[serial]
 fn it_does_not_generate_bindings_for_cargo_projects() -> Result<()> {
     let name = "foo_not_generate";
     let dir = TempDir::new()?;

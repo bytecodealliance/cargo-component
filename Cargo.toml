@@ -63,6 +63,7 @@ wat = { workspace = true }
 warg-server = { workspace = true }
 tempfile = { workspace = true }
 wasmprinter = { workspace = true }
+serial_test = { workspace = true }
 
 [workspace]
 members = ["crates/core", "crates/wit"]
@@ -111,6 +112,7 @@ predicates = "3.1.0"
 wasmparser = "0.202.0"
 wat = "1.202.0"
 wasmprinter = "0.202.0"
+serial_test = "3.1.1"
 
 [profile.release]
 panic = "abort"
