@@ -1779,9 +1779,9 @@ dependencies = [
 
 [[package]]
 name = "keyring"
-version = "2.3.2"
+version = "2.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1be8bc4c6b6e9d85ecdad090fcf342a9216f53d747a537cc05e3452fd650ca46"
+checksum = "363387f0019d714aa60cc30ab4fe501a747f4c08fc58f069dd14be971bd495a0"
 dependencies = [
  "byteorder",
  "lazy_static 1.4.0",
@@ -3890,8 +3890,9 @@ dependencies = [
 
 [[package]]
 name = "warg-api"
-version = "0.5.0-dev"
-source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=a692b15#a692b158a1c7a059f68746c3558b8ef0b836d46b"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b556c2cc6a4fcac4f50587bb62b04d1c722943702c659b31e16240311588f8f"
 dependencies = [
  "indexmap 2.2.6",
  "itertools 0.12.1",
@@ -3904,8 +3905,9 @@ dependencies = [
 
 [[package]]
 name = "warg-client"
-version = "0.5.0-dev"
-source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=a692b15#a692b158a1c7a059f68746c3558b8ef0b836d46b"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f99db16e7821706e7f4efe2a4a10c7dd7d4545a42c87e2d6bef77283a14b096"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -3948,8 +3950,9 @@ dependencies = [
 
 [[package]]
 name = "warg-credentials"
-version = "0.5.0-dev"
-source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=a692b15#a692b158a1c7a059f68746c3558b8ef0b836d46b"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a87b014f5773027bdaa4c407ea72a84889a583e48f67ec2b21b490a27313d68a"
 dependencies = [
  "anyhow",
  "indexmap 2.2.6",
@@ -3961,8 +3964,9 @@ dependencies = [
 
 [[package]]
 name = "warg-crypto"
-version = "0.5.0-dev"
-source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=a692b15#a692b158a1c7a059f68746c3558b8ef0b836d46b"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "394967bc096c72ef524de2bd64f0a516e0c4378ca89b88838bb5d64311fdb224"
 dependencies = [
  "anyhow",
  "base64",
@@ -3981,8 +3985,9 @@ dependencies = [
 
 [[package]]
 name = "warg-protobuf"
-version = "0.5.0-dev"
-source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=a692b15#a692b158a1c7a059f68746c3558b8ef0b836d46b"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "13bf18aec939aa032f89fe05ac1957002c6619eabf58a74e88e300657ec4087e"
 dependencies = [
  "anyhow",
  "pbjson",
@@ -3999,8 +4004,9 @@ dependencies = [
 
 [[package]]
 name = "warg-protocol"
-version = "0.5.0-dev"
-source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=a692b15#a692b158a1c7a059f68746c3558b8ef0b836d46b"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4b00c0564b6d52db574b2345dae2918f138dab82a341ef4da61e611eb679a8ee"
 dependencies = [
  "anyhow",
  "base64",
@@ -4021,8 +4027,9 @@ dependencies = [
 
 [[package]]
 name = "warg-server"
-version = "0.5.0-dev"
-source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=a692b15#a692b158a1c7a059f68746c3558b8ef0b836d46b"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "687bf9d3e34eabe867432fe08a9f5d05c4b34d49d1b1ff516265b901fe75d33b"
 dependencies = [
  "anyhow",
  "axum",
@@ -4051,8 +4058,9 @@ dependencies = [
 
 [[package]]
 name = "warg-transparency"
-version = "0.5.0-dev"
-source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=a692b15#a692b158a1c7a059f68746c3558b8ef0b836d46b"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1592ffca976471c8b998a176faa5da328ca99ddba1858c5a3dac149cf4557c8"
 dependencies = [
  "anyhow",
  "indexmap 2.2.6",
