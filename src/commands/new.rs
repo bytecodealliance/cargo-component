@@ -245,6 +245,18 @@ impl NewCommand {
             doc["lib"]["crate-type"] = value(Value::from_iter(["cdylib"]));
         }
 
+        // add release profile
+        let mut release_profile = table();
+        release_profile["codegen-units"] = value(1);
+        release_profile["opt-level"] = value("s");
+        release_profile["debug"] = value(false);
+        release_profile["strip"] = value(true);
+        release_profile["lto"] = value(true);
+        let mut profile = table();
+        profile.as_table_mut().unwrap().set_implicit(true);
+        profile["release"] = release_profile;
+        doc["profile"] = profile;
+
         let mut component = Table::new();
         component.set_implicit(true);
 
