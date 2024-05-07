@@ -3891,7 +3891,7 @@ dependencies = [
 [[package]]
 name = "warg-api"
 version = "0.5.0-dev"
-source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=3eb6368#3eb63685df8f485d84ffefb35216e387ea31eab7"
+source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=a692b15#a692b158a1c7a059f68746c3558b8ef0b836d46b"
 dependencies = [
  "indexmap 2.2.6",
  "itertools 0.12.1",
@@ -3905,7 +3905,7 @@ dependencies = [
 [[package]]
 name = "warg-client"
 version = "0.5.0-dev"
-source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=3eb6368#3eb63685df8f485d84ffefb35216e387ea31eab7"
+source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=a692b15#a692b158a1c7a059f68746c3558b8ef0b836d46b"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -3949,7 +3949,7 @@ dependencies = [
 [[package]]
 name = "warg-credentials"
 version = "0.5.0-dev"
-source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=3eb6368#3eb63685df8f485d84ffefb35216e387ea31eab7"
+source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=a692b15#a692b158a1c7a059f68746c3558b8ef0b836d46b"
 dependencies = [
  "anyhow",
  "indexmap 2.2.6",
@@ -3962,7 +3962,7 @@ dependencies = [
 [[package]]
 name = "warg-crypto"
 version = "0.5.0-dev"
-source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=3eb6368#3eb63685df8f485d84ffefb35216e387ea31eab7"
+source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=a692b15#a692b158a1c7a059f68746c3558b8ef0b836d46b"
 dependencies = [
  "anyhow",
  "base64",
@@ -3982,7 +3982,7 @@ dependencies = [
 [[package]]
 name = "warg-protobuf"
 version = "0.5.0-dev"
-source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=3eb6368#3eb63685df8f485d84ffefb35216e387ea31eab7"
+source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=a692b15#a692b158a1c7a059f68746c3558b8ef0b836d46b"
 dependencies = [
  "anyhow",
  "pbjson",
@@ -4000,7 +4000,7 @@ dependencies = [
 [[package]]
 name = "warg-protocol"
 version = "0.5.0-dev"
-source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=3eb6368#3eb63685df8f485d84ffefb35216e387ea31eab7"
+source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=a692b15#a692b158a1c7a059f68746c3558b8ef0b836d46b"
 dependencies = [
  "anyhow",
  "base64",
@@ -4022,7 +4022,7 @@ dependencies = [
 [[package]]
 name = "warg-server"
 version = "0.5.0-dev"
-source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=3eb6368#3eb63685df8f485d84ffefb35216e387ea31eab7"
+source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=a692b15#a692b158a1c7a059f68746c3558b8ef0b836d46b"
 dependencies = [
  "anyhow",
  "axum",
@@ -4052,7 +4052,7 @@ dependencies = [
 [[package]]
 name = "warg-transparency"
 version = "0.5.0-dev"
-source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=3eb6368#3eb63685df8f485d84ffefb35216e387ea31eab7"
+source = "git+https://github.com/calvinrp/bytecodealliance-registry?rev=a692b15#a692b158a1c7a059f68746c3558b8ef0b836d46b"
 dependencies = [
  "anyhow",
  "indexmap 2.2.6",
