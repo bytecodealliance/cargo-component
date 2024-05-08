@@ -39,7 +39,7 @@ To install the `cargo component` subcommand from source, run the following
 command:
 
 ```
-cargo install cargo-component
+cargo install cargo-component --locked
 ```
 
 If you have the [cargo-binstall](https://github.com/cargo-bins/cargo-binstall)
