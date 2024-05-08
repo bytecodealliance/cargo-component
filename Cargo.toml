@@ -69,11 +69,11 @@ members = ["crates/core", "crates/wit"]
 
 [workspace.dependencies]
 cargo-component-core = { path = "crates/core", version = "0.11.0" }
-warg-protocol = "0.4.2"
-warg-crypto = "0.4.2"
-warg-client = "0.4.2"
-warg-credentials = "0.4.2"
-warg-server = "0.4.2"
+warg-protocol = "0.4.3"
+warg-crypto = "0.4.3"
+warg-client = "0.4.3"
+warg-credentials = "0.4.3"
+warg-server = "0.4.3"
 anyhow = "1.0.82"
 clap = { version = "4.5.4", features = ["derive"] }
 toml_edit = { version = "0.22.9", features = ["serde"] }
