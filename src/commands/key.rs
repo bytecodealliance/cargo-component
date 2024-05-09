@@ -5,7 +5,7 @@ use clap::{Args, Subcommand};
 use p256::ecdsa::SigningKey;
 use rand_core::OsRng;
 use std::io::{self, Write};
-use warg_credentials::keyring as warg_keyring;
+use warg_client::keyring as warg_keyring;
 use warg_crypto::signing::PrivateKey;
 use warg_keyring::{delete_signing_key, get_signing_key, set_signing_key};
 

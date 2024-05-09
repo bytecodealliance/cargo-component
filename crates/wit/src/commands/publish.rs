@@ -5,7 +5,7 @@ use crate::{
 use anyhow::{Context, Result};
 use cargo_component_core::{command::CommonOptions, registry::find_url};
 use clap::Args;
-use warg_credentials::keyring::get_signing_key;
+use warg_client::keyring::get_signing_key;
 use warg_crypto::signing::PrivateKey;
 use warg_protocol::registry::PackageName;
 
