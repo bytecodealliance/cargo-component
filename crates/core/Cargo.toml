@@ -17,7 +17,6 @@ unicode-width = { workspace = true }
 warg-crypto = { workspace = true }
 warg-protocol = { workspace = true }
 warg-client = { workspace = true }
-warg-credentials = { workspace = true }
 toml_edit = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }

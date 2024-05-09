@@ -602,7 +602,6 @@ dependencies = [
  "unicode-width",
  "url",
  "warg-client",
- "warg-credentials",
  "warg-crypto",
  "warg-protocol",
  "windows-sys 0.52.0",
@@ -3947,15 +3946,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "warg-credentials"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bcad56900cb6a983c7090569a7eaa0774db22ade370e39d67a0c3b77354e6abd"
-dependencies = [
- "warg-client",
-]
-
-[[package]]
 name = "warg-crypto"
 version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4528,7 +4518,6 @@ dependencies = [
  "toml_edit 0.22.9",
  "url",
  "warg-client",
- "warg-credentials",
  "warg-crypto",
  "warg-protocol",
  "warg-server",
