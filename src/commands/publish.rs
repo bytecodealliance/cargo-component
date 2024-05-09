@@ -7,7 +7,7 @@ use anyhow::{bail, Context, Result};
 use cargo_component_core::{command::CommonOptions, registry::find_url};
 use clap::Args;
 use std::path::PathBuf;
-use warg_credentials::keyring::get_signing_key;
+use warg_client::keyring::get_signing_key;
 use warg_crypto::signing::PrivateKey;
 
 /// Publish a package to a registry.

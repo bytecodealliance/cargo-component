@@ -28,7 +28,6 @@ wit-component = { workspace = true }
 wit-parser = { workspace = true }
 log = { workspace = true }
 tokio = { workspace = true }
-secrecy = { workspace = true }
 clap = { workspace = true }
 
 [target.'cfg(windows)'.dependencies.windows-sys]

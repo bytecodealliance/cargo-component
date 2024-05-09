@@ -560,7 +560,6 @@ dependencies = [
  "pretty_env_logger",
  "rand_core",
  "rpassword",
- "secrecy",
  "semver",
  "serde 1.0.197",
  "serde_json",
@@ -571,7 +570,6 @@ dependencies = [
  "toml_edit 0.22.9",
  "url",
  "warg-client",
- "warg-credentials",
  "warg-crypto",
  "warg-protocol",
  "warg-server",
@@ -597,7 +595,6 @@ dependencies = [
  "libc",
  "log",
  "owo-colors",
- "secrecy",
  "semver",
  "serde 1.0.197",
  "tokio",
@@ -3890,9 +3887,9 @@ dependencies = [
 
 [[package]]
 name = "warg-api"
-version = "0.4.2"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b556c2cc6a4fcac4f50587bb62b04d1c722943702c659b31e16240311588f8f"
+checksum = "b08e86feb745fa5a4e9b3ed8c53ca7353ce474c9164573e7963c65eab0e20998"
 dependencies = [
  "indexmap 2.2.6",
  "itertools 0.12.1",
@@ -3905,9 +3902,9 @@ dependencies = [
 
 [[package]]
 name = "warg-client"
-version = "0.4.2"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6f99db16e7821706e7f4efe2a4a10c7dd7d4545a42c87e2d6bef77283a14b096"
+checksum = "ecb95cdddbc52c73e774d6d555412bb8060156f1ac666df733c18bdeb923c22c"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -3919,6 +3916,7 @@ dependencies = [
  "futures-util",
  "indexmap 2.2.6",
  "itertools 0.12.1",
+ "keyring",
  "libc",
  "normpath",
  "once_cell",
@@ -3950,23 +3948,18 @@ dependencies = [
 
 [[package]]
 name = "warg-credentials"
-version = "0.4.2"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a87b014f5773027bdaa4c407ea72a84889a583e48f67ec2b21b490a27313d68a"
+checksum = "bcad56900cb6a983c7090569a7eaa0774db22ade370e39d67a0c3b77354e6abd"
 dependencies = [
- "anyhow",
- "indexmap 2.2.6",
- "keyring",
- "secrecy",
  "warg-client",
- "warg-crypto",
 ]
 
 [[package]]
 name = "warg-crypto"
-version = "0.4.2"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "394967bc096c72ef524de2bd64f0a516e0c4378ca89b88838bb5d64311fdb224"
+checksum = "79344c8bd2cf133533ce6352b6491fbb343e374a8c09527073adda5015c89c92"
 dependencies = [
  "anyhow",
  "base64",
@@ -3985,9 +3978,9 @@ dependencies = [
 
 [[package]]
 name = "warg-protobuf"
-version = "0.4.2"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "13bf18aec939aa032f89fe05ac1957002c6619eabf58a74e88e300657ec4087e"
+checksum = "975e38d2ddba1d26f46713d75cccecf3769ebaae7d14b0dcb830d207867c50bf"
 dependencies = [
  "anyhow",
  "pbjson",
@@ -4004,9 +3997,9 @@ dependencies = [
 
 [[package]]
 name = "warg-protocol"
-version = "0.4.2"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b00c0564b6d52db574b2345dae2918f138dab82a341ef4da61e611eb679a8ee"
+checksum = "fb997bf019742f796123539e9c9031d3ec8ed973950a0534e1f6af508e27e4f1"
 dependencies = [
  "anyhow",
  "base64",
@@ -4027,9 +4020,9 @@ dependencies = [
 
 [[package]]
 name = "warg-server"
-version = "0.4.2"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "687bf9d3e34eabe867432fe08a9f5d05c4b34d49d1b1ff516265b901fe75d33b"
+checksum = "a8ada7d9f5ec554959501509b60229da52f5bd0e535b6b83eef2ca4f7f47d127"
 dependencies = [
  "anyhow",
  "axum",
@@ -4058,9 +4051,9 @@ dependencies = [
 
 [[package]]
 name = "warg-transparency"
-version = "0.4.2"
+version = "0.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c1592ffca976471c8b998a176faa5da328ca99ddba1858c5a3dac149cf4557c8"
+checksum = "f04b4573fd7c7ebee61f5b4645b464e7dcd656386d0ca4c77b37533ad1bb98d9"
 dependencies = [
  "anyhow",
  "indexmap 2.2.6",
