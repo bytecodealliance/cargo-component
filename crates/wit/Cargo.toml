@@ -20,7 +20,6 @@ serde = { workspace = true }
 toml_edit = { workspace = true }
 warg-protocol = { workspace = true }
 warg-client = { workspace = true }
-warg-credentials = { workspace = true }
 warg-crypto = { workspace = true }
 log = { workspace = true }
 clap = { workspace = true }

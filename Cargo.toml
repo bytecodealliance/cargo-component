@@ -70,7 +70,6 @@ cargo-component-core = { path = "crates/core", version = "0.11.0" }
 warg-protocol = "0.6.0"
 warg-crypto = "0.6.0"
 warg-client = "0.6.0"
-warg-credentials = "0.6.0"
 warg-server = "0.6.0"
 anyhow = "1.0.82"
 clap = { version = "4.5.4", features = ["derive"] }
