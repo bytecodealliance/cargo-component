@@ -69,9 +69,10 @@ members = ["crates/core", "crates/wit"]
 
 [workspace.dependencies]
 cargo-component-core = { path = "crates/core", version = "0.11.0" }
-warg-protocol = "0.4.1"
+# warm-client and warg-protocol have breaking change in 0.4.2, see https://github.com/bytecodealliance/cargo-component/issues/293
+warg-protocol = "=0.4.1"
 warg-crypto = "0.4.1"
-warg-client = "0.4.1"
+warg-client = "=0.4.1"
 warg-credentials = "0.4.1"
 warg-server = "0.4.1"
 anyhow = "1.0.82"
