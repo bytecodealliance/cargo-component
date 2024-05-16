@@ -1,7 +1,7 @@
 # The `wit` tool
 
 A tool for creating and publishing WIT packages to a [WebAssembly component
-registry](https://warg.io/).
+registry](https://github.com/bytecodealliance/registry/).
 
 WIT packages are used in the [WebAssembly Component Model](https://github.com/WebAssembly/component-model/)
 for defining interfaces, types, and worlds used in WebAssembly components.
@@ -141,7 +141,7 @@ WebAssembly component registries accept packages based on the keys used to sign
 the records being published.
 
 The `wit` tool uses the OS-provided keyring to securely store signing keys.
-Use the `warg` CLI to manage your signing keys.
+Use the [`warg` CLI](https://crates.io/crates/warg-cli) to manage your signing keys.
 
 ## Contributing to `wit`
 
