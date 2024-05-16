@@ -7,7 +7,6 @@ use anyhow::{bail, Context, Result};
 use cargo_component_core::{command::CommonOptions, registry::find_url};
 use clap::Args;
 use std::path::PathBuf;
-use warg_client::keyring::get_signing_key;
 use warg_crypto::signing::PrivateKey;
 
 /// Publish a package to a registry.
@@ -131,13 +130,9 @@ impl PublishCommand {
         )?;
 
         let signing_key = if let Ok(key) = std::env::var("CARGO_COMPONENT_PUBLISH_KEY") {
-            PrivateKey::decode(key).context("failed to parse signing key from `CARGO_COMPONENT_PUBLISH_KEY` environment variable")?
+            Some(PrivateKey::decode(key).context("failed to parse signing key from `CARGO_COMPONENT_PUBLISH_KEY` environment variable")?)
         } else {
-            get_signing_key(
-                self.registry.as_deref(),
-                &config.warg().keys,
-                config.warg.home_url.as_deref(),
-            )?
+            None
         };
 
         let cargo_build_args = CargoArguments {
@@ -180,7 +175,7 @@ impl PublishCommand {
             name,
             version: &component_metadata.version,
             path: &outputs[0],
-            signing_key: &signing_key,
+            signing_key,
             dry_run: self.dry_run,
         };
 

@@ -1028,7 +1028,7 @@ pub struct PublishOptions<'a> {
     /// The path to the package being published.
     pub path: &'a Path,
     /// The signing key to use for the publish operation.
-    pub signing_key: &'a PrivateKey,
+    pub signing_key: Option<PrivateKey>,
     /// Whether to perform a dry run or not.
     pub dry_run: bool,
 }
@@ -1095,7 +1095,7 @@ pub async fn publish(config: &Config, options: &PublishOptions<'_>) -> Result<()
         return Ok(());
     }
 
-    let client = create_client(config.warg(), options.registry_url, config.terminal())?;
+    let client = create_client(config.warg(), options.registry_url, config.terminal()).await?;
 
     let bytes = fs::read(options.path).with_context(|| {
         format!(
@@ -1137,7 +1137,11 @@ pub async fn publish(config: &Config, options: &PublishOptions<'_>) -> Result<()
         content,
     });
 
-    let record_id = client.publish_with_info(options.signing_key, info).await?;
+    let record_id = if let Some(signing_key) = &options.signing_key {
+        client.publish_with_info(signing_key, info).await?
+    } else {
+        client.sign_with_keyring_and_publish(Some(info)).await?
+    };
     client
         .wait_for_publish(options.name, &record_id, Duration::from_secs(1))
         .await?;

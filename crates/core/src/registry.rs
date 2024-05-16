@@ -50,12 +50,12 @@ pub fn find_url<'a>(
 }
 
 /// Creates a registry client with the given warg configuration.
-pub fn create_client(
+pub async fn create_client(
     config: &warg_client::Config,
     url: &str,
     terminal: &Terminal,
 ) -> Result<FileSystemClient> {
-    match FileSystemClient::try_new_with_config(Some(url), config, None)? {
+    match FileSystemClient::try_new_with_config(Some(url), config, None).await? {
         StorageLockResult::Acquired(client) => Ok(client),
         StorageLockResult::NotAcquired(path) => {
             terminal.status_with_color(
@@ -64,7 +64,7 @@ pub fn create_client(
                 Colors::Cyan,
             )?;
 
-            Ok(FileSystemClient::new_with_config(Some(url), config, None)?)
+            Ok(FileSystemClient::new_with_config(Some(url), config, None).await?)
         }
     }
 }
@@ -477,7 +477,9 @@ impl<'a> DependencyResolver<'a> {
                             self.warg_config.home_url.as_deref(),
                         )?;
                         e.insert(Registry {
-                            client: Arc::new(create_client(self.warg_config, url, self.terminal)?),
+                            client: Arc::new(
+                                create_client(self.warg_config, url, self.terminal).await?,
+                            ),
                             packages: HashMap::new(),
                             dependencies: Vec::new(),
                             upserts: HashSet::new(),

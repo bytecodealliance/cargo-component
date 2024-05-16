@@ -140,36 +140,8 @@ wit publish --registry https://registry.example.com --key-name my-signing-key
 WebAssembly component registries accept packages based on the keys used to sign
 the records being published.
 
-The `wit` tool uses the OS-provided key ring to manage signing keys.
-
-To create a new signing key for a registry, use the `key new` command:
-
-```
-wit key new https://registry.example.com
-```
-
-To print a Key ID (a fingerprint of the public key) for a signing key, use the
-`key id` command:
-
-```
-wit key id https://registry.example.com
-```
-
-To explicitly set a signing key, use the `key set` command:
-
-```
-wit key set https://registry.example.com
-```
-
-This command will securely prompt you for the signing key to set in the OS key
-ring.
-
-To delete an existing signing key (note: use extreme caution when deleting
-signing keys), use the `key delete` command:
-
-```
-wit key delete https://registry.example.com
-```
+The `wit` tool uses the OS-provided keyring to securely store signing keys.
+Use the `warg` CLI to manage your signing keys.
 
 ## Contributing to `wit`
 

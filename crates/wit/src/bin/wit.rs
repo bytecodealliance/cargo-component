@@ -2,9 +2,7 @@ use anyhow::Result;
 use cargo_component_core::terminal::{Color, Terminal, Verbosity};
 use clap::Parser;
 use std::process::exit;
-use wit::commands::{
-    AddCommand, BuildCommand, InitCommand, KeyCommand, PublishCommand, UpdateCommand,
-};
+use wit::commands::{AddCommand, BuildCommand, InitCommand, PublishCommand, UpdateCommand};
 
 fn version() -> &'static str {
     option_env!("WIT_VERSION_INFO").unwrap_or(env!("CARGO_PKG_VERSION"))
@@ -30,7 +28,6 @@ pub enum Command {
     Add(AddCommand),
     Build(BuildCommand),
     Publish(PublishCommand),
-    Key(KeyCommand),
     Update(UpdateCommand),
 }
 
@@ -45,7 +42,6 @@ async fn main() -> Result<()> {
         Command::Add(cmd) => cmd.exec().await,
         Command::Build(cmd) => cmd.exec().await,
         Command::Publish(cmd) => cmd.exec().await,
-        Command::Key(cmd) => cmd.exec().await,
         Command::Update(cmd) => cmd.exec().await,
     } {
         let terminal = Terminal::new(Verbosity::Normal, Color::Auto);
