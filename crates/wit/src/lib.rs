@@ -256,7 +256,7 @@ struct PublishOptions<'a> {
     config_path: &'a Path,
     warg_config: &'a warg_client::Config,
     url: &'a str,
-    signing_key: &'a PrivateKey,
+    signing_key: Option<PrivateKey>,
     package: Option<&'a registry::PackageName>,
     init: bool,
     dry_run: bool,
@@ -328,7 +328,7 @@ async fn publish_wit_package(options: PublishOptions<'_>, terminal: &Terminal) -
 
     let bytes = add_registry_metadata(options.config, &bytes)?;
     let name = options.package.unwrap_or(&name);
-    let client = create_client(options.warg_config, options.url, terminal)?;
+    let client = create_client(options.warg_config, options.url, terminal).await?;
 
     let content = client
         .content()
@@ -355,7 +355,11 @@ async fn publish_wit_package(options: PublishOptions<'_>, terminal: &Terminal) -
         content,
     });
 
-    let record_id = client.publish_with_info(options.signing_key, info).await?;
+    let record_id = if let Some(signing_key) = &options.signing_key {
+        client.publish_with_info(signing_key, info).await?
+    } else {
+        client.sign_with_keyring_and_publish(Some(info)).await?
+    };
     client
         .wait_for_publish(name, &record_id, Duration::from_secs(1))
         .await?;

@@ -240,10 +240,8 @@ The `cargo component` subcommand has some analogous commands to cargo itself:
   manifest file.
 * `cargo component update` — same as `cargo update` but also updates the
   dependencies in the component lock file.
-* `cargo component publish` - publishes a WebAssembly component to a [warg](https://warg.io/)
+* `cargo component publish` - publishes a WebAssembly component to a [warg](https://github.com/bytecodealliance/registry/)
   component registry.
-* `cargo component key` - manages signing keys for publishing WebAssembly
-  components.
 
 Unrecognized commands are passed through to `cargo` itself, but only after the
 bindings information for component packages has been updated.

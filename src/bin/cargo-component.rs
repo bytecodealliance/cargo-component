@@ -1,6 +1,6 @@
 use anyhow::{bail, Result};
 use cargo_component::{
-    commands::{AddCommand, KeyCommand, NewCommand, PublishCommand, UpdateCommand},
+    commands::{AddCommand, NewCommand, PublishCommand, UpdateCommand},
     config::{CargoArguments, Config},
     load_component_metadata, load_metadata, run_cargo_command,
 };
@@ -17,7 +17,6 @@ const BUILTIN_COMMANDS: &[&str] = &[
     "component", // for indirection via `cargo component`
     "help",
     "init",
-    "key",
     "new",
     "publish",
     "remove",
@@ -68,7 +67,6 @@ enum CargoComponent {
 enum Command {
     Add(AddCommand),
     // TODO: Init(InitCommand),
-    Key(KeyCommand),
     New(NewCommand),
     // TODO: Remove(RemoveCommand),
     Update(UpdateCommand),
@@ -112,7 +110,6 @@ async fn main() -> Result<()> {
             if let Err(e) = match CargoComponent::parse() {
                 CargoComponent::Component(cmd) | CargoComponent::Command(cmd) => match cmd {
                     Command::Add(cmd) => cmd.exec().await,
-                    Command::Key(cmd) => cmd.exec().await,
                     Command::New(cmd) => cmd.exec().await,
                     Command::Update(cmd) => cmd.exec().await,
                     Command::Publish(cmd) => cmd.exec().await,
