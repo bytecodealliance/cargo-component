@@ -362,7 +362,7 @@ impl<'a> UnimplementedFunction<'a> {
 
     fn print_type_id(
         &self,
-        in_world: bool,
+        mut in_world: bool,
         id: TypeId,
         trie: &mut UseTrie,
         source: &mut String,
@@ -431,6 +431,22 @@ impl<'a> UnimplementedFunction<'a> {
                 self.print_type_id(in_world, *id, trie, source)?
             }
             TypeDefKind::Handle(Handle::Borrow(id)) => {
+                if !in_world {
+                    if let TypeDefKind::Type(Type::Id(id)) = &self.resolve.types[*id].kind {
+                        match &self.resolve.types[*id].owner {
+                            TypeOwner::World(_) => in_world = true,
+                            TypeOwner::Interface(interface_id) => {
+                                in_world = !self.resolve.worlds.iter().any(|(_, world)| {
+                                    world.exports.values().any(|world_item| match world_item {
+                                        WorldItem::Interface(id) => id == interface_id,
+                                        _ => false,
+                                    })
+                                });
+                            }
+                            _ => {}
+                        }
+                    }
+                }
                 if in_world {
                     source.push('&');
                 }

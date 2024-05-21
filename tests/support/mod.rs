@@ -21,7 +21,7 @@ use warg_client::{
 use warg_crypto::signing::PrivateKey;
 use warg_protocol::{operator::NamespaceState, registry::PackageName};
 use warg_server::{policy::content::WasmContentPolicy, Config, Server};
-use wasmparser::{Chunk, Encoding, Parser, Payload, Validator, WasmFeatures};
+use wasmparser::{Chunk, Encoding, Parser, Payload, Validator};
 use wit_parser::{Resolve, UnresolvedPackage};
 
 pub fn test_operator_key() -> &'static str {
@@ -314,11 +314,7 @@ pub fn validate_component(path: &Path) -> Result<()> {
         .with_context(|| format!("failed to read `{path}`", path = path.display()))?;
 
     // Validate the bytes as either a component or a module
-    Validator::new_with_features(WasmFeatures {
-        component_model: true,
-        ..Default::default()
-    })
-    .validate_all(&bytes)?;
+    Validator::new_with_features(Default::default()).validate_all(&bytes)?;
 
     // Check that the bytes are for a component and not a module
     let mut parser = Parser::new(0);

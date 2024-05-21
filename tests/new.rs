@@ -161,18 +161,37 @@ interface bar {
     z: func(b: borrow<b>);
 }
 
-interface other {
-    resource some-resource {}
+interface not-exported {
+    resource some {
+        hello: func() -> string;
+    }
+}
+
+interface is-exported {
+    resource else {
+        hello: func() -> string;
+    }
+}
+
+interface is-exported-and-aliased {
+    resource something {
+        hello: func() -> string;
+    }
 }
 
 interface baz {
     use bar.{a as a2};
-    use other.{some-resource};
+    use not-exported.{some};
+    use is-exported.{else};
+    use is-exported-and-aliased.{something as someelse};
 
     resource a {
         constructor(a: borrow<a>);
-        a: static func(some: borrow<some-resource>) -> a;
+        a: static func(a: borrow<a>) -> a;
         b: func(a: a);
+        c: static func(some: borrow<some>) -> a;
+        d: static func(else: borrow<else>) -> a;
+        //e: static func(else: borrow<someelse>) -> a;
     }
 
     resource b {
@@ -181,6 +200,7 @@ interface baz {
         b: func(a: a);
     }
 
+    u: func(some: borrow<some>) -> some;
     v: func(a2: borrow<a2>) -> a2;
     w: func(a: a) -> a;
     x: func(b: b) -> b;
@@ -197,6 +217,8 @@ world foo {
     export bar: func(file: borrow<file>) -> file;
     export bar;
     export baz;
+    export is-exported;
+    export is-exported-and-aliased;
 }"#,
         true,
     )
