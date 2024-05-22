@@ -418,37 +418,7 @@ impl<'a> UnimplementedFunction<'a> {
             TypeDefKind::Type(ty) => self.print_type(ty, trie, source)?,
             TypeDefKind::Handle(Handle::Own(id)) => self.print_type_id(*id, trie, source, false)?,
             TypeDefKind::Handle(Handle::Borrow(id)) => {
-                let type_info = &self.resolve.types[*id];
-                let exported_resource = match type_info.kind {
-                    TypeDefKind::Type(Type::Id(kind_id)) => {
-                        let kind_type = &self.resolve.types[kind_id];
-                        match kind_type.owner {
-                            TypeOwner::World(_) => false,
-                            TypeOwner::Interface(interface_id) => {
-                                self.target_world.exports.values().any(
-                                    |world_item| match world_item {
-                                        WorldItem::Interface(id) => *id == interface_id,
-                                        _ => false,
-                                    },
-                                )
-                            }
-                            _ => true,
-                        }
-                    }
-                    TypeDefKind::Resource => match type_info.owner {
-                        TypeOwner::World(_) => false,
-                        TypeOwner::Interface(interface_id) => self
-                            .target_world
-                            .exports
-                            .values()
-                            .any(|world_item| match world_item {
-                                WorldItem::Interface(id) => *id == interface_id,
-                                _ => false,
-                            }),
-                        _ => true,
-                    },
-                    _ => false,
-                };
+                let exported_resource = self.is_exported_resource(*id);
                 if !exported_resource {
                     source.push('&');
                 }
@@ -461,6 +431,42 @@ impl<'a> UnimplementedFunction<'a> {
         }
 
         Ok(())
+    }
+
+    fn is_exported_resource(&self, id: TypeId) -> bool {
+        let type_info = &self.resolve.types[id];
+        match type_info.kind {
+            TypeDefKind::Type(Type::Id(kind_id)) => {
+                let kind_type = &self.resolve.types[kind_id];
+                match kind_type.owner {
+                    TypeOwner::World(_) => false,
+                    TypeOwner::Interface(interface_id) => {
+                        self.target_world
+                            .exports
+                            .values()
+                            .any(|world_item| match world_item {
+                                WorldItem::Interface(id) => *id == interface_id,
+                                _ => false,
+                            })
+                    }
+                    _ => true,
+                }
+            }
+            TypeDefKind::Resource => match type_info.owner {
+                TypeOwner::World(_) => false,
+                TypeOwner::Interface(interface_id) => {
+                    self.target_world
+                        .exports
+                        .values()
+                        .any(|world_item| match world_item {
+                            WorldItem::Interface(id) => *id == interface_id,
+                            _ => false,
+                        })
+                }
+                _ => true,
+            },
+            _ => false,
+        }
     }
 
     fn print_type_path(
