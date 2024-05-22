@@ -239,15 +239,15 @@ impl ReservedNames {
 struct UnimplementedFunction<'a> {
     resolve: &'a Resolve,
     func: &'a Function,
-    in_world: bool,
+    target_world: &'a World,
 }
 
 impl<'a> UnimplementedFunction<'a> {
-    fn new(resolve: &'a Resolve, func: &'a Function, in_world: bool) -> Self {
+    fn new(resolve: &'a Resolve, func: &'a Function, target_world: &'a World) -> Self {
         Self {
             resolve,
             func,
-            in_world,
+            target_world,
         }
     }
 
@@ -297,7 +297,7 @@ impl<'a> UnimplementedFunction<'a> {
             } else {
                 source.push_str(&to_rust_ident(name));
                 source.push_str(": ");
-                self.print_type(self.in_world, param, trie, source)?;
+                self.print_type(param, trie, source)?;
             }
         }
         source.push(')');
@@ -308,12 +308,7 @@ impl<'a> UnimplementedFunction<'a> {
                 if constructor {
                     source.push_str("Self");
                 } else {
-                    self.print_type(
-                        self.in_world,
-                        self.func.results.iter_types().next().unwrap(),
-                        trie,
-                        source,
-                    )?;
+                    self.print_type(self.func.results.iter_types().next().unwrap(), trie, source)?;
                 }
             }
             _ => {
@@ -323,7 +318,7 @@ impl<'a> UnimplementedFunction<'a> {
                         source.push_str(", ");
                     }
 
-                    self.print_type(self.in_world, ty, trie, source)?;
+                    self.print_type(ty, trie, source)?;
                 }
 
                 source.push(')');
@@ -333,13 +328,7 @@ impl<'a> UnimplementedFunction<'a> {
         Ok(())
     }
 
-    fn print_type(
-        &self,
-        in_world: bool,
-        ty: &Type,
-        trie: &mut UseTrie,
-        source: &mut String,
-    ) -> Result<()> {
+    fn print_type(&self, ty: &Type, trie: &mut UseTrie, source: &mut String) -> Result<()> {
         match ty {
             Type::Bool => source.push_str("bool"),
             Type::U8 => source.push_str("u8"),
@@ -354,7 +343,7 @@ impl<'a> UnimplementedFunction<'a> {
             Type::F64 => source.push_str("f64"),
             Type::Char => source.push_str("char"),
             Type::String => source.push_str("String"),
-            Type::Id(id) => self.print_type_id(in_world, *id, trie, source)?,
+            Type::Id(id) => self.print_type_id(*id, trie, source, false)?,
         }
 
         Ok(())
@@ -362,34 +351,34 @@ impl<'a> UnimplementedFunction<'a> {
 
     fn print_type_id(
         &self,
-        mut in_world: bool,
         id: TypeId,
         trie: &mut UseTrie,
         source: &mut String,
+        type_name_borrow_suffix: bool,
     ) -> Result<()> {
         let ty = &self.resolve.types[id];
 
         if ty.name.is_some() {
-            self.print_type_path(ty, trie, source);
+            self.print_type_path(ty, trie, source, type_name_borrow_suffix);
             return Ok(());
         }
 
         match &ty.kind {
             TypeDefKind::List(ty) => {
                 source.push_str("Vec<");
-                self.print_type(in_world, ty, trie, source)?;
+                self.print_type(ty, trie, source)?;
                 source.push('>');
             }
             TypeDefKind::Option(ty) => {
                 source.push_str("Option<");
-                self.print_type(in_world, ty, trie, source)?;
+                self.print_type(ty, trie, source)?;
                 source.push('>');
             }
             TypeDefKind::Result(r) => {
                 source.push_str("Result<");
-                self.print_optional_type(in_world, r.ok.as_ref(), trie, source)?;
+                self.print_optional_type(r.ok.as_ref(), trie, source)?;
                 source.push_str(", ");
-                self.print_optional_type(in_world, r.err.as_ref(), trie, source)?;
+                self.print_optional_type(r.err.as_ref(), trie, source)?;
                 source.push('>');
             }
             TypeDefKind::Variant(_) => {
@@ -401,7 +390,7 @@ impl<'a> UnimplementedFunction<'a> {
                     if i > 0 {
                         source.push_str(", ");
                     }
-                    self.print_type(in_world, ty, trie, source)?;
+                    self.print_type(ty, trie, source)?;
                 }
                 source.push(')');
             }
@@ -416,44 +405,54 @@ impl<'a> UnimplementedFunction<'a> {
             }
             TypeDefKind::Future(ty) => {
                 source.push_str("Future<");
-                self.print_optional_type(in_world, ty.as_ref(), trie, source)?;
+                self.print_optional_type(ty.as_ref(), trie, source)?;
                 source.push('>');
             }
             TypeDefKind::Stream(stream) => {
                 source.push_str("Stream<");
-                self.print_optional_type(in_world, stream.element.as_ref(), trie, source)?;
+                self.print_optional_type(stream.element.as_ref(), trie, source)?;
                 source.push_str(", ");
-                self.print_optional_type(in_world, stream.end.as_ref(), trie, source)?;
+                self.print_optional_type(stream.end.as_ref(), trie, source)?;
                 source.push('>');
             }
-            TypeDefKind::Type(ty) => self.print_type(in_world, ty, trie, source)?,
-            TypeDefKind::Handle(Handle::Own(id)) => {
-                self.print_type_id(in_world, *id, trie, source)?
-            }
+            TypeDefKind::Type(ty) => self.print_type(ty, trie, source)?,
+            TypeDefKind::Handle(Handle::Own(id)) => self.print_type_id(*id, trie, source, false)?,
             TypeDefKind::Handle(Handle::Borrow(id)) => {
-                if !in_world {
-                    if let TypeDefKind::Type(Type::Id(id)) = &self.resolve.types[*id].kind {
-                        match &self.resolve.types[*id].owner {
-                            TypeOwner::World(_) => in_world = true,
+                let type_info = &self.resolve.types[*id];
+                let exported_resource = match type_info.kind {
+                    TypeDefKind::Type(Type::Id(kind_id)) => {
+                        let kind_type = &self.resolve.types[kind_id];
+                        match kind_type.owner {
+                            TypeOwner::World(_) => false,
                             TypeOwner::Interface(interface_id) => {
-                                in_world = !self.resolve.worlds.iter().any(|(_, world)| {
-                                    world.exports.values().any(|world_item| match world_item {
-                                        WorldItem::Interface(id) => id == interface_id,
+                                self.target_world.exports.values().any(
+                                    |world_item| match world_item {
+                                        WorldItem::Interface(id) => *id == interface_id,
                                         _ => false,
-                                    })
-                                });
+                                    },
+                                )
                             }
-                            _ => {}
+                            _ => true,
                         }
                     }
-                }
-                if in_world {
+                    TypeDefKind::Resource => match type_info.owner {
+                        TypeOwner::World(_) => false,
+                        TypeOwner::Interface(interface_id) => self
+                            .target_world
+                            .exports
+                            .values()
+                            .any(|world_item| match world_item {
+                                WorldItem::Interface(id) => *id == interface_id,
+                                _ => false,
+                            }),
+                        _ => true,
+                    },
+                    _ => false,
+                };
+                if !exported_resource {
                     source.push('&');
                 }
-                self.print_type_id(in_world, *id, trie, source)?;
-                if !in_world {
-                    source.push_str("Borrow");
-                }
+                self.print_type_id(*id, trie, source, exported_resource)?;
             }
             TypeDefKind::Resource => {
                 bail!("unsupported anonymous resource type found in WIT package")
@@ -464,20 +463,26 @@ impl<'a> UnimplementedFunction<'a> {
         Ok(())
     }
 
-    fn print_type_path(&self, ty: &TypeDef, trie: &mut UseTrie, source: &mut String) {
+    fn print_type_path(
+        &self,
+        ty: &TypeDef,
+        trie: &mut UseTrie,
+        source: &mut String,
+        type_name_borrow_suffix: bool,
+    ) {
+        // add the 'Borrow' suffix to the type name, if needed.
+        // this is to match the wit-bindgen-rust bindings.
+        let type_name = if type_name_borrow_suffix {
+            format!("{}Borrow", ty.name.as_deref().unwrap())
+        } else {
+            ty.name.as_deref().unwrap().to_string()
+        };
+
         if let TypeOwner::Interface(id) = ty.owner {
             let interface = &self.resolve.interfaces[id];
             if interface.package.is_some() {
-                write!(
-                    source,
-                    "{name}",
-                    name = trie.insert_interface_type(
-                        self.resolve,
-                        interface,
-                        ty.name.as_deref().unwrap()
-                    )
-                )
-                .unwrap();
+                let name = trie.insert_interface_type(self.resolve, interface, &type_name);
+                write!(source, "{name}",).unwrap();
                 return;
             }
         }
@@ -485,20 +490,19 @@ impl<'a> UnimplementedFunction<'a> {
         write!(
             source,
             "{name}",
-            name = trie.insert(["bindings"], ty.name.as_deref().unwrap())
+            name = trie.insert(["bindings"], &type_name)
         )
         .unwrap();
     }
 
     fn print_optional_type(
         &self,
-        in_world: bool,
         ty: Option<&Type>,
         trie: &mut UseTrie,
         source: &mut String,
     ) -> Result<()> {
         match ty {
-            Some(ty) => self.print_type(in_world, ty, trie, source)?,
+            Some(ty) => self.print_type(ty, trie, source)?,
             None => source.push_str("()"),
         }
 
@@ -520,6 +524,7 @@ struct InterfaceGenerator<'a> {
     interface: &'a Interface,
     functions: Vec<&'a Function>,
     resources: IndexMap<TypeId, Resource<'a>>,
+    target_world: &'a World,
 }
 
 impl<'a> InterfaceGenerator<'a> {
@@ -528,6 +533,7 @@ impl<'a> InterfaceGenerator<'a> {
         key: &'a WorldKey,
         interface: &'a Interface,
         names: &mut ReservedNames,
+        target_world: &'a World,
     ) -> Self {
         let mut functions = Vec::new();
         let mut resources: IndexMap<_, Resource> = IndexMap::new();
@@ -567,6 +573,7 @@ impl<'a> InterfaceGenerator<'a> {
             interface,
             functions,
             resources,
+            target_world,
         }
     }
 
@@ -586,7 +593,8 @@ impl<'a> InterfaceGenerator<'a> {
             )?;
 
             for func in &resource.functions {
-                UnimplementedFunction::new(self.resolve, func, false).print(trie, &mut source)?;
+                UnimplementedFunction::new(self.resolve, func, self.target_world)
+                    .print(trie, &mut source)?;
             }
 
             source.push_str("}\n");
@@ -625,7 +633,8 @@ impl<'a> InterfaceGenerator<'a> {
                 source.push('\n');
             }
 
-            UnimplementedFunction::new(self.resolve, func, false).print(trie, &mut source)?;
+            UnimplementedFunction::new(self.resolve, func, self.target_world)
+                .print(trie, &mut source)?;
         }
 
         source.push_str("}\n");
@@ -638,6 +647,7 @@ struct ImplementationGenerator<'a> {
     resolve: &'a Resolve,
     functions: Vec<&'a Function>,
     interfaces: Vec<InterfaceGenerator<'a>>,
+    target_world: &'a World,
 }
 
 impl<'a> ImplementationGenerator<'a> {
@@ -652,7 +662,9 @@ impl<'a> ImplementationGenerator<'a> {
                 }
                 WorldItem::Interface(iface) => {
                     let interface = &resolve.interfaces[*iface];
-                    interfaces.push(InterfaceGenerator::new(resolve, key, interface, names));
+                    interfaces.push(InterfaceGenerator::new(
+                        resolve, key, interface, names, world,
+                    ));
                 }
                 WorldItem::Type(_) => continue,
             }
@@ -662,6 +674,7 @@ impl<'a> ImplementationGenerator<'a> {
             resolve,
             functions,
             interfaces,
+            target_world: world,
         }
     }
 
@@ -681,7 +694,8 @@ impl<'a> ImplementationGenerator<'a> {
                     source.push('\n');
                 }
 
-                UnimplementedFunction::new(self.resolve, func, true).print(trie, &mut source)?;
+                UnimplementedFunction::new(self.resolve, func, self.target_world)
+                    .print(trie, &mut source)?;
             }
 
             source.push_str("}\n");

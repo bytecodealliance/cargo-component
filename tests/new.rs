@@ -191,7 +191,7 @@ interface baz {
         b: func(a: a);
         c: static func(some: borrow<some>) -> a;
         d: static func(else: borrow<else>) -> a;
-        //e: static func(else: borrow<someelse>) -> a;
+        e: static func(else: borrow<someelse>) -> a;
     }
 
     resource b {
@@ -206,6 +206,10 @@ interface baz {
     x: func(b: b) -> b;
     y: func(a: borrow<a>);
     z: func(b: borrow<b>);
+}
+
+world not-used {
+    export not-exported;
 }
 
 world foo {
@@ -224,7 +228,7 @@ world foo {
     )
     .await?;
 
-    let project = Project::with_dir(dir.clone(), "component", "--target test:bar@1.0.0")?;
+    let project = Project::with_dir(dir.clone(), "component", "--target test:bar/foo@1.0.0")?;
     project
         .cargo_component("build")
         .assert()
