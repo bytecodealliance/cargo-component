@@ -161,13 +161,37 @@ interface bar {
     z: func(b: borrow<b>);
 }
 
+interface not-exported {
+    resource some {
+        hello: func() -> string;
+    }
+}
+
+interface is-exported {
+    resource else {
+        hello: func() -> string;
+    }
+}
+
+interface is-exported-and-aliased {
+    resource something {
+        hello: func() -> string;
+    }
+}
+
 interface baz {
     use bar.{a as a2};
+    use not-exported.{some};
+    use is-exported.{else};
+    use is-exported-and-aliased.{something as someelse};
 
     resource a {
         constructor(a: borrow<a>);
         a: static func(a: borrow<a>) -> a;
         b: func(a: a);
+        c: static func(some: borrow<some>) -> a;
+        d: static func(else: borrow<else>) -> a;
+        e: static func(else: borrow<someelse>) -> a;
     }
 
     resource b {
@@ -176,11 +200,16 @@ interface baz {
         b: func(a: a);
     }
 
+    u: func(some: borrow<some>) -> some;
     v: func(a2: borrow<a2>) -> a2;
     w: func(a: a) -> a;
     x: func(b: b) -> b;
     y: func(a: borrow<a>);
     z: func(b: borrow<b>);
+}
+
+world not-used {
+    export not-exported;
 }
 
 world foo {
@@ -192,12 +221,14 @@ world foo {
     export bar: func(file: borrow<file>) -> file;
     export bar;
     export baz;
+    export is-exported;
+    export is-exported-and-aliased;
 }"#,
         true,
     )
     .await?;
 
-    let project = Project::with_dir(dir.clone(), "component", "--target test:bar@1.0.0")?;
+    let project = Project::with_dir(dir.clone(), "component", "--target test:bar/foo@1.0.0")?;
     project
         .cargo_component("build")
         .assert()
