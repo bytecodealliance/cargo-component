@@ -269,20 +269,18 @@ impl NewCommand {
         if !self.is_command() {
             if let Some((resolution, world)) = target.as_ref() {
                 // if specifying exact version, set that exact version in the Cargo.toml
-                let version = if !resolution.requirement.comparators.is_empty() && resolution.requirement.comparators[0].op == semver::Op::Exact {
+                let version = if !resolution.requirement.comparators.is_empty()
+                    && resolution.requirement.comparators[0].op == semver::Op::Exact
+                {
                     format!("={}", resolution.version)
                 } else {
                     format!("{}", resolution.version)
                 };
                 component["target"] = match world {
-                    Some(world) => value(format!(
-                        "{name}/{world}@{version}",
-                        name = resolution.name,
-                    )),
-                    None => value(format!(
-                        "{name}@{version}",
-                        name = resolution.name,
-                    )),
+                    Some(world) => {
+                        value(format!("{name}/{world}@{version}", name = resolution.name,))
+                    }
+                    None => value(format!("{name}@{version}", name = resolution.name,)),
                 };
             }
         }
