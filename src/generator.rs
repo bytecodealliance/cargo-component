@@ -435,6 +435,9 @@ impl<'a> UnimplementedFunction<'a> {
 
     fn is_exported_resource(&self, id: TypeId) -> bool {
         let type_info = &self.resolve.types[id];
+        if let TypeOwner::World(_) = type_info.owner {
+            return false;
+        }
         match type_info.kind {
             TypeDefKind::Type(Type::Id(kind_id)) => {
                 let kind_type = &self.resolve.types[kind_id];
@@ -570,6 +573,23 @@ impl<'a> InterfaceGenerator<'a> {
                         functions: vec![func],
                     });
                 }
+            }
+        }
+
+        // Add resources that did not have any methods
+        for (_, id) in interface.types.iter() {
+            let ty = &resolve.types[*id];
+            if ty.kind == TypeDefKind::Resource && !resources.contains_key(id) {
+                let name = ty.name.as_deref().expect("unnamed resource type");
+                let impl_name = names.reserve(name);
+                resources.insert(
+                    *id,
+                    Resource {
+                        ty,
+                        impl_name,
+                        functions: vec![],
+                    },
+                );
             }
         }
 

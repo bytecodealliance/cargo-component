@@ -208,11 +208,20 @@ interface baz {
     z: func(b: borrow<b>);
 }
 
+interface another {
+    resource yet-another {
+        hello: func() -> string;
+    }
+    resource empty {}
+}
+
 world not-used {
     export not-exported;
 }
 
 world foo {
+    use another.{yet-another, empty};
+
     resource file {
         open: static func(path: string) -> file;
         path: func() -> string;
@@ -223,6 +232,10 @@ world foo {
     export baz;
     export is-exported;
     export is-exported-and-aliased;
+
+    export another;
+    export another-func: func(yet: borrow<yet-another>) -> result;
+    export another-func-empty: func(empty: borrow<empty>) -> result;
 }"#,
         true,
     )
