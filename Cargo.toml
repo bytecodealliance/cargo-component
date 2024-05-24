@@ -9,7 +9,7 @@ repository = { workspace = true }
 readme = "README.md"
 
 [workspace.package]
-version = "0.14.0-dev"
+version = "0.13.1"
 edition = "2021"
 authors = ["Peter Huene <peter@huene.dev>"]
 license = "Apache-2.0 WITH LLVM-exception"
@@ -66,7 +66,7 @@ wasmprinter = { workspace = true }
 members = ["crates/core", "crates/wit"]
 
 [workspace.dependencies]
-cargo-component-core = { path = "crates/core", version = "0.14.0-dev" }
+cargo-component-core = { path = "crates/core", version = "0.13.1" }
 warg-protocol = "0.7.0"
 warg-crypto = "0.7.0"
 warg-client = "0.7.0"
