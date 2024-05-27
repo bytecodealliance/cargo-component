@@ -24,7 +24,7 @@ runner = [
     "-S",
     "preview2",
     "-S",
-    "cli",
+    "common",
 ]"#,
     )?;
 

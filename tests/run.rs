@@ -100,7 +100,7 @@ bindings::export!(Component with_types_in bindings);
         .cargo_component("run")
         .env(
             "CARGO_TARGET_WASM32_WASI_RUNNER",
-            "wasmtime --env APP_NAME=CargoComponent -C cache=no -W component-model -S preview2 -S cli",
+            "wasmtime --env APP_NAME=CargoComponent -C cache=no -W component-model -S preview2 -S common",
         )
         .assert()
         .stdout(contains("[guest] running component 'my:reactor'"))

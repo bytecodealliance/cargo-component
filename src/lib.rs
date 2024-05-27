@@ -276,7 +276,7 @@ fn get_runner(serve: bool) -> Result<PathAndArgs> {
                     .args(if serve {
                         vec!["serve"]
                     } else {
-                        vec!["-S", "preview2", "-S", "cli"]
+                        vec!["-S", "preview2", "-S", "common"]
                     })
                     .to_owned(),
                 true,
