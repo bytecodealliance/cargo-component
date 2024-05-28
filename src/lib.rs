@@ -79,15 +79,19 @@ enum CargoCommand {
     Run,
     Test,
     Bench,
+    Serve,
 }
 
 impl CargoCommand {
     fn buildable(self) -> bool {
-        matches!(self, Self::Build | Self::Run | Self::Test | Self::Bench)
+        matches!(
+            self,
+            Self::Build | Self::Run | Self::Test | Self::Bench | Self::Serve
+        )
     }
 
     fn runnable(self) -> bool {
-        matches!(self, Self::Run | Self::Test | Self::Bench)
+        matches!(self, Self::Run | Self::Test | Self::Bench | Self::Serve)
     }
 
     fn testable(self) -> bool {
@@ -103,6 +107,7 @@ impl fmt::Display for CargoCommand {
             Self::Run => write!(f, "run"),
             Self::Test => write!(f, "test"),
             Self::Bench => write!(f, "bench"),
+            Self::Serve => write!(f, "serve"),
             Self::Other => write!(f, "<unknown>"),
         }
     }
@@ -116,6 +121,7 @@ impl From<&str> for CargoCommand {
             "r" | "run" => Self::Run,
             "t" | "test" => Self::Test,
             "bench" => Self::Bench,
+            "serve" => Self::Serve,
             _ => Self::Other,
         }
     }
@@ -171,8 +177,8 @@ pub async fn run_cargo_command(
     );
 
     let mut cargo = Command::new(&cargo_path);
-    if command == CargoCommand::Run {
-        // Treat a run as a build command as we need to componentize the output
+    if matches!(command, CargoCommand::Run | CargoCommand::Serve) {
+        // Treat run and serve as build commands as we need to componentize the output
         cargo.arg("build");
         if let Some(arg) = args.peek() {
             if Some((*arg).as_str()) == subcommand {
@@ -229,7 +235,7 @@ pub async fn run_cargo_command(
     }
 
     let runner = if needs_runner && command.runnable() {
-        Some(get_runner()?)
+        Some(get_runner(command == CargoCommand::Serve)?)
     } else {
         None
     };
@@ -253,7 +259,7 @@ pub async fn run_cargo_command(
     Ok(outputs.into_iter().map(|o| o.path).collect())
 }
 
-fn get_runner() -> Result<PathAndArgs> {
+fn get_runner(serve: bool) -> Result<PathAndArgs> {
     let cargo_config = cargo_config2::Config::load()?;
 
     // We check here before we actually build that a runtime is present.
@@ -267,7 +273,11 @@ fn get_runner() -> Result<PathAndArgs> {
         .unwrap_or_else(|| {
             (
                 PathAndArgs::new("wasmtime")
-                    .args(vec!["-S", "preview2", "-S", "common"])
+                    .args(if serve {
+                        vec!["serve"]
+                    } else {
+                        vec!["-S", "preview2", "-S", "common"]
+                    })
                     .to_owned(),
                 true,
             )
@@ -439,7 +449,8 @@ fn componentize_artifacts(
             };
 
             if command.testable() && artifact.profile.test
-                || (command == CargoCommand::Run && !artifact.profile.test)
+                || (matches!(command, CargoCommand::Run | CargoCommand::Serve)
+                    && !artifact.profile.test)
             {
                 output.display = Some(output_display_name(
                     cargo_metadata,
@@ -525,14 +536,14 @@ fn spawn_outputs(
         })
         .collect::<Vec<_>>();
 
-    if command == CargoCommand::Run && executables.len() > 1 {
+    if matches!(command, CargoCommand::Run | CargoCommand::Serve) && executables.len() > 1 {
         config.terminal().error(
-            "`cargo component run` can run at most one component, but multiple were specified",
+            "`cargo component {command}` can run at most one component, but multiple were specified",
         )
     } else if executables.is_empty() {
         config.terminal().error(format!(
             "a component {ty} target must be available for `cargo component {command}`",
-            ty = if command == CargoCommand::Run {
+            ty = if matches!(command, CargoCommand::Run | CargoCommand::Serve) {
                 "bin"
             } else {
                 "test"
