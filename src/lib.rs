@@ -274,7 +274,7 @@ fn get_runner(serve: bool) -> Result<PathAndArgs> {
             (
                 PathAndArgs::new("wasmtime")
                     .args(if serve {
-                        vec!["serve"]
+                        vec!["serve", "-S", "common", "-S", "http"]
                     } else {
                         vec!["-S", "preview2", "-S", "common"]
                     })
