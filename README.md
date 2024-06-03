@@ -32,6 +32,9 @@ may cause build errors for existing component projects.
 
 1. The `cargo component` subcommand is written in Rust, so you'll want the
   [latest stable Rust installed](https://www.rust-lang.org/tools/install).
+2. `cargo component` requires a working OpenSSL install on Linux. See the installation instructions [here](https://docs.rs/openssl/0.10.64/openssl/index.html#automatic).
+3. `cargo component` also requires a working C toolchain. Make sure to have a
+working `cc` command (or equivalent) for your environment.
 
 ## Installation
 
