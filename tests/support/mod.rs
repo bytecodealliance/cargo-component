@@ -290,14 +290,14 @@ impl Project {
 
     pub fn debug_wasm(&self, name: &str) -> PathBuf {
         self.build_dir()
-            .join("wasm32-wasi")
+            .join("wasm32-wasip1")
             .join("debug")
             .join(format!("{name}.wasm"))
     }
 
     pub fn release_wasm(&self, name: &str) -> PathBuf {
         self.build_dir()
-            .join("wasm32-wasi")
+            .join("wasm32-wasip1")
             .join("release")
             .join(format!("{name}.wasm"))
     }

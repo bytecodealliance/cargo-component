@@ -27,8 +27,8 @@ jobs:
         rustup update stable --no-self-update
         rustup update nightly --no-self-update
         rustup default stable
-        rustup target add wasm32-wasi
-        rustup target add wasm32-wasi --toolchain nightly
+        rustup target add wasm32-wasip1
+        rustup target add wasm32-wasip1 --toolchain nightly
         rustup target add wasm32-unknown-unknown
         rustup component add rustfmt
         rustup component add rustfmt --toolchain nightly
@@ -47,7 +47,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
     - name: Install Rust
-      run: rustup update stable --no-self-update && rustup default stable && rustup target add wasm32-wasi && rustup target add wasm32-unknown-unknown
+      run: rustup update stable --no-self-update && rustup default stable && rustup target add wasm32-wasip1 && rustup target add wasm32-unknown-unknown
     - name: Install cargo-component (debug)
       run: cargo install --locked --debug --path .
     - name: Build the example component

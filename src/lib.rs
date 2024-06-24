@@ -48,7 +48,7 @@ mod registry;
 mod target;
 
 fn is_wasm_target(target: &str) -> bool {
-    target == "wasm32-wasi" || target == "wasm32-unknown-unknown"
+    target == "wasm32-wasi" || target == "wasm32-wasip1" || target == "wasm32-unknown-unknown"
 }
 
 /// Represents a cargo package paired with its component metadata.
@@ -194,9 +194,9 @@ pub async fn run_cargo_command(
     if command.buildable() {
         install_wasm32_wasi(config)?;
 
-        // Add an implicit wasm32-wasi target if there isn't a wasm target present
+        // Add an implicit wasm32-wasip1 target if there isn't a wasm target present
         if !cargo_args.targets.iter().any(|t| is_wasm_target(t)) {
-            cargo.arg("--target").arg("wasm32-wasi");
+            cargo.arg("--target").arg("wasm32-wasip1");
         }
 
         if let Some(format) = &cargo_args.message_format {
@@ -263,11 +263,11 @@ fn get_runner(serve: bool) -> Result<PathAndArgs> {
     let cargo_config = cargo_config2::Config::load()?;
 
     // We check here before we actually build that a runtime is present.
-    // We first check the runner for `wasm32-wasi` in the order from
+    // We first check the runner for `wasm32-wasip1` in the order from
     // cargo's convention for a user-supplied runtime (path or executable)
     // and use the default, namely `wasmtime`, if it is not set.
     let (runner, using_default) = cargo_config
-        .runner(TargetTripleRef::from("wasm32-wasi"))
+        .runner(TargetTripleRef::from("wasm32-wasip1"))
         .unwrap_or_default()
         .map(|runner_override| (runner_override, false))
         .unwrap_or_else(|| {
@@ -294,7 +294,7 @@ fn get_runner(serve: bool) -> Result<PathAndArgs> {
         if !(runner.path.exists() || which::which(&runner.path).is_ok()) {
             bail!(
                 "failed to find `{wasi_runner}` specified by either the `CARGO_TARGET_WASM32_WASI_RUNNER`\
-                environment variable or as the `wasm32-wasi` runner in `.cargo/config.toml`"
+                environment variable or as the `wasm32-wasip1` runner in `.cargo/config.toml`"
             );
         }
     } else if which::which(&runner.path).is_err() {
