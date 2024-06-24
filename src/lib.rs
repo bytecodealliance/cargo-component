@@ -293,7 +293,7 @@ fn get_runner(serve: bool) -> Result<PathAndArgs> {
         // check if the override runner exists
         if !(runner.path.exists() || which::which(&runner.path).is_ok()) {
             bail!(
-                "failed to find `{wasi_runner}` specified by either the `CARGO_TARGET_WASM32_WASI_RUNNER`\
+                "failed to find `{wasi_runner}` specified by either the `CARGO_TARGET_WASM32_WASIP1_RUNNER`\
                 environment variable or as the `wasm32-wasip1` runner in `.cargo/config.toml`"
             );
         }
