@@ -2,7 +2,7 @@
 
 #![deny(missing_docs)]
 
-use crate::target::install_wasm32_wasi;
+use crate::target::install_wasm32_wasip1;
 use anyhow::{bail, Context, Result};
 use bindings::BindingsGenerator;
 use bytes::Bytes;
@@ -192,7 +192,7 @@ pub async fn run_cargo_command(
 
     // Handle the target for buildable commands
     if command.buildable() {
-        install_wasm32_wasi(config)?;
+        install_wasm32_wasip1(config)?;
 
         // Add an implicit wasm32-wasip1 target if there isn't a wasm target present
         if !cargo_args.targets.iter().any(|t| is_wasm_target(t)) {
