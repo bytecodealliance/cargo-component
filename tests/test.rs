@@ -14,7 +14,7 @@ fn it_runs_test_with_command_component() -> Result<()> {
     fs::write(
         project.root().join(".cargo/config.toml"),
         r#"
-[target.wasm32-wasi]
+[target.wasm32-wasip1]
 runner = [
     "wasmtime",
     "-C",

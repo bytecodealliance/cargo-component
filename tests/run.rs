@@ -99,7 +99,7 @@ bindings::export!(Component with_types_in bindings);
     project
         .cargo_component("run")
         .env(
-            "CARGO_TARGET_WASM32_WASI_RUNNER",
+            "CARGO_TARGET_WASM32_WASIP1_RUNNER",
             "wasmtime --env APP_NAME=CargoComponent -C cache=no -W component-model -S preview2 -S common",
         )
         .assert()

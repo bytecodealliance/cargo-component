@@ -142,13 +142,13 @@ Until that time, there's `cargo component`!
 
 ## WASI Support
 
-Currently `cargo component` targets `wasm32-wasi` by default.
+Currently `cargo component` targets `wasm32-wasip1` by default.
 
 As this target is for a _preview1_ release of WASI, the WebAssembly module
 produced by the Rust compiler must be adapted to the _preview2_ version of WASI
 supported by the component model.
 
-The adaptation is automatically performed when `wasm32-wasi` is targeted using
+The adaptation is automatically performed when `wasm32-wasip1` is targeted using
 a built-in WASI adapter snapshotted out of the Wasmtime repository.
 
 You may override the built-in adapter `cargo component` uses by setting the

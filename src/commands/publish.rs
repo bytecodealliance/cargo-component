@@ -17,7 +17,7 @@ pub struct PublishCommand {
     #[clap(flatten)]
     pub common: CommonOptions,
 
-    /// Build for the target triple (defaults to `wasm32-wasi`)
+    /// Build for the target triple (defaults to `wasm32-wasip1`)
     #[clap(long = "target", value_name = "TRIPLE")]
     pub target: Option<String>,
 
