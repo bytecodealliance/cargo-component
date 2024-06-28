@@ -1,8 +1,10 @@
-use crate::support::*;
+use std::fs;
+
 use anyhow::Result;
 use assert_cmd::prelude::*;
 use predicates::str::contains;
-use std::fs;
+
+use crate::support::*;
 
 mod support;
 
@@ -12,7 +14,7 @@ mod support;
     ignore = "test is currently failing in ci and needs to be debugged"
 )]
 fn it_runs_bench_with_basic_component() -> Result<()> {
-    let project = Project::new("foo")?;
+    let project = Project::new("foo", true)?;
 
     fs::write(
         project.root().join("wit/world.wit"),
@@ -69,7 +71,7 @@ fn bench_recursive_fibonacci(b: &mut Bencher) {
     )?;
 
     project
-        .cargo_component("bench")
+        .cargo_component(["bench"])
         .env("RUSTUP_TOOLCHAIN", "nightly")
         .assert()
         .stdout(contains("test bench_recursive_fibonacci ..."))

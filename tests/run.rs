@@ -1,15 +1,17 @@
-use crate::support::*;
+use std::fs;
+
 use anyhow::Result;
 use assert_cmd::prelude::*;
 use predicates::str::contains;
-use std::fs;
 use toml_edit::{value, Item, Table};
+
+use crate::support::*;
 
 mod support;
 
 #[test]
 fn it_runs_with_command_component() -> Result<()> {
-    let project = Project::new_bin("bar")?;
+    let project = Project::new("bar", false)?;
 
     fs::write(
         project.root().join("src/main.rs"),
@@ -22,7 +24,7 @@ fn main() {
     )?;
 
     project
-        .cargo_component("run")
+        .cargo_component(["run"])
         .arg("--")
         .arg("--verbose")
         .assert()
@@ -36,7 +38,7 @@ fn main() {
 
 #[test]
 fn it_runs_with_reactor_component() -> Result<()> {
-    let project = Project::new("baz")?;
+    let project = Project::new("baz", true)?;
     project.update_manifest(|mut doc| {
         let mut dependencies = Table::new();
         dependencies["wasi:cli"]["path"] = value("wit/deps/cli");
@@ -94,7 +96,7 @@ bindings::export!(Component with_types_in bindings);
     )?;
 
     project
-        .cargo_component("run")
+        .cargo_component(["run"])
         .env(
             "CARGO_TARGET_WASM32_WASIP1_RUNNER",
             "wasmtime --env APP_NAME=CargoComponent -C cache=no -W component-model -S preview2 -S cli",

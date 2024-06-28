@@ -1,8 +1,9 @@
-use crate::{load_component_metadata, load_metadata, Config};
 use anyhow::Result;
 use cargo_component_core::command::CommonOptions;
 use clap::Args;
 use std::path::PathBuf;
+
+use crate::{load_component_metadata, load_metadata, Config};
 
 /// Update dependencies as recorded in the component lock file
 #[derive(Args)]
@@ -37,17 +38,17 @@ impl UpdateCommand {
     /// Executes the command.
     pub async fn exec(self) -> Result<()> {
         log::debug!("executing update command");
-        let config = Config::new(self.common.new_terminal())?;
+        let config = Config::new(self.common.new_terminal(), self.common.config)?;
         let metadata = load_metadata(self.manifest_path.as_deref())?;
         let packages = load_component_metadata(&metadata, [].iter(), true)?;
 
-        let network_allowed = !self.frozen && !self.offline;
         let lock_update_allowed = !self.frozen && !self.locked;
+        let client = config.client(self.common.cache_dir).await?;
         crate::update_lockfile(
+            client,
             &config,
             &metadata,
             &packages,
-            network_allowed,
             lock_update_allowed,
             self.locked,
             self.dry_run,

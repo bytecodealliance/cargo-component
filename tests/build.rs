@@ -1,19 +1,21 @@
-use crate::support::*;
+use std::{fs, process::Command, rc::Rc};
+
 use anyhow::{Context, Result};
 use assert_cmd::prelude::*;
 use predicates::{prelude::PredicateBooleanExt, str::contains};
-use std::{fs, process::Command, rc::Rc};
 use tempfile::TempDir;
 use toml_edit::{value, Array, Item, Table};
+
+use crate::support::*;
 
 mod support;
 
 #[test]
 fn it_builds_debug() -> Result<()> {
-    let project = Project::new("foo")?;
+    let project = Project::new("foo", true)?;
 
     project
-        .cargo_component("build")
+        .cargo_component(["build"])
         .assert()
         .stderr(contains(
             "Finished `dev` profile [unoptimized + debuginfo] target(s)",
@@ -31,10 +33,10 @@ fn it_builds_debug() -> Result<()> {
 
 #[test]
 fn it_builds_a_bin_project_with_snake_case() -> Result<()> {
-    let project = Project::new_bin("hello_world")?;
+    let project = Project::new("hello_world", false)?;
 
     project
-        .cargo_component("build --release")
+        .cargo_component(["build", "--release"])
         .assert()
         .stderr(contains("Finished `release` profile [optimized] target(s)"))
         .success();
@@ -46,10 +48,10 @@ fn it_builds_a_bin_project_with_snake_case() -> Result<()> {
 
 #[test]
 fn it_builds_a_bin_project() -> Result<()> {
-    let project = Project::new_bin("foo")?;
+    let project = Project::new("foo", false)?;
 
     project
-        .cargo_component("build --release")
+        .cargo_component(["build", "--release"])
         .assert()
         .stderr(contains("Finished `release` profile [optimized] target(s)"))
         .success();
@@ -62,10 +64,7 @@ fn it_builds_a_bin_project() -> Result<()> {
 #[test]
 fn it_builds_a_workspace() -> Result<()> {
     let dir = Rc::new(TempDir::new()?);
-    let project = Project {
-        dir: dir.clone(),
-        root: dir.path().to_owned(),
-    };
+    let project = Project::new_uninitialized(dir.clone(), dir.path().to_owned());
 
     project.file(
         "baz/Cargo.toml",
@@ -81,13 +80,13 @@ edition = "2021"
     project.file("baz/src/lib.rs", "")?;
 
     project
-        .cargo_component("new --lib foo")
+        .cargo_component(["new", "--lib", "foo"])
         .assert()
         .stderr(contains("Updated manifest of package `foo`"))
         .success();
 
     project
-        .cargo_component("new --lib bar")
+        .cargo_component(["new", "--lib", "bar"])
         .assert()
         .stderr(contains("Updated manifest of package `bar`"))
         .success();
@@ -101,7 +100,7 @@ edition = "2021"
     )?;
 
     project
-        .cargo_component("build")
+        .cargo_component(["build"])
         .assert()
         .stderr(contains(
             "Finished `dev` profile [unoptimized + debuginfo] target(s)",
@@ -116,10 +115,10 @@ edition = "2021"
 
 #[test]
 fn it_supports_wit_keywords() -> Result<()> {
-    let project = Project::new("interface")?;
+    let project = Project::new("interface", true)?;
 
     project
-        .cargo_component("build --release")
+        .cargo_component(["build", "--release"])
         .assert()
         .stderr(contains("Finished `release` profile [optimized] target(s)"))
         .success();
@@ -131,10 +130,10 @@ fn it_supports_wit_keywords() -> Result<()> {
 
 #[test]
 fn it_adds_a_producers_field() -> Result<()> {
-    let project = Project::new("foo")?;
+    let project = Project::new("foo", true)?;
 
     project
-        .cargo_component("build --release")
+        .cargo_component(["build", "--release"])
         .assert()
         .stderr(contains("Finished `release` profile [optimized] target(s)"))
         .success();
@@ -161,10 +160,10 @@ fn it_adds_a_producers_field() -> Result<()> {
 
 #[test]
 fn it_builds_wasm32_unknown_unknown_from_cli() -> Result<()> {
-    let project = Project::new("foo")?;
+    let project = Project::new("foo", true)?;
 
     project
-        .cargo_component("build --target wasm32-unknown-unknown")
+        .cargo_component(["build", "--target", "wasm32-unknown-unknown"])
         .assert()
         .stderr(contains(
             "Finished `dev` profile [unoptimized + debuginfo] target(s)",
@@ -184,7 +183,7 @@ fn it_builds_wasm32_unknown_unknown_from_cli() -> Result<()> {
 
 #[test]
 fn it_builds_wasm32_unknown_unknown_from_config() -> Result<()> {
-    let project = Project::new("foo")?;
+    let project = Project::new("foo", true)?;
 
     project.file(
         ".cargo/config.toml",
@@ -194,7 +193,7 @@ target = "wasm32-unknown-unknown"
     )?;
 
     project
-        .cargo_component("build")
+        .cargo_component(["build"])
         .assert()
         .stderr(contains(
             "Finished `dev` profile [unoptimized + debuginfo] target(s)",
@@ -214,10 +213,10 @@ target = "wasm32-unknown-unknown"
 
 #[test]
 fn it_builds_wasm32_unknown_unknown_from_env() -> Result<()> {
-    let project = Project::new("foo")?;
+    let project = Project::new("foo", true)?;
 
     project
-        .cargo_component("build")
+        .cargo_component(["build"])
         .env("CARGO_BUILD_TARGET", "wasm32-unknown-unknown")
         .assert()
         .stderr(contains(
@@ -238,14 +237,14 @@ fn it_builds_wasm32_unknown_unknown_from_env() -> Result<()> {
 
 #[test]
 fn it_regenerates_target_if_wit_changed() -> Result<()> {
-    let project = Project::new("foo")?;
+    let project = Project::new("foo", true)?;
     project.update_manifest(|mut doc| {
         doc["package"]["metadata"]["component"]["target"]["world"] = value("example");
         Ok(doc)
     })?;
 
     project
-        .cargo_component("build")
+        .cargo_component(["build"])
         .assert()
         .stderr(contains(
             "Finished `dev` profile [unoptimized + debuginfo] target(s)",
@@ -254,16 +253,10 @@ fn it_regenerates_target_if_wit_changed() -> Result<()> {
 
     validate_component(&project.debug_wasm("foo"))?;
 
-    project
-        .cargo_component("build")
-        .assert()
-        .stderr(contains("Generating bindings").not())
-        .success();
-
     fs::write(project.root().join("wit/other.wit"), "world foo {}")?;
 
     project
-        .cargo_component("build")
+        .cargo_component(["build"])
         .assert()
         .stderr(contains("Generating bindings"))
         .success();
@@ -273,7 +266,7 @@ fn it_regenerates_target_if_wit_changed() -> Result<()> {
 
 #[test]
 fn it_builds_with_local_wit_deps() -> Result<()> {
-    let project = Project::new("foo")?;
+    let project = Project::new("foo", true)?;
     project.update_manifest(|mut doc| {
         let mut dependencies = Table::new();
         dependencies["foo:bar"]["path"] = value("wit/deps/foo-bar");
@@ -353,7 +346,7 @@ bindings::export!(Component with_types_in bindings);
     )?;
 
     project
-        .cargo_component("build")
+        .cargo_component(["build"])
         .assert()
         .stderr(contains(
             "Finished `dev` profile [unoptimized + debuginfo] target(s)",
@@ -367,7 +360,7 @@ bindings::export!(Component with_types_in bindings);
 
 #[test]
 fn empty_world_with_dep_valid() -> Result<()> {
-    let project = Project::new("dep")?;
+    let project = Project::new("dep", true)?;
 
     fs::write(
         project.root().join("wit/world.wit"),
@@ -402,12 +395,12 @@ fn empty_world_with_dep_valid() -> Result<()> {
         ",
     )?;
 
-    project.cargo_component("build").assert().success();
+    project.cargo_component(["build"]).assert().success();
 
     let dep = project.debug_wasm("dep");
     validate_component(&dep)?;
 
-    let project = Project::with_dir(project.dir().clone(), "main", "")?;
+    let project = Project::with_dir(project.dir().clone(), "main", true, Vec::<String>::new())?;
     project.update_manifest(|mut doc| {
         let table = doc["package"]["metadata"]["component"]
             .as_table_mut()
@@ -435,7 +428,7 @@ fn empty_world_with_dep_valid() -> Result<()> {
         ",
     )?;
 
-    project.cargo_component("build").assert().success();
+    project.cargo_component(["build"]).assert().success();
     validate_component(&project.debug_wasm("main"))?;
 
     Ok(())
@@ -443,7 +436,7 @@ fn empty_world_with_dep_valid() -> Result<()> {
 
 #[test]
 fn it_builds_with_resources() -> Result<()> {
-    let project = Project::new("foo")?;
+    let project = Project::new("foo", true)?;
 
     fs::write(
         project.root().join("wit/world.wit"),
@@ -501,7 +494,7 @@ fn it_builds_with_resources() -> Result<()> {
         "#,
     )?;
 
-    project.cargo_component("build").assert().success();
+    project.cargo_component(["build"]).assert().success();
 
     let dep = project.debug_wasm("foo");
     validate_component(&dep)?;
@@ -511,7 +504,7 @@ fn it_builds_with_resources() -> Result<()> {
 
 #[test]
 fn it_builds_resources_with_specified_ownership_model() -> Result<()> {
-    let project = Project::new("foo")?;
+    let project = Project::new("foo", true)?;
     project.update_manifest(|mut doc| {
         doc["package"]["metadata"]["component"]["bindings"]["ownership"] =
             value("borrowing-duplicate-if-necessary");
@@ -574,7 +567,7 @@ fn it_builds_resources_with_specified_ownership_model() -> Result<()> {
         "#,
     )?;
 
-    project.cargo_component("build").assert().success();
+    project.cargo_component(["build"]).assert().success();
 
     let dep = project.debug_wasm("foo");
     validate_component(&dep)?;
@@ -584,8 +577,7 @@ fn it_builds_resources_with_specified_ownership_model() -> Result<()> {
 
 #[test]
 fn it_builds_with_a_component_dependency() -> Result<()> {
-    let dir = Rc::new(TempDir::new()?);
-    let comp1 = Project::with_dir(dir.clone(), "comp1", "")?;
+    let comp1 = Project::new("comp1", true)?;
 
     fs::write(
         comp1.root().join("wit/world.wit"),
@@ -642,7 +634,7 @@ bindings::export!(Component with_types_in bindings);
     )?;
 
     comp1
-        .cargo_component("build --release")
+        .cargo_component(["build", "--release"])
         .assert()
         .stderr(contains("Finished `release` profile [optimized] target(s)"))
         .success();
@@ -650,7 +642,7 @@ bindings::export!(Component with_types_in bindings);
     let dep = comp1.release_wasm("comp1");
     validate_component(&dep)?;
 
-    let comp2 = Project::with_dir(dir.clone(), "comp2", "")?;
+    let comp2 = Project::with_dir(comp1.dir.clone(), "comp2", true, Vec::<String>::new())?;
     comp2.update_manifest(|mut doc| {
         doc["package"]["metadata"]["component"]["dependencies"]["my:comp1"]["path"] =
             value(dep.display().to_string());
@@ -689,7 +681,7 @@ bindings::export!(Component with_types_in bindings);
     )?;
 
     comp2
-        .cargo_component("build --release")
+        .cargo_component(["build", "--release"])
         .assert()
         .stderr(contains("Finished `release` profile [optimized] target(s)"))
         .success();
@@ -702,19 +694,19 @@ bindings::export!(Component with_types_in bindings);
 
 #[test]
 fn it_builds_with_adapter() -> Result<()> {
-    let project = Project::new("foo")?;
+    let project = Project::new("foo", true)?;
     project.update_manifest(|mut doc| {
         doc["package"]["metadata"]["component"]["adapter"] = value("not-a-valid-path");
         Ok(doc)
     })?;
 
     project
-        .cargo_component("build")
+        .cargo_component(["build"])
         .assert()
         .stderr(contains("error: failed to read module adapter"))
         .failure();
 
-    let project = Project::new("foo")?;
+    let project = Project::new("foo", true)?;
     let adapter_path = "adapter/wasi_snapshot_preview1.wasm";
     project.file(
         adapter_path,
@@ -726,7 +718,7 @@ fn it_builds_with_adapter() -> Result<()> {
     })?;
 
     project
-        .cargo_component("build")
+        .cargo_component(["build"])
         .assert()
         .stderr(contains(
             "Finished `dev` profile [unoptimized + debuginfo] target(s)",
@@ -740,7 +732,7 @@ fn it_builds_with_adapter() -> Result<()> {
 
 #[test]
 fn it_errors_if_adapter_is_not_wasm() -> Result<()> {
-    let project = Project::new("foo")?;
+    let project = Project::new("foo", true)?;
     project.update_manifest(|mut doc| {
         doc["package"]["metadata"]["component"]["adapter"] = value("foo.wasm");
         Ok(doc)
@@ -749,7 +741,7 @@ fn it_errors_if_adapter_is_not_wasm() -> Result<()> {
     fs::write(project.root().join("foo.wasm"), "not wasm")?;
 
     project
-        .cargo_component("build")
+        .cargo_component(["build"])
         .assert()
         .stderr(contains("error: failed to load adapter module"))
         .failure();
@@ -759,7 +751,7 @@ fn it_errors_if_adapter_is_not_wasm() -> Result<()> {
 
 #[test]
 fn it_adds_additional_derives() -> Result<()> {
-    let project = Project::new("foo")?;
+    let project = Project::new("foo", true)?;
     project.update_manifest(|mut doc| {
         doc["package"]["metadata"]["component"]["bindings"]["derives"] =
             value(Array::from_iter(["serde::Serialize", "serde::Deserialize"]));
@@ -819,7 +811,7 @@ bindings::export!(Component with_types_in bindings);
     )?;
 
     project
-        .cargo_component("build")
+        .cargo_component(["build"])
         .assert()
         .stderr(contains(
             "Finished `dev` profile [unoptimized + debuginfo] target(s)",
@@ -833,7 +825,7 @@ bindings::export!(Component with_types_in bindings);
 
 #[test]
 fn it_builds_with_versioned_wit() -> Result<()> {
-    let project = Project::new("foo")?;
+    let project = Project::new("foo", true)?;
 
     fs::write(
         project.root().join("wit/world.wit"),
@@ -866,7 +858,7 @@ fn it_builds_with_versioned_wit() -> Result<()> {
         "#,
     )?;
 
-    project.cargo_component("build").assert().success();
+    project.cargo_component(["build"]).assert().success();
 
     let dep = project.debug_wasm("foo");
     validate_component(&dep)?;
@@ -876,14 +868,14 @@ fn it_builds_with_versioned_wit() -> Result<()> {
 
 #[test]
 fn it_warns_on_proxy_setting_for_command() -> Result<()> {
-    let project = Project::new_bin("foo")?;
+    let project = Project::new("foo", false)?;
     project.update_manifest(|mut doc| {
         doc["package"]["metadata"]["component"]["proxy"] = value(true);
         Ok(doc)
     })?;
 
     project
-        .cargo_component("build")
+        .cargo_component(["build"])
         .assert()
         .stderr(contains(
             "warning: ignoring `proxy` setting in `Cargo.toml` for command component",
@@ -897,7 +889,7 @@ fn it_warns_on_proxy_setting_for_command() -> Result<()> {
 
 #[test]
 fn it_warns_with_proxy_and_adapter_settings() -> Result<()> {
-    let project = Project::new("foo")?;
+    let project = Project::new("foo", true)?;
     let adapter_path = "adapter/wasi_snapshot_preview1.wasm";
     project.file(
         adapter_path,
@@ -910,7 +902,7 @@ fn it_warns_with_proxy_and_adapter_settings() -> Result<()> {
     })?;
 
     project
-        .cargo_component("build")
+        .cargo_component(["build"])
         .assert()
         .stderr(contains("warning: ignoring `proxy` setting due to `adapter` setting being present in `Cargo.toml`"))
         .success();
@@ -922,11 +914,10 @@ fn it_warns_with_proxy_and_adapter_settings() -> Result<()> {
 
 #[test]
 fn it_builds_with_proxy_adapter() -> Result<()> {
-    let dir = Rc::new(TempDir::new()?);
-    let project = Project::with_dir(dir.clone(), "foo", "--proxy")?;
+    let project = Project::new_with_args("foo", true, ["--proxy"])?;
 
     project
-        .cargo_component("build")
+        .cargo_component(["build"])
         .assert()
         .stderr(contains(
             "Finished `dev` profile [unoptimized + debuginfo] target(s)",
@@ -955,7 +946,7 @@ fn it_does_not_generate_bindings_for_cargo_projects() -> Result<()> {
         cmd.arg(name);
         cmd.assert().stderr(contains("Creating")).success();
 
-        let mut cmd = cargo_component("build");
+        let mut cmd = cargo_component(["build"]);
         cmd.current_dir(dir.path().join(name));
         cmd.assert()
             .stderr(contains("Generating bindings").not())

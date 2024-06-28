@@ -1,10 +1,15 @@
+use std::path::PathBuf;
+
 use anyhow::{bail, Result};
 use cargo_component::{
     commands::{AddCommand, NewCommand, PublishCommand, UpdateCommand},
     config::{CargoArguments, Config},
     load_component_metadata, load_metadata, run_cargo_command,
 };
-use cargo_component_core::terminal::{Color, Terminal, Verbosity};
+use cargo_component_core::{
+    command::{CACHE_DIR_ENV_VAR, CONFIG_FILE_ENV_VAR},
+    terminal::{Color, Terminal, Verbosity},
+};
 use clap::{CommandFactory, Parser};
 
 fn version() -> &'static str {
@@ -144,17 +149,22 @@ async fn main() -> Result<()> {
         _ => {
             // Not a built-in command, run the cargo command
             let cargo_args = CargoArguments::parse()?;
-            let config = Config::new(Terminal::new(
-                if cargo_args.quiet {
-                    Verbosity::Quiet
-                } else {
-                    match cargo_args.verbose {
-                        0 => Verbosity::Normal,
-                        _ => Verbosity::Verbose,
-                    }
-                },
-                cargo_args.color.unwrap_or_default(),
-            ))?;
+            let cache_dir = std::env::var(CACHE_DIR_ENV_VAR).map(PathBuf::from).ok();
+            let config_file = std::env::var(CONFIG_FILE_ENV_VAR).map(PathBuf::from).ok();
+            let config = Config::new(
+                Terminal::new(
+                    if cargo_args.quiet {
+                        Verbosity::Quiet
+                    } else {
+                        match cargo_args.verbose {
+                            0 => Verbosity::Normal,
+                            _ => Verbosity::Verbose,
+                        }
+                    },
+                    cargo_args.color.unwrap_or_default(),
+                ),
+                config_file,
+            )?;
 
             let metadata = load_metadata(cargo_args.manifest_path.as_deref())?;
             let packages = load_component_metadata(
@@ -171,7 +181,9 @@ async fn main() -> Result<()> {
             }
 
             let spawn_args: Vec<_> = std::env::args().skip(1).collect();
+            let client = config.client(cache_dir).await?;
             if let Err(e) = run_cargo_command(
+                client,
                 &config,
                 &metadata,
                 &packages,

@@ -1,16 +1,17 @@
-use crate::support::*;
+use std::fs;
+
 use anyhow::Result;
 use assert_cmd::prelude::*;
 use predicates::{prelude::PredicateBooleanExt, str::contains, Predicate};
-use std::{fs, rc::Rc};
-use tempfile::TempDir;
+
+use crate::support::*;
 
 mod support;
 
 #[test]
 fn help() {
     for arg in ["help update", "update -h", "update --help"] {
-        wit(arg)
+        wit(arg.split_whitespace())
             .assert()
             .stdout(contains("Update dependencies as recorded in the lock file"))
             .success();
@@ -19,7 +20,7 @@ fn help() {
 
 #[test]
 fn it_fails_with_missing_toml_file() -> Result<()> {
-    wit("update")
+    wit(["update"])
         .assert()
         .stderr(contains(
             "error: failed to find configuration file `wit.toml`",
@@ -30,35 +31,33 @@ fn it_fails_with_missing_toml_file() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn update_without_changes_is_a_noop() -> Result<()> {
-    let dir = Rc::new(TempDir::new()?);
-    let (_server, config) = spawn_server(dir.path()).await?;
-    config.write_to_file(&dir.path().join("warg-config.json"))?;
+    let (server, _, _) = spawn_server(Vec::<String>::new()).await?;
 
-    let project = Project::with_dir(dir.clone(), "bar", "")?;
+    let project = server.project("bar", Vec::<String>::new())?;
     project.file("bar.wit", "package test:bar;\n")?;
     project
-        .wit("publish --init")
+        .wit(["publish", "--init"])
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("Published package `test:bar` v0.1.0"))
         .success();
 
-    let project = Project::with_dir(dir.clone(), "baz", "")?;
+    let project = server.project("baz", Vec::<String>::new())?;
     project.file("baz.wit", "package test:baz;\n")?;
     project
-        .wit("add test:bar")
+        .wit(["add", "test:bar"])
         .assert()
         .stderr(contains("Added dependency `test:bar` with version `0.1.0"))
         .success();
 
     project
-        .wit("build")
+        .wit(["build"])
         .assert()
         .success()
         .stderr(contains("Created package `baz.wasm`"));
 
     project
-        .wit("update")
+        .wit(["update"])
         .assert()
         .success()
         .stderr(contains("test:bar").not());
@@ -68,47 +67,46 @@ async fn update_without_changes_is_a_noop() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn test_update_without_compatible_changes_is_a_noop() -> Result<()> {
-    let dir = Rc::new(TempDir::new()?);
-    let (_server, config) = spawn_server(dir.path()).await?;
-    config.write_to_file(&dir.path().join("warg-config.json"))?;
+    let (server, _, _) = spawn_server(Vec::<String>::new()).await?;
 
-    let project = Project::with_dir(dir.clone(), "bar", "")?;
-    project.file("bar.wit", "package test:bar;\n")?;
-    project
-        .wit("publish --init")
+    let project1 = server.project("bar", Vec::<String>::new())?;
+    project1.file("bar.wit", "package test:bar;\n")?;
+
+    project1
+        .wit(["publish", "--init"])
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("Published package `test:bar` v0.1.0"))
         .success();
 
-    let project = Project::with_dir(dir.clone(), "baz", "")?;
-    project.file("baz.wit", "package test:baz;\n")?;
-    project
-        .wit("add test:bar")
+    let project2 = server.project("baz", Vec::<String>::new())?;
+    project2.file("baz.wit", "package test:baz;\n")?;
+    project2
+        .wit(["add", "test:bar"])
         .assert()
         .stderr(contains("Added dependency `test:bar` with version `0.1.0"))
         .success();
 
-    project
-        .wit("build")
+    project2
+        .wit(["build"])
         .assert()
         .success()
         .stderr(contains("Created package `baz.wasm`"));
 
-    fs::write(
-        dir.path().join("bar/wit.toml"),
+    project1.file(
+        "wit.toml",
         "version = \"1.0.0\"\n[dependencies]\n[registries]\n",
     )?;
 
-    wit("publish")
+    project1
+        .wit(["publish"])
         .env("WIT_PUBLISH_KEY", test_signing_key())
-        .current_dir(dir.path().join("bar"))
         .assert()
         .stderr(contains("Published package `test:bar` v1.0.0"))
         .success();
 
-    project
-        .wit("update")
+    project2
+        .wit(["update"])
         .assert()
         .success()
         .stderr(contains("test:bar").not());
@@ -118,57 +116,55 @@ async fn test_update_without_compatible_changes_is_a_noop() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn update_with_compatible_changes() -> Result<()> {
-    let dir = Rc::new(TempDir::new()?);
-    let (_server, config) = spawn_server(dir.path()).await?;
-    config.write_to_file(&dir.path().join("warg-config.json"))?;
+    let (server, _, _) = spawn_server(Vec::<String>::new()).await?;
 
-    let project = Project::with_dir(dir.clone(), "bar", "")?;
-    project.file("bar.wit", "package test:bar;\n")?;
-    project.file(
+    let project1 = server.project("bar", Vec::<String>::new())?;
+    project1.file("bar.wit", "package test:bar;\n")?;
+    project1.file(
         "wit.toml",
         "version = \"1.0.0\"\n[dependencies]\n[registries]\n",
     )?;
 
-    project
-        .wit("publish --init")
+    project1
+        .wit(["publish", "--init"])
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("Published package `test:bar` v1.0.0"))
         .success();
 
-    let project = Project::with_dir(dir.clone(), "baz", "")?;
-    project.file("baz.wit", "package test:baz;\n")?;
-    project
-        .wit("add test:bar")
+    let project2 = server.project("baz", Vec::<String>::new())?;
+    project2.file("baz.wit", "package test:baz;\n")?;
+    project2
+        .wit(["add", "test:bar"])
         .assert()
         .stderr(contains("Added dependency `test:bar` with version `1.0.0"))
         .success();
 
-    project
-        .wit("build")
+    project2
+        .wit(["build"])
         .assert()
         .success()
         .stderr(contains("Created package `baz.wasm`"));
 
-    fs::write(
-        dir.path().join("bar/wit.toml"),
+    project1.file(
+        "wit.toml",
         "version = \"1.1.0\"\n[dependencies]\n[registries]\n",
     )?;
 
-    wit("publish")
+    project1
+        .wit(["publish"])
         .env("WIT_PUBLISH_KEY", test_signing_key())
-        .current_dir(dir.path().join("bar"))
         .assert()
         .stderr(contains("Published package `test:bar` v1.1.0"))
         .success();
 
-    project
-        .wit("update")
+    project2
+        .wit(["update"])
         .assert()
         .success()
         .stderr(contains("Updating dependency `test:bar` v1.0.0 -> v1.1.0"));
 
-    let lock_file = fs::read_to_string(project.root().join("wit.lock"))?;
+    let lock_file = fs::read_to_string(project2.root().join("wit.lock"))?;
     assert!(contains("version = \"1.1.0\"").eval(&lock_file));
 
     Ok(())
@@ -176,57 +172,59 @@ async fn update_with_compatible_changes() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn update_with_compatible_changes_is_noop_for_dryrun() -> Result<()> {
-    let dir = Rc::new(TempDir::new()?);
-    let (_server, config) = spawn_server(dir.path()).await?;
-    config.write_to_file(&dir.path().join("warg-config.json"))?;
+    let (server, _, _) = spawn_server(Vec::<String>::new()).await?;
 
-    let project = Project::with_dir(dir.clone(), "bar", "")?;
-    project.file("bar.wit", "package test:bar;\n")?;
-    project.file(
+    let project1 = server.project("bar", Vec::<String>::new())?;
+    project1.file("bar.wit", "package test:bar;\n")?;
+    project1.file(
         "wit.toml",
         "version = \"1.0.0\"\n[dependencies]\n[registries]\n",
     )?;
 
-    project
-        .wit("publish --init")
+    project1
+        .wit(["publish", "--init"])
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("Published package `test:bar` v1.0.0"))
         .success();
 
-    let project = Project::with_dir(dir.clone(), "baz", "")?;
-    project.file("baz.wit", "package test:baz;\n")?;
-    project
-        .wit("add test:bar")
+    let project2 = server.project("baz", Vec::<String>::new())?;
+    project2.file("baz.wit", "package test:baz;\n")?;
+    project2
+        .wit(["add", "test:bar"])
         .assert()
         .stderr(contains("Added dependency `test:bar` with version `1.0.0"))
         .success();
 
-    project
-        .wit("build")
+    project2
+        .wit(["build"])
         .assert()
         .success()
         .stderr(contains("Created package `baz.wasm`"));
 
-    fs::write(
-        dir.path().join("bar/wit.toml"),
+    project1.file(
+        "wit.toml",
         "version = \"1.1.0\"\n[dependencies]\n[registries]\n",
     )?;
 
-    wit("publish")
+    project1
+        .wit(["publish"])
         .env("WIT_PUBLISH_KEY", test_signing_key())
-        .current_dir(dir.path().join("bar"))
         .assert()
         .stderr(contains("Published package `test:bar` v1.1.0"))
         .success();
 
-    project.wit("update --dry-run").assert().success().stderr(
-        contains("Would update dependency `test:bar` v1.0.0 -> v1.1.0").and(contains(
-            "warning: not updating lock file due to --dry-run option",
-        )),
-    );
+    project2
+        .wit(["update", "--dry-run"])
+        .assert()
+        .success()
+        .stderr(
+            contains("Would update dependency `test:bar` v1.0.0 -> v1.1.0").and(contains(
+                "warning: not updating lock file due to --dry-run option",
+            )),
+        );
 
-    let lock_file = fs::read_to_string(project.root().join("wit.lock"))?;
+    let lock_file = fs::read_to_string(project2.root().join("wit.lock"))?;
     assert!(contains("version = \"1.1.0\"").not().eval(&lock_file));
 
     Ok(())
@@ -234,11 +232,9 @@ async fn update_with_compatible_changes_is_noop_for_dryrun() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn update_with_changed_dependencies() -> Result<()> {
-    let dir = Rc::new(TempDir::new()?);
-    let (_server, config) = spawn_server(dir.path()).await?;
-    config.write_to_file(&dir.path().join("warg-config.json"))?;
+    let (server, _, _) = spawn_server(Vec::<String>::new()).await?;
 
-    let project = Project::with_dir(dir.clone(), "bar", "")?;
+    let project = server.project("bar", Vec::<String>::new())?;
     project.file("bar.wit", "package test:bar;\n")?;
     project.file(
         "wit.toml",
@@ -246,13 +242,13 @@ async fn update_with_changed_dependencies() -> Result<()> {
     )?;
 
     project
-        .wit("publish --init")
+        .wit(["publish", "--init"])
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("Published package `test:bar` v1.0.0"))
         .success();
 
-    let project = Project::with_dir(dir.clone(), "baz", "")?;
+    let project = server.project("baz", Vec::<String>::new())?;
     project.file("baz.wit", "package test:baz;\n")?;
     project.file(
         "wit.toml",
@@ -260,22 +256,22 @@ async fn update_with_changed_dependencies() -> Result<()> {
     )?;
 
     project
-        .wit("publish --init")
+        .wit(["publish", "--init"])
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("Published package `test:baz` v1.0.0"))
         .success();
 
-    let project = Project::with_dir(dir.clone(), "qux", "")?;
+    let project = server.project("qux", Vec::<String>::new())?;
     project.file("qux.wit", "package test:qux;\n")?;
     project
-        .wit("add test:bar")
+        .wit(["add", "test:bar"])
         .assert()
         .stderr(contains("Added dependency `test:bar` with version `1.0.0"))
         .success();
 
     project
-        .wit("build")
+        .wit(["build"])
         .assert()
         .stderr(contains("Created package `qux.wasm`"))
         .success();
@@ -286,7 +282,7 @@ async fn update_with_changed_dependencies() -> Result<()> {
     )?;
 
     project
-        .wit("update")
+        .wit(["update"])
         .assert()
         .stderr(
             contains("Removing dependency `test:bar` v1.0.0")
@@ -295,7 +291,7 @@ async fn update_with_changed_dependencies() -> Result<()> {
         .success();
 
     project
-        .wit("build")
+        .wit(["build"])
         .assert()
         .stderr(contains("Created package `qux.wasm`"))
         .success();

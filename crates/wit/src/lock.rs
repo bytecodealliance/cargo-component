@@ -1,4 +1,5 @@
 //! Module for the lock file implementation.
+use std::{collections::HashMap, path::Path};
 
 use anyhow::Result;
 use cargo_component_core::{
@@ -7,9 +8,7 @@ use cargo_component_core::{
     terminal::{Colors, Terminal},
 };
 use semver::Version;
-use std::{collections::HashMap, path::Path};
-use warg_crypto::hash::AnyHash;
-use warg_protocol::registry::PackageName;
+use wasm_pkg_client::{ContentDigest, PackageRef};
 
 /// The name of the lock file.
 pub const LOCK_FILE_NAME: &str = "wit.lock";
@@ -57,8 +56,8 @@ pub(crate) fn acquire_lock_file_rw(terminal: &Terminal, config_path: &Path) -> R
 
 /// Constructs a `LockFile` from a `DependencyResolutionMap`.
 pub fn to_lock_file(map: &DependencyResolutionMap) -> LockFile {
-    type PackageKey = (PackageName, Option<String>);
-    type VersionsMap = HashMap<String, (Version, AnyHash)>;
+    type PackageKey = (PackageRef, Option<String>);
+    type VersionsMap = HashMap<String, (Version, ContentDigest)>;
     let mut packages: HashMap<PackageKey, VersionsMap> = HashMap::new();
 
     for resolution in map.values() {

@@ -1,21 +1,15 @@
 //! Module for bindings generation.
-
-use crate::{
-    last_modified_time,
-    metadata::{ComponentMetadata, Ownership},
-    registry::PackageDependencyResolution,
+use std::{
+    collections::{HashMap, HashSet},
+    path::{Path, PathBuf},
 };
+
 use anyhow::{bail, Context, Result};
 use cargo_component_core::registry::DecodedDependency;
 use heck::ToKebabCase;
 use indexmap::{IndexMap, IndexSet};
 use semver::Version;
-use std::{
-    collections::{HashMap, HashSet},
-    path::{Path, PathBuf},
-    time::SystemTime,
-};
-use warg_protocol::registry;
+use wasm_pkg_client::PackageRef;
 use wit_bindgen_core::Files;
 use wit_bindgen_rust::Opts;
 use wit_component::DecodedWasm;
@@ -23,6 +17,8 @@ use wit_parser::{
     Interface, Package, PackageName, Resolve, Type, TypeDefKind, TypeOwner, UnresolvedPackage,
     World, WorldId, WorldItem, WorldKey,
 };
+
+use crate::{metadata::Ownership, registry::PackageDependencyResolution};
 
 // Used to format `unlocked-dep` import names for dependencies on
 // other components.
@@ -63,7 +59,6 @@ pub struct BindingsGenerator<'a> {
     resolution: &'a PackageDependencyResolution<'a>,
     resolve: Resolve,
     world: WorldId,
-    source_files: Vec<PathBuf>,
 }
 
 impl<'a> BindingsGenerator<'a> {
@@ -71,74 +66,28 @@ impl<'a> BindingsGenerator<'a> {
     /// and package dependency resolution.
     ///
     /// Returns a tuple of the bindings generator and a map of import names.
-    pub fn new(
+    pub async fn new(
         resolution: &'a PackageDependencyResolution<'a>,
     ) -> Result<Option<(Self, HashMap<String, String>)>> {
         let mut import_name_map = Default::default();
-        match Self::create_target_world(resolution, &mut import_name_map).with_context(|| {
-            format!(
-                "failed to create a target world for package `{name}` ({path})",
-                name = resolution.metadata.name,
-                path = resolution.metadata.manifest_path.display()
-            )
-        })? {
-            Some((resolve, world, source_files)) => Ok(Some((
+        match Self::create_target_world(resolution, &mut import_name_map)
+            .await
+            .with_context(|| {
+                format!(
+                    "failed to create a target world for package `{name}` ({path})",
+                    name = resolution.metadata.name,
+                    path = resolution.metadata.manifest_path.display()
+                )
+            })? {
+            Some((resolve, world, _)) => Ok(Some((
                 Self {
                     resolution,
                     resolve,
                     world,
-                    source_files,
                 },
                 import_name_map,
             ))),
             None => Ok(None),
-        }
-    }
-
-    /// Gets the cargo metadata for the package that the bindings are for.
-    pub fn metadata(&self) -> &ComponentMetadata {
-        self.resolution.metadata
-    }
-
-    /// Gets the reason for generating the bindings.
-    ///
-    /// If this returns `Ok(None)`, then the bindings are up-to-date and
-    /// do not need to be regenerated.
-    pub fn reason(
-        &self,
-        last_modified_exe: SystemTime,
-        last_modified_output: Option<SystemTime>,
-    ) -> Result<Option<&'static str>> {
-        let last_modified_output = match last_modified_output {
-            Some(time) => time,
-            None => return Ok(Some("the bindings have not been generated yet")),
-        };
-
-        let metadata = self.metadata();
-        let exe_modified = last_modified_exe > last_modified_output;
-        let manifest_modified = metadata.modified_at > last_modified_output;
-        let target_modified = if let Some(path) = metadata.target_path() {
-            last_modified_time(&path)? > last_modified_output
-        } else {
-            false
-        };
-
-        if exe_modified
-            || manifest_modified
-            || target_modified
-            || self.dependencies_are_newer(last_modified_output)?
-        {
-            Ok(Some(if manifest_modified {
-                "the manifest was modified"
-            } else if target_modified {
-                "the target WIT package was modified"
-            } else if exe_modified {
-                "the cargo-component executable was modified"
-            } else {
-                "a dependency was modified"
-            }))
-        } else {
-            Ok(None)
         }
     }
 
@@ -196,32 +145,8 @@ impl<'a> BindingsGenerator<'a> {
         Ok(sources[0].to_string())
     }
 
-    fn dependencies_are_newer(&self, last_modified_output: SystemTime) -> Result<bool> {
-        for dep in &self.source_files {
-            if last_modified_time(dep)? > last_modified_output {
-                log::debug!(
-                    "target source file `{path}` has been modified",
-                    path = dep.display()
-                );
-                return Ok(true);
-            }
-        }
-
-        for (_, dep) in self.resolution.all() {
-            if last_modified_time(dep.path())? > last_modified_output {
-                log::debug!(
-                    "dependency `{path}` has been modified",
-                    path = dep.path().display()
-                );
-                return Ok(true);
-            }
-        }
-
-        Ok(false)
-    }
-
-    fn create_target_world(
-        resolution: &PackageDependencyResolution,
+    async fn create_target_world(
+        resolution: &PackageDependencyResolution<'_>,
         import_name_map: &mut HashMap<String, String>,
     ) -> Result<Option<(Resolve, WorldId, Vec<PathBuf>)>> {
         log::debug!(
@@ -233,16 +158,17 @@ impl<'a> BindingsGenerator<'a> {
         // A flag used to determine whether the target is empty. It must meet two conditions:
         // no wit files and no dependencies.
         let mut empty_target = false;
-        let (mut merged, world_id, source_files) =
-            if let Some(name) = resolution.metadata.target_package() {
-                Self::target_package(resolution, name, resolution.metadata.target_world())?
-            } else if let Some(path) = resolution.metadata.target_path() {
-                Self::target_local_path(resolution, &path, resolution.metadata.target_world())?
-            } else {
-                empty_target = true;
-                let (merged, world) = Self::target_empty_world(resolution);
-                (merged, world, Vec::new())
-            };
+        let (mut merged, world_id, source_files) = if let Some(name) =
+            resolution.metadata.target_package()
+        {
+            Self::target_package(resolution, name, resolution.metadata.target_world()).await?
+        } else if let Some(path) = resolution.metadata.target_path() {
+            Self::target_local_path(resolution, &path, resolution.metadata.target_world()).await?
+        } else {
+            empty_target = true;
+            let (merged, world) = Self::target_empty_world(resolution);
+            (merged, world, Vec::new())
+        };
 
         // Merge all component dependencies as interface imports
         for (id, dependency) in &resolution.resolutions {
@@ -250,7 +176,8 @@ impl<'a> BindingsGenerator<'a> {
             empty_target = false;
 
             let (mut resolve, component_world_id) = dependency
-                .decode()?
+                .decode()
+                .await?
                 .into_component_world()
                 .with_context(|| format!("failed to decode component dependency `{id}`"))?;
 
@@ -282,9 +209,9 @@ impl<'a> BindingsGenerator<'a> {
         Ok(Some((merged, world_id, source_files)))
     }
 
-    fn target_package(
-        resolution: &PackageDependencyResolution,
-        name: &registry::PackageName,
+    async fn target_package(
+        resolution: &PackageDependencyResolution<'_>,
+        name: &PackageRef,
         world: Option<&str>,
     ) -> Result<(Resolve, WorldId, Vec<PathBuf>)> {
         // We must have resolved a target package dependency at this point
@@ -292,12 +219,13 @@ impl<'a> BindingsGenerator<'a> {
 
         // Decode the target package dependency
         let dependency = resolution.target_resolutions.values().next().unwrap();
-        let (resolve, pkg, source_files) = dependency.decode()?.resolve().with_context(|| {
-            format!(
-                "failed to resolve target package `{name}`",
-                name = dependency.name()
-            )
-        })?;
+        let (resolve, pkg, source_files) =
+            dependency.decode().await?.resolve().with_context(|| {
+                format!(
+                    "failed to resolve target package `{name}`",
+                    name = dependency.name()
+                )
+            })?;
 
         let world = resolve
             .select_world(pkg, world)
@@ -306,8 +234,8 @@ impl<'a> BindingsGenerator<'a> {
         Ok((resolve, world, source_files))
     }
 
-    fn target_local_path(
-        resolution: &PackageDependencyResolution,
+    async fn target_local_path(
+        resolution: &PackageDependencyResolution<'_>,
         path: &Path,
         world: Option<&str>,
     ) -> Result<(Resolve, WorldId, Vec<PathBuf>)> {
@@ -316,7 +244,7 @@ impl<'a> BindingsGenerator<'a> {
         // Start by decoding all of the target dependencies
         let mut deps = IndexMap::new();
         for (id, resolution) in &resolution.target_resolutions {
-            let decoded = resolution.decode()?;
+            let decoded = resolution.decode().await?;
             let name = decoded.package_name();
 
             if let Some(prev) = deps.insert(name.clone(), decoded) {

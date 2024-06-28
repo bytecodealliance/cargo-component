@@ -1,18 +1,20 @@
-use crate::support::*;
+use std::{fmt::Write, fs, rc::Rc};
+
 use anyhow::Result;
 use assert_cmd::prelude::*;
 use predicates::{boolean::PredicateBooleanExt, str::contains};
-use std::{fmt::Write, fs, rc::Rc};
 use tempfile::TempDir;
+
+use crate::support::*;
 
 mod support;
 
 #[test]
 fn it_checks_a_new_project() -> Result<()> {
-    let project = Project::new("foo")?;
+    let project = Project::new("foo", true)?;
 
     project
-        .cargo_component("clippy")
+        .cargo_component(["clippy"])
         .assert()
         .stderr(contains("Checking foo v0.1.0"))
         .success();
@@ -22,7 +24,7 @@ fn it_checks_a_new_project() -> Result<()> {
 
 #[test]
 fn it_finds_errors() -> Result<()> {
-    let project = Project::new("foo")?;
+    let project = Project::new("foo", true)?;
 
     let mut src = fs::read_to_string(project.root().join("src/lib.rs"))?;
     write!(&mut src, "\n\nfn foo() -> String {{\n  \"foo\"\n}}\n")?;
@@ -30,7 +32,7 @@ fn it_finds_errors() -> Result<()> {
     fs::write(project.root().join("src/lib.rs"), src)?;
 
     project
-        .cargo_component("clippy")
+        .cargo_component(["clippy"])
         .assert()
         .stderr(contains("Checking foo v0.1.0").and(contains("expected `String`, found `&str`")))
         .failure();
@@ -40,7 +42,7 @@ fn it_finds_errors() -> Result<()> {
 
 #[test]
 fn it_finds_clippy_warnings() -> Result<()> {
-    let project = Project::new("foo")?;
+    let project = Project::new("foo", true)?;
 
     let mut src = fs::read_to_string(project.root().join("src/lib.rs"))?;
     write!(
@@ -51,7 +53,7 @@ fn it_finds_clippy_warnings() -> Result<()> {
     fs::write(project.root().join("src/lib.rs"), src)?;
 
     project
-        .cargo_component("clippy")
+        .cargo_component(["clippy"])
         .assert()
         .stderr(contains("Checking foo v0.1.0").and(contains("clippy::needless_return")))
         .success();
@@ -62,10 +64,8 @@ fn it_finds_clippy_warnings() -> Result<()> {
 #[test]
 fn it_checks_a_workspace() -> Result<()> {
     let dir = Rc::new(TempDir::new()?);
-    let project = Project {
-        dir: dir.clone(),
-        root: dir.path().to_owned(),
-    };
+    let root = dir.path().to_owned();
+    let project = Project::new_uninitialized(dir, root);
 
     project.file(
         "baz/Cargo.toml",
@@ -81,13 +81,13 @@ edition = "2021"
     project.file("baz/src/lib.rs", "")?;
 
     project
-        .cargo_component("new --lib foo")
+        .cargo_component(["new", "--lib", "foo"])
         .assert()
         .stderr(contains("Updated manifest of package `foo`"))
         .success();
 
     project
-        .cargo_component("new --lib bar")
+        .cargo_component(["new", "--lib", "bar"])
         .assert()
         .stderr(contains("Updated manifest of package `bar`"))
         .success();
@@ -101,7 +101,7 @@ members = ["foo", "bar", "baz"]
     )?;
 
     project
-        .cargo_component("clippy")
+        .cargo_component(["clippy"])
         .assert()
         .stderr(contains("Checking foo v0.1.0").and(contains("Checking bar v0.1.0")))
         .success();

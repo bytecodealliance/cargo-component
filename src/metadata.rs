@@ -1,4 +1,11 @@
 //! Module for component metadata representation in `Cargo.toml`.
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    path::{Path, PathBuf},
+    str::FromStr,
+    time::SystemTime,
+};
 
 use anyhow::{bail, Context, Result};
 use cargo_component_core::registry::{Dependency, RegistryPackage};
@@ -9,15 +16,8 @@ use serde::{
     Deserialize,
 };
 use serde_json::from_value;
-use std::{
-    borrow::Cow,
-    collections::HashMap,
-    path::{Path, PathBuf},
-    str::FromStr,
-    time::SystemTime,
-};
 use url::Url;
-use warg_protocol::registry::PackageName;
+use wasm_pkg_client::PackageRef;
 
 /// The default directory to look for a target WIT file.
 pub const DEFAULT_WIT_DIR: &str = "wit";
@@ -133,7 +133,7 @@ pub enum Target {
     /// The target is a world from a registry package.
     Package {
         /// The name of the target package (e.g. `wasi:http`).
-        name: PackageName,
+        name: PackageRef,
         /// The registry package being targeted.
         package: RegistryPackage,
         /// The name of the world being targeted.
@@ -158,13 +158,13 @@ pub enum Target {
         /// [select-world]: https://docs.rs/wit-parser/latest/wit_parser/struct.Resolve.html#method.select_world
         world: Option<String>,
         /// The dependencies of the wit document being targeted.
-        dependencies: HashMap<PackageName, Dependency>,
+        dependencies: HashMap<PackageRef, Dependency>,
     },
 }
 
 impl Target {
     /// Gets the dependencies of the target.
-    pub fn dependencies(&self) -> Cow<HashMap<PackageName, Dependency>> {
+    pub fn dependencies(&self) -> Cow<HashMap<PackageRef, Dependency>> {
         match self {
             Self::Package { name, package, .. } => Cow::Owned(HashMap::from_iter([(
                 name.clone(),
@@ -260,7 +260,7 @@ impl<'de> Deserialize<'de> for Target {
                     world: Option<String>,
                     registry: Option<String>,
                     path: Option<PathBuf>,
-                    dependencies: HashMap<PackageName, Dependency>,
+                    dependencies: HashMap<PackageRef, Dependency>,
                 }
 
                 let entry = Entry::deserialize(MapAccessDeserializer::new(map))?;
@@ -320,13 +320,13 @@ impl<'de> Deserialize<'de> for Target {
 #[serde(default, deny_unknown_fields)]
 pub struct ComponentSection {
     /// The package name of the component, for publishing.
-    pub package: Option<PackageName>,
+    pub package: Option<PackageRef>,
     /// The world targeted by the component.
     pub target: Target,
     /// The path to the WASI adapter to use.
     pub adapter: Option<PathBuf>,
     /// The dependencies of the component.
-    pub dependencies: HashMap<PackageName, Dependency>,
+    pub dependencies: HashMap<PackageRef, Dependency>,
     /// The registries to use for the component.
     pub registries: HashMap<String, Url>,
     /// The configuration for bindings generation.
@@ -433,7 +433,7 @@ impl ComponentMetadata {
     /// Gets the target package name.
     ///
     /// Returns `None` if the target is not a registry package.
-    pub fn target_package(&self) -> Option<&PackageName> {
+    pub fn target_package(&self) -> Option<&PackageRef> {
         match &self.section.target {
             Target::Package { name, .. } => Some(name),
             _ => None,

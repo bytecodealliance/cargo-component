@@ -1,15 +1,17 @@
-use crate::support::*;
+use std::fs;
+
 use anyhow::{Context, Result};
 use assert_cmd::prelude::*;
 use predicates::str::contains;
-use std::fs;
+
+use crate::support::*;
 
 mod support;
 
 #[test]
 fn help() {
     for arg in ["help build", "build -h", "build --help"] {
-        wit(arg)
+        wit(arg.split_whitespace())
             .assert()
             .stdout(contains("Build a binary WIT package"))
             .success();
@@ -18,7 +20,7 @@ fn help() {
 
 #[test]
 fn it_fails_with_missing_toml_file() -> Result<()> {
-    wit("build")
+    wit(["build"])
         .assert()
         .stderr(contains(
             "error: failed to find configuration file `wit.toml`",
@@ -46,7 +48,7 @@ world baz-world {}
     )?;
 
     project
-        .wit("build")
+        .wit(["build"])
         .assert()
         .stderr(contains("Created package `bar.wasm`"))
         .success();
@@ -74,7 +76,7 @@ fn it_adds_a_producers_field() -> Result<()> {
     project.file("producers.wit", "package test:producers;")?;
 
     project
-        .wit("build")
+        .wit(["build"])
         .assert()
         .stderr(contains("Created package `producers.wasm`"))
         .success();

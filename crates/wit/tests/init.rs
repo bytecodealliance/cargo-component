@@ -1,16 +1,18 @@
-use crate::support::*;
+use std::{fs, path::Path};
+
 use anyhow::Result;
 use assert_cmd::prelude::*;
 use predicates::str::contains;
-use std::{fs, path::Path};
 use tempfile::TempDir;
+
+use crate::support::*;
 
 mod support;
 
 #[test]
 fn help() {
     for arg in ["help init", "init -h", "init --help"] {
-        wit(arg)
+        wit(arg.split_whitespace())
             .assert()
             .stdout(contains("Initialize a new WIT package"))
             .success();
@@ -21,7 +23,7 @@ fn help() {
 fn it_creates_the_expected_files() -> Result<()> {
     let dir = TempDir::new()?;
 
-    wit("init foo")
+    wit(["init", "foo"])
         .current_dir(dir.path())
         .assert()
         .stderr(contains(format!(
@@ -40,7 +42,7 @@ fn it_creates_the_expected_files() -> Result<()> {
 fn it_supports_registry_option() -> Result<()> {
     let dir = TempDir::new()?;
 
-    wit("init bar --registry https://example.com")
+    wit(["init", "bar", "--registry", "https://example.com"])
         .current_dir(dir.path())
         .assert()
         .stderr(contains(format!(

@@ -1,11 +1,14 @@
+use std::{fs, path::PathBuf};
+
+use anyhow::{Context, Result};
+use cargo_component_core::{cache_dir, command::CommonOptions};
+use clap::Args;
+use wasm_pkg_client::caching::FileCache;
+
 use crate::{
     build_wit_package,
     config::{Config, CONFIG_FILE_NAME},
 };
-use anyhow::{Context, Result};
-use cargo_component_core::command::CommonOptions;
-use clap::Args;
-use std::{fs, path::PathBuf};
 
 /// Build a binary WIT package.
 #[derive(Args)]
@@ -28,10 +31,19 @@ impl BuildCommand {
         let (config, config_path) = Config::from_default_file()?
             .with_context(|| format!("failed to find configuration file `{CONFIG_FILE_NAME}`"))?;
 
-        let warg_config = warg_client::Config::from_default_file()?.unwrap_or_default();
-
         let terminal = self.common.new_terminal();
-        let (id, bytes) = build_wit_package(&config, &config_path, &warg_config, &terminal).await?;
+        let pkg_config = if let Some(config_file) = self.common.config {
+            wasm_pkg_client::Config::from_file(&config_file).context(format!(
+                "failed to load configuration file from {}",
+                config_file.display()
+            ))?
+        } else {
+            wasm_pkg_client::Config::global_defaults()?
+        };
+        let file_cache = FileCache::new(cache_dir(self.common.cache_dir)?).await?;
+
+        let (id, bytes) =
+            build_wit_package(&config, &config_path, pkg_config, &terminal, file_cache).await?;
 
         let output = self
             .output

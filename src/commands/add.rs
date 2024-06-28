@@ -1,9 +1,9 @@
-use crate::{
-    config::CargoPackageSpec,
-    load_component_metadata, load_metadata,
-    metadata::{ComponentMetadata, Target},
-    Config, PackageComponentMetadata,
+use std::{
+    fs,
+    path::{Path, PathBuf},
+    sync::Arc,
 };
+
 use anyhow::{bail, Context, Result};
 use cargo_component_core::{
     command::CommonOptions,
@@ -13,12 +13,18 @@ use cargo_component_core::{
 use cargo_metadata::Package;
 use clap::Args;
 use semver::VersionReq;
-use std::{
-    fs,
-    path::{Path, PathBuf},
-};
 use toml_edit::{value, DocumentMut, InlineTable, Item, Table, Value};
-use warg_protocol::registry::PackageName;
+use wasm_pkg_client::{
+    caching::{CachingClient, FileCache},
+    PackageRef,
+};
+
+use crate::{
+    config::CargoPackageSpec,
+    load_component_metadata, load_metadata,
+    metadata::{ComponentMetadata, Target},
+    Config, PackageComponentMetadata,
+};
 
 /// Add a dependency for a WebAssembly component
 #[derive(Args)]
@@ -46,7 +52,7 @@ pub struct AddCommand {
 
     /// The name of the dependency to use; defaults to the package name.
     #[clap(long, value_name = "NAME")]
-    pub name: Option<PackageName>,
+    pub name: Option<PackageRef>,
 
     /// The name of the package to add a dependency to.
     #[clap(value_name = "PACKAGE")]
@@ -64,8 +70,10 @@ pub struct AddCommand {
 impl AddCommand {
     /// Executes the command
     pub async fn exec(self) -> Result<()> {
-        let config = Config::new(self.common.new_terminal())?;
+        let config = Config::new(self.common.new_terminal(), self.common.config.clone())?;
         let metadata = load_metadata(self.manifest_path.as_deref())?;
+
+        let client = config.client(self.common.cache_dir.clone()).await?;
 
         let spec = match &self.spec {
             Some(spec) => Some(spec.clone()),
@@ -104,7 +112,7 @@ impl AddCommand {
                 ),
             )?;
         } else {
-            let version = self.resolve_version(&config, &metadata, name, true).await?;
+            let version = self.resolve_version(client, name).await?;
             let version = version.trim_start_matches('^');
             self.add(package, version)?;
 
@@ -119,18 +127,10 @@ impl AddCommand {
 
     async fn resolve_version(
         &self,
-        config: &Config,
-        metadata: &ComponentMetadata,
-        name: &PackageName,
-        network_allowed: bool,
+        client: Arc<CachingClient<FileCache>>,
+        name: &PackageRef,
     ) -> Result<String> {
-        let mut resolver = DependencyResolver::new(
-            config.warg(),
-            &metadata.section.registries,
-            None,
-            config.terminal(),
-            network_allowed,
-        )?;
+        let mut resolver = DependencyResolver::new_with_client(client, None);
         let dependency = Dependency::Package(RegistryPackage {
             name: Some(self.package.name.clone()),
             version: self
@@ -231,13 +231,15 @@ impl AddCommand {
         self.with_dependencies(pkg, |dependencies| {
             match self.name.as_ref() {
                 Some(name) => {
-                    dependencies[name.as_ref()] = value(InlineTable::from_iter([
+                    let str_name = name.to_string();
+                    dependencies[&str_name] = value(InlineTable::from_iter([
                         ("package", Value::from(self.package.name.to_string())),
                         ("version", Value::from(version)),
                     ]));
                 }
                 _ => {
-                    dependencies[self.package.name.as_ref()] = value(version);
+                    let str_name = self.package.name.to_string();
+                    dependencies[&str_name] = value(version);
                 }
             }
             Ok(())
@@ -247,11 +249,11 @@ impl AddCommand {
     fn add_from_path(&self, pkg: &Package, path: &Path) -> Result<()> {
         self.with_dependencies(pkg, |dependencies| {
             let key = match self.name.as_ref() {
-                Some(name) => name.as_ref(),
-                None => self.package.name.as_ref(),
+                Some(name) => name.to_string(),
+                None => self.package.name.to_string(),
             };
 
-            dependencies[key] = value(InlineTable::from_iter([(
+            dependencies[&key] = value(InlineTable::from_iter([(
                 "path",
                 Value::from(path.to_str().unwrap()),
             )]));
@@ -260,7 +262,7 @@ impl AddCommand {
         })
     }
 
-    fn validate(&self, metadata: &ComponentMetadata, name: &PackageName) -> Result<()> {
+    fn validate(&self, metadata: &ComponentMetadata, name: &PackageRef) -> Result<()> {
         if self.target {
             match &metadata.section.target {
                 Target::Package { .. } => {

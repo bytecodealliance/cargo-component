@@ -1,6 +1,6 @@
 //! Module for interacting with component registries.
+use std::{collections::HashMap, sync::Arc};
 
-use crate::{config::Config, metadata::ComponentMetadata};
 use anyhow::Result;
 use cargo_component_core::{
     lock::{LockFile, LockFileResolver, LockedPackage, LockedPackageVersion},
@@ -8,9 +8,12 @@ use cargo_component_core::{
 };
 use cargo_metadata::PackageId;
 use semver::Version;
-use std::collections::HashMap;
-use warg_crypto::hash::AnyHash;
-use warg_protocol::registry::PackageName;
+use wasm_pkg_client::{
+    caching::{CachingClient, FileCache},
+    ContentDigest, PackageRef,
+};
+
+use crate::metadata::ComponentMetadata;
 
 /// Represents a resolution of dependencies for a Cargo package.
 #[derive(Debug, Clone)]
@@ -28,49 +31,36 @@ impl<'a> PackageDependencyResolution<'a> {
     ///
     /// Returns `Ok(None)` if the package is not a component package.
     pub async fn new(
-        config: &Config,
+        client: Arc<CachingClient<FileCache>>,
         metadata: &'a ComponentMetadata,
         lock_file: Option<LockFileResolver<'_>>,
-        network_allowed: bool,
     ) -> Result<PackageDependencyResolution<'a>> {
         Ok(Self {
             metadata,
-            target_resolutions: Self::resolve_target_deps(
-                config,
-                metadata,
-                lock_file,
-                network_allowed,
-            )
-            .await?,
-            resolutions: Self::resolve_deps(config, metadata, lock_file, network_allowed).await?,
+            target_resolutions: Self::resolve_target_deps(client.clone(), metadata, lock_file)
+                .await?,
+            resolutions: Self::resolve_deps(client, metadata, lock_file).await?,
         })
     }
 
     /// Iterates over all dependency resolutions of the package.
-    pub fn all(&self) -> impl Iterator<Item = (&PackageName, &DependencyResolution)> {
+    pub fn all(&self) -> impl Iterator<Item = (&PackageRef, &DependencyResolution)> {
         self.target_resolutions
             .iter()
             .chain(self.resolutions.iter())
     }
 
     async fn resolve_target_deps(
-        config: &Config,
+        client: Arc<CachingClient<FileCache>>,
         metadata: &ComponentMetadata,
         lock_file: Option<LockFileResolver<'_>>,
-        network_allowed: bool,
     ) -> Result<DependencyResolutionMap> {
         let target_deps = metadata.section.target.dependencies();
         if target_deps.is_empty() {
             return Ok(Default::default());
         }
 
-        let mut resolver = DependencyResolver::new(
-            config.warg(),
-            &metadata.section.registries,
-            lock_file,
-            config.terminal(),
-            network_allowed,
-        )?;
+        let mut resolver = DependencyResolver::new_with_client(client, lock_file);
 
         for (name, dependency) in target_deps.iter() {
             resolver.add_dependency(name, dependency).await?;
@@ -80,22 +70,15 @@ impl<'a> PackageDependencyResolution<'a> {
     }
 
     async fn resolve_deps(
-        config: &Config,
+        client: Arc<CachingClient<FileCache>>,
         metadata: &ComponentMetadata,
         lock_file: Option<LockFileResolver<'_>>,
-        network_allowed: bool,
     ) -> Result<DependencyResolutionMap> {
         if metadata.section.dependencies.is_empty() {
             return Ok(Default::default());
         }
 
-        let mut resolver = DependencyResolver::new(
-            config.warg(),
-            &metadata.section.registries,
-            lock_file,
-            config.terminal(),
-            network_allowed,
-        )?;
+        let mut resolver = DependencyResolver::new_with_client(client, lock_file);
 
         for (name, dependency) in &metadata.section.dependencies {
             resolver.add_dependency(name, dependency).await?;
@@ -129,8 +112,8 @@ impl<'a> PackageResolutionMap<'a> {
 
     /// Converts the resolution map into a lock file.
     pub fn to_lock_file(&self) -> LockFile {
-        type PackageKey = (PackageName, Option<String>);
-        type VersionsMap = HashMap<String, (Version, AnyHash)>;
+        type PackageKey = (PackageRef, Option<String>);
+        type VersionsMap = HashMap<String, (Version, ContentDigest)>;
         let mut packages: HashMap<PackageKey, VersionsMap> = HashMap::new();
 
         for resolution in self.0.values() {

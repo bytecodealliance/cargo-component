@@ -2,7 +2,19 @@
 
 #![deny(missing_docs)]
 
-use crate::target::install_wasm32_wasip1;
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    env,
+    fmt::{self, Write},
+    fs::{self, File},
+    io::{BufRead, BufReader, Read, Seek, SeekFrom},
+    path::{Path, PathBuf},
+    process::{Command, Stdio},
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
+
 use anyhow::{bail, Context, Result};
 use bindings::BindingsGenerator;
 use bytes::Bytes;
@@ -13,30 +25,23 @@ use cargo_component_core::{
 };
 use cargo_config2::{PathAndArgs, TargetTripleRef};
 use cargo_metadata::{Artifact, Message, Metadata, MetadataCommand, Package};
-use config::{CargoArguments, CargoPackageSpec, Config};
-use lock::{acquire_lock_file_ro, acquire_lock_file_rw};
-use metadata::ComponentMetadata;
-use registry::{PackageDependencyResolution, PackageResolutionMap};
 use semver::Version;
 use shell_escape::escape;
-use std::{
-    borrow::Cow,
-    collections::HashMap,
-    env,
-    fmt::{self, Write},
-    fs::{self, File},
-    io::{BufRead, BufReader, Read, Seek, SeekFrom},
-    path::{Path, PathBuf},
-    process::{Command, Stdio},
-    time::{Duration, SystemTime},
-};
 use tempfile::NamedTempFile;
 use warg_client::storage::{ContentStorage, PublishEntry, PublishInfo};
 use warg_crypto::signing::PrivateKey;
 use warg_protocol::registry::PackageName;
 use wasm_metadata::{Link, LinkType, RegistryMetadata};
+use wasm_pkg_client::caching::{CachingClient, FileCache};
 use wasmparser::{Parser, Payload};
 use wit_component::ComponentEncoder;
+
+use crate::target::install_wasm32_wasip1;
+
+use config::{CargoArguments, CargoPackageSpec, Config};
+use lock::{acquire_lock_file_ro, acquire_lock_file_rw};
+use metadata::ComponentMetadata;
+use registry::{PackageDependencyResolution, PackageResolutionMap};
 
 mod bindings;
 pub mod commands;
@@ -135,6 +140,7 @@ impl From<&str> for CargoCommand {
 ///
 /// Returns any relevant output components.
 pub async fn run_cargo_command(
+    client: Arc<CachingClient<FileCache>>,
     config: &Config,
     metadata: &Metadata,
     packages: &[PackageComponentMetadata<'_>],
@@ -142,7 +148,7 @@ pub async fn run_cargo_command(
     cargo_args: &CargoArguments,
     spawn_args: &[String],
 ) -> Result<Vec<PathBuf>> {
-    let import_name_map = generate_bindings(config, metadata, packages, cargo_args).await?;
+    let import_name_map = generate_bindings(client, config, metadata, packages, cargo_args).await?;
 
     let cargo_path = std::env::var("CARGO")
         .map(PathBuf::from)
@@ -729,12 +735,12 @@ pub fn load_component_metadata<'a>(
 }
 
 async fn generate_bindings(
+    client: Arc<CachingClient<FileCache>>,
     config: &Config,
     metadata: &Metadata,
     packages: &[PackageComponentMetadata<'_>],
     cargo_args: &CargoArguments,
 ) -> Result<HashMap<String, HashMap<String, String>>> {
-    let last_modified_exe = last_modified_time(&std::env::current_exe()?)?;
     let file_lock = acquire_lock_file_ro(config.terminal(), metadata)?;
     let lock_file = file_lock
         .as_ref()
@@ -752,14 +758,13 @@ async fn generate_bindings(
         env::current_dir().with_context(|| "couldn't get the current directory of the process")?;
 
     let resolver = lock_file.as_ref().map(LockFileResolver::new);
-    let resolution_map =
-        create_resolution_map(config, packages, resolver, cargo_args.network_allowed()).await?;
+    let resolution_map = create_resolution_map(client, packages, resolver).await?;
     let mut import_name_map = HashMap::new();
     for PackageComponentMetadata { package, .. } in packages {
         let resolution = resolution_map.get(&package.id).expect("missing resolution");
         import_name_map.insert(
             package.name.clone(),
-            generate_package_bindings(config, resolution, last_modified_exe, &cwd).await?,
+            generate_package_bindings(config, resolution, &cwd).await?,
         );
     }
 
@@ -789,16 +794,15 @@ async fn generate_bindings(
 }
 
 async fn create_resolution_map<'a>(
-    config: &Config,
+    client: Arc<CachingClient<FileCache>>,
     packages: &'a [PackageComponentMetadata<'_>],
     lock_file: Option<LockFileResolver<'_>>,
-    network_allowed: bool,
 ) -> Result<PackageResolutionMap<'a>> {
     let mut map = PackageResolutionMap::default();
 
     for PackageComponentMetadata { package, metadata } in packages {
         let resolution =
-            PackageDependencyResolution::new(config, metadata, lock_file, network_allowed).await?;
+            PackageDependencyResolution::new(client.clone(), metadata, lock_file).await?;
 
         map.insert(package.id.clone(), resolution);
     }
@@ -809,7 +813,6 @@ async fn create_resolution_map<'a>(
 async fn generate_package_bindings(
     config: &Config,
     resolution: &PackageDependencyResolution<'_>,
-    last_modified_exe: SystemTime,
     cwd: &Path,
 ) -> Result<HashMap<String, String>> {
     if !resolution.metadata.section_present && resolution.metadata.target_path().is_none() {
@@ -821,7 +824,7 @@ async fn generate_package_bindings(
     }
 
     // If there is no wit files and no dependencies, stop generating the bindings file for it.
-    let (generator, import_name_map) = match BindingsGenerator::new(resolution)? {
+    let (generator, import_name_map) = match BindingsGenerator::new(resolution).await? {
         Some(v) => v,
         None => return Ok(HashMap::new()),
     };
@@ -835,54 +838,32 @@ async fn generate_package_bindings(
         .join("src");
     let bindings_path = output_dir.join("bindings.rs");
 
-    let last_modified_output = bindings_path
-        .is_file()
-        .then(|| last_modified_time(&bindings_path))
-        .transpose()?;
+    config.terminal().status(
+        "Generating",
+        format!(
+            "bindings for {name} ({path})",
+            name = resolution.metadata.name,
+            path = bindings_path
+                .strip_prefix(cwd)
+                .unwrap_or(&bindings_path)
+                .display()
+        ),
+    )?;
 
-    match generator.reason(last_modified_exe, last_modified_output)? {
-        Some(reason) => {
-            log::debug!(
-                "generating bindings for package `{name}` at `{path}` because {reason}",
-                name = resolution.metadata.name,
-                path = bindings_path.display(),
-            );
+    let bindings = generator.generate()?;
+    fs::create_dir_all(&output_dir).with_context(|| {
+        format!(
+            "failed to create output directory `{path}`",
+            path = output_dir.display()
+        )
+    })?;
 
-            config.terminal().status(
-                "Generating",
-                format!(
-                    "bindings for {name} ({path})",
-                    name = resolution.metadata.name,
-                    path = bindings_path
-                        .strip_prefix(cwd)
-                        .unwrap_or(&bindings_path)
-                        .display()
-                ),
-            )?;
-
-            let bindings = generator.generate()?;
-            fs::create_dir_all(&output_dir).with_context(|| {
-                format!(
-                    "failed to create output directory `{path}`",
-                    path = output_dir.display()
-                )
-            })?;
-
-            fs::write(&bindings_path, bindings).with_context(|| {
-                format!(
-                    "failed to write bindings file `{path}`",
-                    path = bindings_path.display()
-                )
-            })?;
-        }
-        None => {
-            log::debug!(
-                "existing bindings for package `{name}` at `{path}` is up-to-date",
-                name = resolution.metadata.name,
-                path = bindings_path.display(),
-            );
-        }
-    }
+    fs::write(&bindings_path, bindings).with_context(|| {
+        format!(
+            "failed to write bindings file `{path}`",
+            path = bindings_path.display()
+        )
+    })?;
 
     Ok(import_name_map)
 }
@@ -1176,16 +1157,16 @@ pub async fn publish(config: &Config, options: &PublishOptions<'_>) -> Result<()
 ///
 /// This updates only `Cargo-component.lock`.
 pub async fn update_lockfile(
+    client: Arc<CachingClient<FileCache>>,
     config: &Config,
     metadata: &Metadata,
     packages: &[PackageComponentMetadata<'_>],
-    network_allowed: bool,
     lock_update_allowed: bool,
     locked: bool,
     dry_run: bool,
 ) -> Result<()> {
     // Read the current lock file and generate a new one
-    let map = create_resolution_map(config, packages, None, network_allowed).await?;
+    let map = create_resolution_map(client, packages, None).await?;
 
     let file_lock = acquire_lock_file_ro(config.terminal(), metadata)?;
     let orig_lock_file = file_lock
