@@ -352,7 +352,7 @@ impl NewCommand {
             None => {
                 if self.is_command() {
                     Ok(r#"#[allow(warnings)]
-mod bindings;
+mod generated;
 
 fn main() {
     println!("Hello, world!");
@@ -361,9 +361,9 @@ fn main() {
                     .into())
                 } else {
                     Ok(r#"#[allow(warnings)]
-mod bindings;
+mod generated;
 
-use bindings::Guest;
+use generated::Guest;
 
 struct Component;
 
@@ -374,7 +374,7 @@ impl Guest for Component {
     }
 }
 
-bindings::export!(Component with_types_in bindings);
+generated::export!(Component with_types_in generated);
 "#
                     .into())
                 }

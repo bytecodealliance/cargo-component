@@ -178,7 +178,7 @@ impl UseTrie {
 
         self.insert(
             [
-                "bindings",
+                "generated",
                 "exports",
                 pkg.name.namespace.as_str(),
                 pkg.name.name.as_str(),
@@ -191,7 +191,7 @@ impl UseTrie {
     /// Inserts an export trait for the given world key.
     fn insert_export_trait(&mut self, resolve: &Resolve, key: &WorldKey) -> Cow<str> {
         match key {
-            WorldKey::Name(name) => self.insert(["bindings", "exports", name.as_str()], "Guest"),
+            WorldKey::Name(name) => self.insert(["generated", "exports", name.as_str()], "Guest"),
             WorldKey::Interface(id) => {
                 let iface = &resolve.interfaces[*id];
                 self.insert_interface_type(resolve, iface, "Guest")
@@ -499,7 +499,7 @@ impl<'a> UnimplementedFunction<'a> {
         write!(
             source,
             "{name}",
-            name = trie.insert(["bindings"], &type_name)
+            name = trie.insert(["generated"], &type_name)
         )
         .unwrap();
     }
@@ -712,7 +712,7 @@ impl<'a> ImplementationGenerator<'a> {
             writeln!(
                 &mut source,
                 "\nimpl {name} for {IMPLEMENTER} {{",
-                name = trie.insert(["bindings"], "Guest")
+                name = trie.insert(["generated"], "Guest")
             )?;
 
             for (i, func) in self.functions.iter().enumerate() {
@@ -767,7 +767,7 @@ impl<'a> SourceGenerator<'a> {
         let impls = generator.generate(&mut trie)?;
 
         let mut source = String::new();
-        writeln!(&mut source, "#[allow(warnings)]\nmod bindings;")?;
+        writeln!(&mut source, "#[allow(warnings)]\nmod generated;")?;
         writeln!(&mut source)?;
         write!(
             &mut source,
@@ -787,7 +787,7 @@ impl<'a> SourceGenerator<'a> {
 
         writeln!(
             &mut source,
-            "\nbindings::export!({IMPLEMENTER} with_types_in bindings);"
+            "\ngenerated::export!({IMPLEMENTER} with_types_in generated);"
         )?;
 
         if self.format {

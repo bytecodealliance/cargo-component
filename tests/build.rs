@@ -277,8 +277,8 @@ world example {
     fs::write(
         project.root().join("src/lib.rs"),
         "#[allow(warnings)]
-mod bindings;
-use bindings::exports::{foo::bar::baz::{Guest as Baz, Ty}, bar::baz::qux::Guest as Qux};
+mod generated;
+use generated::exports::{foo::bar::baz::{Guest as Baz, Ty}, bar::baz::qux::Guest as Qux};
 
 struct Component;
 
@@ -294,7 +294,7 @@ impl Qux for Component {
     }
 }
 
-bindings::export!(Component with_types_in bindings);
+generated::export!(Component with_types_in generated);
 ",
     )?;
 
@@ -334,8 +334,8 @@ fn empty_world_with_dep_valid() -> Result<()> {
         project.root().join("src/lib.rs"),
         "
             #[allow(warnings)]
-            mod bindings;
-            use bindings::{Guest, Foo};
+            mod generated;
+            use generated::{Guest, Foo};
             struct Component;
 
             impl Guest for Component {
@@ -344,7 +344,7 @@ fn empty_world_with_dep_valid() -> Result<()> {
                 }
             }
 
-            bindings::export!(Component with_types_in bindings);
+            generated::export!(Component with_types_in generated);
         ",
     )?;
 
@@ -372,11 +372,11 @@ fn empty_world_with_dep_valid() -> Result<()> {
         project.root().join("src/lib.rs"),
         "
             #[allow(warnings)]
-            mod bindings;
+            mod generated;
 
             #[no_mangle]
             pub extern \"C\" fn foo() {
-                bindings::foo_bar::hello();
+                generated::foo_bar::hello();
             }
         ",
     )?;
@@ -413,21 +413,21 @@ fn it_builds_with_resources() -> Result<()> {
         project.root().join("src/lib.rs"),
         r#"
             #[allow(warnings)]
-            mod bindings;
+            mod generated;
 
             use std::cell::Cell;
 
             struct Component;
 
-            impl bindings::exports::baz::Guest for Component {
+            impl generated::exports::baz::Guest for Component {
                 type KeyedInteger = KeyedInteger;
             }
 
-            bindings::export!(Component with_types_in bindings);
+            generated::export!(Component with_types_in generated);
 
             pub struct KeyedInteger(Cell<u32>);
 
-            impl bindings::exports::baz::GuestKeyedInteger for KeyedInteger {
+            impl generated::exports::baz::GuestKeyedInteger for KeyedInteger {
                 fn new(x: u32) -> Self {
                     Self(Cell::new(x))
                 }
@@ -486,21 +486,21 @@ fn it_builds_resources_with_specified_ownership_model() -> Result<()> {
         project.root().join("src/lib.rs"),
         r#"
             #[allow(warnings)]
-            mod bindings;
+            mod generated;
 
             use std::cell::Cell;
 
             struct Component;
 
-            impl bindings::exports::baz::Guest for Component {
+            impl generated::exports::baz::Guest for Component {
                 type KeyedInteger = KeyedInteger;
             }
 
-            bindings::export!(Component with_types_in bindings);
+            generated::export!(Component with_types_in generated);
 
             pub struct KeyedInteger(Cell<u32>);
 
-            impl bindings::exports::baz::GuestKeyedInteger for KeyedInteger {
+            impl generated::exports::baz::GuestKeyedInteger for KeyedInteger {
                 fn new(x: u32) -> Self {
                     Self(Cell::new(x))
                 }
@@ -565,9 +565,9 @@ world random-generator {
         comp1.root().join("src/lib.rs"),
         r#"
 #[allow(warnings)]
-mod bindings;
+mod generated;
 
-use bindings::{Guest, Seed, exports::my::comp1::other};
+use generated::{Guest, Seed, exports::my::comp1::other};
 
 struct Component;
 
@@ -583,7 +583,7 @@ impl other::Guest for Component {
     }
 }
 
-bindings::export!(Component with_types_in bindings);
+generated::export!(Component with_types_in generated);
 "#,
     )?;
 
@@ -618,9 +618,9 @@ world random-generator {
         comp2.root().join("src/lib.rs"),
         r#"
 #[allow(warnings)]
-mod bindings;
+mod generated;
 
-use bindings::{Guest, my_comp1, my};
+use generated::{Guest, my_comp1, my};
 
 struct Component;
 
@@ -630,7 +630,7 @@ impl Guest for Component {
     }
 }
 
-bindings::export!(Component with_types_in bindings);
+generated::export!(Component with_types_in generated);
 "#,
     )?;
 
@@ -741,9 +741,9 @@ world foo-world {
         project.root().join("src/lib.rs"),
         r#"
 #[allow(warnings)]
-mod bindings;
-use bindings::Guest;
-use bindings::my::derive::foo::Bar;
+mod generated;
+use generated::Guest;
+use generated::my::derive::foo::Bar;
 
 struct Component;
 
@@ -756,7 +756,7 @@ impl Guest for Component {
     }
 }
 
-bindings::export!(Component with_types_in bindings);
+generated::export!(Component with_types_in generated);
 "#,
     )?;
 
@@ -796,15 +796,15 @@ fn it_builds_with_versioned_wit() -> Result<()> {
         project.root().join("src/lib.rs"),
         r#"
             #[allow(warnings)]
-            mod bindings;
+            mod generated;
 
             struct Component;
 
-            impl bindings::exports::foo::bar::foo::Guest for Component {
+            impl generated::exports::foo::bar::foo::Guest for Component {
                 fn f() {}
             }
 
-            bindings::export!(Component with_types_in bindings);
+            generated::export!(Component with_types_in generated);
         "#,
     )?;
 

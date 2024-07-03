@@ -50,9 +50,9 @@ world generator {
         project.root().join("src/main.rs"),
         r#"
 #[allow(warnings)]
-mod bindings;
+mod generated;
 
-use bindings::{Seed};
+use generated::{Seed};
 
 fn rand(seed: Seed) -> u32 {
     seed.value + 1
@@ -104,9 +104,9 @@ world generator {
         project.root().join("src/lib.rs"),
         r#"
 #[allow(warnings)]
-mod bindings;
+mod generated;
 
-use bindings::{Seed};
+use generated::{Seed};
 
 fn rand(seed: Seed) -> u32 {
     seed.value + 1

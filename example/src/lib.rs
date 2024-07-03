@@ -1,7 +1,7 @@
 #[allow(warnings)]
-mod bindings;
+mod generated;
 
-use bindings::{
+use generated::{
     example::component::{backend as origin, cache},
     exports::example::component::backend::Guest,
 };
@@ -20,4 +20,4 @@ impl Guest for Component {
     }
 }
 
-bindings::export!(Component with_types_in bindings);
+generated::export!(Component with_types_in generated);
