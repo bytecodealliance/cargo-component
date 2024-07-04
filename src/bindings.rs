@@ -73,26 +73,26 @@ impl<'a> BindingsGenerator<'a> {
     /// Returns a tuple of the bindings generator and a map of import names.
     pub fn new(
         resolution: &'a PackageDependencyResolution<'a>,
-    ) -> Result<(Self, HashMap<String, String>)> {
+    ) -> Result<Option<(Self, HashMap<String, String>)>> {
         let mut import_name_map = Default::default();
-        let (resolve, world, source_files) =
-            Self::create_target_world(resolution, &mut import_name_map).with_context(|| {
-                format!(
-                    "failed to create a target world for package `{name}` ({path})",
-                    name = resolution.metadata.name,
-                    path = resolution.metadata.manifest_path.display()
-                )
-            })?;
-
-        Ok((
-            Self {
-                resolution,
-                resolve,
-                world,
-                source_files,
-            },
-            import_name_map,
-        ))
+        match Self::create_target_world(resolution, &mut import_name_map).with_context(|| {
+            format!(
+                "failed to create a target world for package `{name}` ({path})",
+                name = resolution.metadata.name,
+                path = resolution.metadata.manifest_path.display()
+            )
+        })? {
+            Some((resolve, world, source_files)) => Ok(Some((
+                Self {
+                    resolution,
+                    resolve,
+                    world,
+                    source_files,
+                },
+                import_name_map,
+            ))),
+            None => Ok(None),
+        }
     }
 
     /// Gets the cargo metadata for the package that the bindings are for.
@@ -223,19 +223,23 @@ impl<'a> BindingsGenerator<'a> {
     fn create_target_world(
         resolution: &PackageDependencyResolution,
         import_name_map: &mut HashMap<String, String>,
-    ) -> Result<(Resolve, WorldId, Vec<PathBuf>)> {
+    ) -> Result<Option<(Resolve, WorldId, Vec<PathBuf>)>> {
         log::debug!(
             "creating target world for package `{name}` ({path})",
             name = resolution.metadata.name,
             path = resolution.metadata.manifest_path.display()
         );
 
+        // A flag used to determine whether the target is empty. It must meet two conditions:
+        // no wit files and no dependencies.
+        let mut empty_target = false;
         let (mut merged, world_id, source_files) =
             if let Some(name) = resolution.metadata.target_package() {
                 Self::target_package(resolution, name, resolution.metadata.target_world())?
             } else if let Some(path) = resolution.metadata.target_path() {
                 Self::target_local_path(resolution, &path, resolution.metadata.target_world())?
             } else {
+                empty_target = true;
                 let (merged, world) = Self::target_empty_world(resolution);
                 (merged, world, Vec::new())
             };
@@ -243,6 +247,7 @@ impl<'a> BindingsGenerator<'a> {
         // Merge all component dependencies as interface imports
         for (id, dependency) in &resolution.resolutions {
             log::debug!("importing component dependency `{id}`");
+            empty_target = false;
 
             let (mut resolve, component_world_id) = dependency
                 .decode()?
@@ -271,7 +276,10 @@ impl<'a> BindingsGenerator<'a> {
             )?;
         }
 
-        Ok((merged, world_id, source_files))
+        if empty_target {
+            return Ok(None);
+        };
+        Ok(Some((merged, world_id, source_files)))
     }
 
     fn target_package(

@@ -14,9 +14,6 @@ fn it_runs_with_command_component() -> Result<()> {
     fs::write(
         project.root().join("src/main.rs"),
         r#"
-#[allow(warnings)]
-mod bindings;
-
 fn main() {
     if std::env::args().any(|v| v == "--verbose") {
         println!("[guest] running component 'my:command'");
