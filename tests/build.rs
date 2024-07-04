@@ -160,11 +160,65 @@ fn it_adds_a_producers_field() -> Result<()> {
 }
 
 #[test]
-fn it_builds_wasm32_unknown_unknown() -> Result<()> {
+fn it_builds_wasm32_unknown_unknown_from_cli() -> Result<()> {
     let project = Project::new("foo")?;
 
     project
         .cargo_component("build --target wasm32-unknown-unknown")
+        .assert()
+        .stderr(contains(
+            "Finished `dev` profile [unoptimized + debuginfo] target(s)",
+        ))
+        .success();
+
+    validate_component(
+        &project
+            .build_dir()
+            .join("wasm32-unknown-unknown")
+            .join("debug")
+            .join("foo.wasm"),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn it_builds_wasm32_unknown_unknown_from_config() -> Result<()> {
+    let project = Project::new("foo")?;
+
+    project.file(
+        ".cargo/config.toml",
+        r#"[build]
+target = "wasm32-unknown-unknown"
+    "#,
+    )?;
+
+    project
+        .cargo_component("build")
+        .assert()
+        .stderr(contains(
+            "Finished `dev` profile [unoptimized + debuginfo] target(s)",
+        ))
+        .success();
+
+    validate_component(
+        &project
+            .build_dir()
+            .join("wasm32-unknown-unknown")
+            .join("debug")
+            .join("foo.wasm"),
+    )?;
+
+    Ok(())
+}
+
+#[test]
+fn it_builds_wasm32_unknown_unknown_from_env() -> Result<()> {
+    let project = Project::new("foo")?;
+
+    project
+        .cargo_component("build")
+        .env("CARGO_BUILD_TARGET", "wasm32-unknown-unknown")
         .assert()
         .stderr(contains(
             "Finished `dev` profile [unoptimized + debuginfo] target(s)",
