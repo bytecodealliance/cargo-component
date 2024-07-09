@@ -188,14 +188,20 @@ pub async fn run_cargo_command(
     }
     cargo.args(args);
 
-    // TODO: consider targets from .cargo/config.toml
+    let cargo_config = cargo_config2::Config::load()?;
 
     // Handle the target for buildable commands
     if command.buildable() {
         install_wasm32_wasip1(config)?;
 
         // Add an implicit wasm32-wasip1 target if there isn't a wasm target present
-        if !cargo_args.targets.iter().any(|t| is_wasm_target(t)) {
+        if !cargo_args.targets.iter().any(|t| is_wasm_target(t))
+            && !cargo_config
+                .build
+                .target
+                .as_ref()
+                .is_some_and(|v| v.iter().any(|t| is_wasm_target(t.triple())))
+        {
             cargo.arg("--target").arg("wasm32-wasip1");
         }
 
@@ -235,7 +241,7 @@ pub async fn run_cargo_command(
     }
 
     let runner = if needs_runner && command.runnable() {
-        Some(get_runner(command == CargoCommand::Serve)?)
+        Some(get_runner(&cargo_config, command == CargoCommand::Serve)?)
     } else {
         None
     };
@@ -259,9 +265,7 @@ pub async fn run_cargo_command(
     Ok(outputs.into_iter().map(|o| o.path).collect())
 }
 
-fn get_runner(serve: bool) -> Result<PathAndArgs> {
-    let cargo_config = cargo_config2::Config::load()?;
-
+fn get_runner(cargo_config: &cargo_config2::Config, serve: bool) -> Result<PathAndArgs> {
     // We check here before we actually build that a runtime is present.
     // We first check the runner for `wasm32-wasip1` in the order from
     // cargo's convention for a user-supplied runtime (path or executable)
