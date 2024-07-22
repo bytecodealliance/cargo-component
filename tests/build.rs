@@ -715,9 +715,13 @@ fn it_builds_with_adapter() -> Result<()> {
         .failure();
 
     let project = Project::new("foo")?;
+    let adapter_path = "adapter/wasi_snapshot_preview1.wasm";
+    project.file(
+        adapter_path,
+        wasi_preview1_component_adapter_provider::WASI_SNAPSHOT_PREVIEW1_REACTOR_ADAPTER,
+    )?;
     project.update_manifest(|mut doc| {
-        doc["package"]["metadata"]["component"]["adapter"] =
-            value(adapter_path().to_str().unwrap());
+        doc["package"]["metadata"]["component"]["adapter"] = value(adapter_path);
         Ok(doc)
     })?;
 
@@ -894,10 +898,14 @@ fn it_warns_on_proxy_setting_for_command() -> Result<()> {
 #[test]
 fn it_warns_with_proxy_and_adapter_settings() -> Result<()> {
     let project = Project::new("foo")?;
+    let adapter_path = "adapter/wasi_snapshot_preview1.wasm";
+    project.file(
+        adapter_path,
+        wasi_preview1_component_adapter_provider::WASI_SNAPSHOT_PREVIEW1_REACTOR_ADAPTER,
+    )?;
     project.update_manifest(|mut doc| {
         doc["package"]["metadata"]["component"]["proxy"] = value(true);
-        doc["package"]["metadata"]["component"]["adapter"] =
-            value(adapter_path().to_str().unwrap());
+        doc["package"]["metadata"]["component"]["adapter"] = value(adapter_path);
         Ok(doc)
     })?;
 

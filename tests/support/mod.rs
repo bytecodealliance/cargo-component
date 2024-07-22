@@ -32,18 +32,6 @@ pub fn test_signing_key() -> &'static str {
     "ecdsa-p256:2CV1EpLaSYEn4In4OAEDAj5O4Hzu8AFAxgHXuG310Ew="
 }
 
-pub fn adapter_path() -> PathBuf {
-    let mut path = std::env::current_exe().unwrap();
-    path.pop(); // remove test exe name
-    path.pop(); // remove `deps`
-    path.pop(); // remove `debug` or `release`
-    path.pop(); // remove `target`
-    path.push("adapters");
-    path.push(env!("WASI_ADAPTER_VERSION"));
-    path.push("wasi_snapshot_preview1.reactor.wasm");
-    path
-}
-
 pub fn cargo_component(args: &str) -> Command {
     let mut exe = std::env::current_exe().unwrap();
     exe.pop(); // remove test exe name
@@ -261,10 +249,10 @@ impl Project {
         &self.dir
     }
 
-    pub fn file<B: AsRef<Path>>(&self, path: B, body: &str) -> Result<&Self> {
+    pub fn file<B: AsRef<Path>>(&self, path: B, body: impl AsRef<[u8]>) -> Result<&Self> {
         let path = self.root().join(path);
         fs::create_dir_all(path.parent().unwrap())?;
-        fs::write(self.root().join(path), body)?;
+        fs::write(&path, body)?;
         Ok(self)
     }
 

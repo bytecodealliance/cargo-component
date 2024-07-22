@@ -1,14 +1,11 @@
 use std::{path::Path, process::Command};
 
-const WASI_ADAPTER_VERSION: &str = "95fee6f";
-
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
-    println!("cargo:rustc-env=WASI_ADAPTER_VERSION={WASI_ADAPTER_VERSION}");
     if !commit_info() {
         println!(
-            "cargo:rustc-env=CARGO_VERSION_INFO={} (wasi:{WASI_ADAPTER_VERSION})",
+            "cargo:rustc-env=CARGO_VERSION_INFO={}",
             env!("CARGO_PKG_VERSION"),
         );
     }
@@ -34,7 +31,7 @@ fn commit_info() -> bool {
     let mut next = || parts.next().unwrap();
     println!("cargo:rustc-env=CARGO_GIT_HASH={}", next());
     println!(
-        "cargo:rustc-env=CARGO_VERSION_INFO={} ({} {} wasi:{WASI_ADAPTER_VERSION})",
+        "cargo:rustc-env=CARGO_VERSION_INFO={} ({} {})",
         env!("CARGO_PKG_VERSION"),
         next(),
         next()
