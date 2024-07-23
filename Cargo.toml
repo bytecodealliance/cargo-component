@@ -53,6 +53,7 @@ bytes = { workspace = true }
 which = { workspace = true }
 shell-escape = "0.1.5"
 tempfile = { workspace = true }
+wasi-preview1-component-adapter-provider = "23.0.1"
 
 [dev-dependencies]
 assert_cmd = { workspace = true }

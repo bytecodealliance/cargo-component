@@ -911,23 +911,17 @@ fn adapter_bytes(
                 .warn("ignoring `proxy` setting in `Cargo.toml` for command component")?;
         }
 
-        Ok(Cow::Borrowed(include_bytes!(concat!(
-            "../adapters/",
-            env!("WASI_ADAPTER_VERSION"),
-            "/wasi_snapshot_preview1.command.wasm"
-        ))))
+        Ok(Cow::Borrowed(
+            wasi_preview1_component_adapter_provider::WASI_SNAPSHOT_PREVIEW1_COMMAND_ADAPTER,
+        ))
     } else if metadata.section.proxy {
-        Ok(Cow::Borrowed(include_bytes!(concat!(
-            "../adapters/",
-            env!("WASI_ADAPTER_VERSION"),
-            "/wasi_snapshot_preview1.proxy.wasm"
-        ))))
+        Ok(Cow::Borrowed(
+            wasi_preview1_component_adapter_provider::WASI_SNAPSHOT_PREVIEW1_PROXY_ADAPTER,
+        ))
     } else {
-        Ok(Cow::Borrowed(include_bytes!(concat!(
-            "../adapters/",
-            env!("WASI_ADAPTER_VERSION"),
-            "/wasi_snapshot_preview1.reactor.wasm"
-        ))))
+        Ok(Cow::Borrowed(
+            wasi_preview1_component_adapter_provider::WASI_SNAPSHOT_PREVIEW1_REACTOR_ADAPTER,
+        ))
     }
 }
 
