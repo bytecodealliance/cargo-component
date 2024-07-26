@@ -171,8 +171,8 @@ world foo {
 
     let source = r#"
 #[allow(warnings)]
-mod bindings;
-use bindings::{baz, Guest};
+mod generated;
+use generated::{baz, Guest};
 struct Component;
 impl Guest for Component {
     fn bar() -> String {
@@ -180,7 +180,7 @@ impl Guest for Component {
     }
 }
 
-bindings::export!(Component with_types_in bindings);
+generated::export!(Component with_types_in generated);
 "#;
 
     fs::write(project.root().join("src/lib.rs"), source)?;

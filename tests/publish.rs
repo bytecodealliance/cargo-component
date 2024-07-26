@@ -45,7 +45,7 @@ world foo {
 
     // Ensure there's a using declaration in the generated source
     let source = fs::read_to_string(project.root().join("src/lib.rs"))?;
-    assert!(source.contains("use bindings::Guest;"));
+    assert!(source.contains("use generated::Guest;"));
 
     project
         .cargo_component("publish --init")
@@ -141,16 +141,16 @@ world foo {
 
     let source = r#"
 #[allow(warnings)]
-mod bindings;
-use bindings::Guest;
+mod generated;
+use generated::Guest;
 struct Component;
 impl Guest for Component {
     fn bar() -> String {
-        bindings::test_foo::bar()
+        generated::test_foo::bar()
     }
 }
 
-bindings::export!(Component with_types_in bindings);
+generated::export!(Component with_types_in generated);
 "#;
 
     fs::write(project.root().join("src/lib.rs"), source)?;

@@ -15,7 +15,7 @@ fn it_runs_with_command_component() -> Result<()> {
         project.root().join("src/main.rs"),
         r#"
 #[allow(warnings)]
-mod bindings;
+mod generated;
 
 fn main() {
     if std::env::args().any(|v| v == "--verbose") {
@@ -75,9 +75,9 @@ world generator {
         project.root().join("src/lib.rs"),
         r#"
 #[allow(warnings)]
-mod bindings;
+mod generated;
 
-use bindings::exports::wasi::cli::run::Guest;
+use generated::exports::wasi::cli::run::Guest;
 
 struct Component;
 
@@ -92,7 +92,7 @@ impl Guest for Component {
     }
 }
 
-bindings::export!(Component with_types_in bindings);
+generated::export!(Component with_types_in generated);
 "#,
     )?;
 
