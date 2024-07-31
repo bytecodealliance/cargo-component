@@ -351,10 +351,7 @@ impl NewCommand {
             }
             None => {
                 if self.is_command() {
-                    Ok(r#"#[allow(warnings)]
-mod bindings;
-
-fn main() {
+                    Ok(r#"fn main() {
     println!("Hello, world!");
 }
 "#

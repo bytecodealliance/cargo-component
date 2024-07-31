@@ -820,6 +820,12 @@ async fn generate_package_bindings(
         return Ok(HashMap::new());
     }
 
+    // If there is no wit files and no dependencies, stop generating the bindings file for it.
+    let (generator, import_name_map) = match BindingsGenerator::new(resolution)? {
+        Some(v) => v,
+        None => return Ok(HashMap::new()),
+    };
+
     // TODO: make the output path configurable
     let output_dir = resolution
         .metadata
@@ -834,7 +840,6 @@ async fn generate_package_bindings(
         .then(|| last_modified_time(&bindings_path))
         .transpose()?;
 
-    let (generator, import_name_map) = BindingsGenerator::new(resolution)?;
     match generator.reason(last_modified_exe, last_modified_output)? {
         Some(reason) => {
             log::debug!(
