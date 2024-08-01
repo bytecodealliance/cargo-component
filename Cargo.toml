@@ -9,7 +9,7 @@ repository = { workspace = true }
 readme = "README.md"
 
 [workspace.package]
-version = "0.15.0-dev"
+version = "0.16.0-dev"
 edition = "2021"
 authors = ["Peter Huene <peter@huene.dev>"]
 license = "Apache-2.0 WITH LLVM-exception"
@@ -67,7 +67,7 @@ wasmprinter = { workspace = true }
 members = ["crates/core", "crates/wit"]
 
 [workspace.dependencies]
-cargo-component-core = { path = "crates/core", version = "0.15.0-dev" }
+cargo-component-core = { path = "crates/core", version = "0.16.0-dev" }
 warg-protocol = "0.7.0"
 warg-crypto = "0.7.0"
 warg-client = "0.7.0"
@@ -85,9 +85,9 @@ serde = { version = "1.0.197", features = ["derive"] }
 serde_json = "1.0.115"
 indexmap = "2.2.6"
 url = { version = "2.5.0", features = ["serde"] }
-wit-parser = "0.208.1"
-wit-component = "0.208.1"
-wasm-metadata = "0.208.1"
+wit-parser = "0.215.0"
+wit-component = "0.215.0"
+wasm-metadata = "0.215.0"
 parse_arg = "0.1.4"
 cargo_metadata = "0.18.1"
 cargo-config2 = "0.1.24"
@@ -100,14 +100,14 @@ rpassword = "7.3.1"
 futures = "0.3.30"
 bytes = "1.6.0"
 which = "6.0.1"
-wit-bindgen-rust = "0.25.0"
-wit-bindgen-core = "0.25.0"
+wit-bindgen-rust = "0.28.0"
+wit-bindgen-core = "0.28.0"
 tempfile = "3.10.1"
 assert_cmd = "2.0.14"
 predicates = "3.1.0"
-wasmparser = "0.208.1"
-wat = "1.208.1"
-wasmprinter = "0.208.1"
+wasmparser = "0.215.0"
+wat = "1.215.0"
+wasmprinter = "0.215.0"
 
 [profile.release]
 panic = "abort"

@@ -18,7 +18,7 @@ use warg_crypto::signing::PrivateKey;
 use warg_protocol::registry;
 use wasm_metadata::{Link, LinkType, RegistryMetadata};
 use wit_component::DecodedWasm;
-use wit_parser::{PackageId, PackageName, Resolve, UnresolvedPackage};
+use wit_parser::{PackageId, PackageName, Resolve, UnresolvedPackageGroup};
 
 pub mod commands;
 pub mod config;
@@ -97,14 +97,14 @@ fn parse_wit_package(
     }
 
     // Parse the root package itself
-    let root = UnresolvedPackage::parse_dir(dir).with_context(|| {
+    let root = UnresolvedPackageGroup::parse_dir(dir).with_context(|| {
         format!(
             "failed to parse package from directory `{dir}`",
             dir = dir.display()
         )
     })?;
 
-    let mut source_files: Vec<_> = root.source_files().map(Path::to_path_buf).collect();
+    let mut source_files: Vec<_> = root.source_map.source_files().map(Path::to_path_buf).collect();
 
     // Do a topological sort of the dependencies
     let mut order = IndexSet::new();
@@ -122,8 +122,8 @@ fn parse_wit_package(
                 resolution,
                 package,
             } => {
-                source_files.extend(package.source_files().map(Path::to_path_buf));
-                merged.push(package).with_context(|| {
+                source_files.extend(package.source_map.source_files().map(Path::to_path_buf));
+                merged.push_group(package).with_context(|| {
                     format!(
                         "failed to merge dependency `{name}`",
                         name = resolution.name()
@@ -149,7 +149,7 @@ fn parse_wit_package(
         };
     }
 
-    let package = merged.push(root).with_context(|| {
+    let package = merged.push_group(root).with_context(|| {
         format!(
             "failed to merge package from directory `{dir}`",
             dir = dir.display()
@@ -174,7 +174,7 @@ fn parse_wit_package(
                 package,
                 resolution,
             } => {
-                for name in package.foreign_deps.keys() {
+                for name in package.main.foreign_deps.keys() {
                     // Only visit known dependencies
                     // wit-parser will error on unknown foreign dependencies when
                     // the package is resolved
