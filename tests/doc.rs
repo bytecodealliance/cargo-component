@@ -1,17 +1,19 @@
-use crate::support::*;
+use std::fs;
+
 use anyhow::{Context, Result};
 use assert_cmd::prelude::*;
 use predicates::str::contains;
-use std::fs;
+
+use crate::support::*;
 
 mod support;
 
 #[test]
 fn it_documents() -> Result<()> {
-    let project = Project::new("foo")?;
+    let project = Project::new("foo", true)?;
 
     project
-        .cargo_component("doc")
+        .cargo_component(["doc"])
         .assert()
         .stderr(contains(
             "Finished `dev` profile [unoptimized + debuginfo] target(s)",

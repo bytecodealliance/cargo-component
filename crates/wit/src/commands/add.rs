@@ -1,25 +1,25 @@
-use crate::config::{Config, CONFIG_FILE_NAME};
+use std::path::PathBuf;
+
 use anyhow::{bail, Context, Result};
 use cargo_component_core::{
+    cache_dir,
     command::CommonOptions,
     registry::{Dependency, DependencyResolution, DependencyResolver, RegistryPackage},
-    terminal::Terminal,
     VersionedPackageName,
 };
 use clap::Args;
 use semver::VersionReq;
-use std::path::PathBuf;
-use warg_protocol::registry::PackageName;
+use wasm_pkg_client::{caching::FileCache, PackageRef};
+
+use crate::config::{Config, CONFIG_FILE_NAME};
 
 async fn resolve_version(
-    config: &Config,
-    warg_config: &warg_client::Config,
+    pkg_config: wasm_pkg_client::Config,
     package: &VersionedPackageName,
     registry: &Option<String>,
-    terminal: &Terminal,
+    file_cache: FileCache,
 ) -> Result<String> {
-    let mut resolver =
-        DependencyResolver::new(warg_config, &config.registries, None, terminal, true)?;
+    let mut resolver = DependencyResolver::new(pkg_config, None, file_cache);
     let dependency = Dependency::Package(RegistryPackage {
         name: Some(package.name.clone()),
         version: package
@@ -63,7 +63,7 @@ pub struct AddCommand {
 
     /// The name of the dependency to use; defaults to the package name.
     #[clap(long, value_name = "NAME")]
-    pub name: Option<PackageName>,
+    pub name: Option<PackageRef>,
 
     /// Add a package dependency to a file or directory.
     #[clap(long = "path", value_name = "PATH")]
@@ -82,13 +82,23 @@ impl AddCommand {
         let (mut config, config_path) = Config::from_default_file()?
             .with_context(|| format!("failed to find configuration file `{CONFIG_FILE_NAME}`"))?;
 
+        let terminal = self.common.new_terminal();
+        let pkg_config = if let Some(config_file) = self.common.config {
+            wasm_pkg_client::Config::from_file(&config_file).context(format!(
+                "failed to load configuration file from {}",
+                config_file.display()
+            ))?
+        } else {
+            wasm_pkg_client::Config::global_defaults()?
+        };
+
+        let file_cache = FileCache::new(cache_dir(self.common.cache_dir)?).await?;
+
         let name = self.name.as_ref().unwrap_or(&self.package.name);
         if config.dependencies.contains_key(name) {
             bail!("cannot add dependency `{name}` as it conflicts with an existing dependency");
         }
 
-        let warg_config = warg_client::Config::from_default_file()?.unwrap_or_default();
-        let terminal = self.common.new_terminal();
         let message = match self.path.as_deref() {
             Some(path) => {
                 config
@@ -102,14 +112,8 @@ impl AddCommand {
                 )
             }
             None => {
-                let version = resolve_version(
-                    &config,
-                    &warg_config,
-                    &self.package,
-                    &self.registry,
-                    &terminal,
-                )
-                .await?;
+                let version =
+                    resolve_version(pkg_config, &self.package, &self.registry, file_cache).await?;
 
                 let package = RegistryPackage {
                     name: self.name.is_some().then(|| self.package.name.clone()),

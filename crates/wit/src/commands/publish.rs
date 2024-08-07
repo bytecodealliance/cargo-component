@@ -1,12 +1,14 @@
+use anyhow::{Context, Result};
+use cargo_component_core::{cache_dir, command::CommonOptions, registry::find_url};
+use clap::Args;
+use warg_crypto::signing::PrivateKey;
+use warg_protocol::registry::PackageName;
+use wasm_pkg_client::caching::FileCache;
+
 use crate::{
     config::{Config, CONFIG_FILE_NAME},
     publish_wit_package, PublishOptions,
 };
-use anyhow::{Context, Result};
-use cargo_component_core::{command::CommonOptions, registry::find_url};
-use clap::Args;
-use warg_crypto::signing::PrivateKey;
-use warg_protocol::registry::PackageName;
 
 /// Publish a WIT package to a registry.
 #[derive(Args)]
@@ -43,6 +45,15 @@ impl PublishCommand {
 
         let terminal = self.common.new_terminal();
         let warg_config = warg_client::Config::from_default_file()?.unwrap_or_default();
+        let pkg_config = if let Some(config_file) = self.common.config {
+            wasm_pkg_client::Config::from_file(&config_file).context(format!(
+                "failed to load configuration file from {}",
+                config_file.display()
+            ))?
+        } else {
+            wasm_pkg_client::Config::global_defaults()?
+        };
+        let file_cache = FileCache::new(cache_dir(self.common.cache_dir)?).await?;
 
         let url = find_url(
             self.registry.as_deref(),
@@ -63,6 +74,8 @@ impl PublishCommand {
                 config: &config,
                 config_path: &config_path,
                 warg_config: &warg_config,
+                pkg_config,
+                cache: file_cache,
                 url,
                 signing_key,
                 package: self.package.as_ref(),

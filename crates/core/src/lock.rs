@@ -10,8 +10,7 @@ use std::{
     path::{Path, PathBuf},
 };
 use toml_edit::{DocumentMut, Item, Value};
-use warg_crypto::hash::AnyHash;
-use warg_protocol::registry::PackageName;
+use wasm_pkg_client::{ContentDigest, PackageRef};
 
 /// The file format version of the lock file.
 const LOCK_FILE_VERSION: i64 = 1;
@@ -21,7 +20,7 @@ const LOCK_FILE_VERSION: i64 = 1;
 #[serde(rename_all = "kebab-case")]
 pub struct LockedPackage {
     /// The name of the locked package.
-    pub name: PackageName,
+    pub name: PackageRef,
     /// The registry the package was resolved from.
     ///
     /// Defaults to the default registry if not specified.
@@ -37,9 +36,10 @@ pub struct LockedPackage {
 
 impl LockedPackage {
     /// Gets the key used in sorting and searching the package list.
-    pub fn key(&self) -> (&PackageName, &str) {
+    pub fn key(&self) -> (&str, &str, &str) {
         (
-            &self.name,
+            self.name.namespace().as_ref(),
+            self.name.name().as_ref(),
             self.registry.as_deref().unwrap_or(DEFAULT_REGISTRY_NAME),
         )
     }
@@ -53,7 +53,7 @@ pub struct LockedPackageVersion {
     /// The version the package is locked to.
     pub version: Version,
     /// The digest of the package contents.
-    pub digest: AnyHash,
+    pub digest: ContentDigest,
 }
 
 impl LockedPackageVersion {
@@ -81,13 +81,20 @@ impl<'a> LockFileResolver<'a> {
     pub fn resolve(
         &'a self,
         registry: &str,
-        name: &PackageName,
+        package_ref: &PackageRef,
         requirement: &VersionReq,
     ) -> Result<Option<&'a LockedPackageVersion>> {
         if let Some(pkg) = self
             .0
             .packages
-            .binary_search_by_key(&(name, registry), LockedPackage::key)
+            .binary_search_by_key(
+                &(
+                    package_ref.namespace().as_ref(),
+                    package_ref.name().as_ref(),
+                    registry,
+                ),
+                LockedPackage::key,
+            )
             .ok()
             .map(|i| &self.0.packages[i])
         {
@@ -96,12 +103,12 @@ impl<'a> LockFileResolver<'a> {
                 .binary_search_by_key(&requirement.to_string().as_str(), LockedPackageVersion::key)
             {
                 let locked = &pkg.versions[index];
-                log::info!("dependency package `{name}` from registry `{registry}` with requirement `{requirement}` was resolved by the lock file to version {version}", version = locked.version);
+                log::info!("dependency package `{package_ref}` from registry `{registry}` with requirement `{requirement}` was resolved by the lock file to version {version}", version = locked.version);
                 return Ok(Some(locked));
             }
         }
 
-        log::info!("dependency package `{name}` from registry `{registry}` with requirement `{requirement}` was not in the lock file");
+        log::info!("dependency package `{package_ref}` from registry `{registry}` with requirement `{requirement}` was not in the lock file");
         Ok(None)
     }
 }

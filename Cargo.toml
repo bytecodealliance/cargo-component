@@ -18,96 +18,104 @@ keywords = ["webassembly", "wasm", "components", "component-model"]
 repository = "https://github.com/bytecodealliance/cargo-component"
 
 [dependencies]
-cargo-component-core = { workspace = true }
 anyhow = { workspace = true }
+bytes = { workspace = true }
+cargo_metadata = { workspace = true }
+cargo-component-core = { workspace = true }
+cargo-config2 = { workspace = true }
 clap = { workspace = true }
-toml_edit = { workspace = true }
-pretty_env_logger = { workspace = true }
-log = { workspace = true }
-tokio = { workspace = true }
-tokio-util = { workspace = true }
+futures = { workspace = true }
 heck = { workspace = true }
+indexmap = { workspace = true }
+libc = { workspace = true }
+log = { workspace = true }
+p256 = { workspace = true }
+parse_arg = { workspace = true }
+pretty_env_logger = { workspace = true }
+rand_core = { workspace = true }
+rpassword = { workspace = true }
 semver = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-indexmap = { workspace = true }
-url = { workspace = true }
-wit-bindgen-rust = { workspace = true }
-wit-bindgen-core = { workspace = true }
-wit-parser = { workspace = true }
-wit-component = { workspace = true }
-wasm-metadata = { workspace = true }
-wasmparser = { workspace = true }
-parse_arg = { workspace = true }
-cargo_metadata = { workspace = true }
-cargo-config2 = { workspace = true }
-libc = { workspace = true }
-warg-protocol = { workspace = true }
-warg-crypto = { workspace = true }
-warg-client = { workspace = true }
-p256 = { workspace = true }
-rand_core = { workspace = true }
-rpassword = { workspace = true }
-futures = { workspace = true }
-bytes = { workspace = true }
-which = { workspace = true }
 shell-escape = "0.1.5"
 tempfile = { workspace = true }
-wasi-preview1-component-adapter-provider = "23.0.1"
+tokio = { workspace = true }
+tokio-util = { workspace = true }
+toml_edit = { workspace = true }
+url = { workspace = true }
+warg-client = { workspace = true }
+warg-crypto = { workspace = true }
+warg-protocol = { workspace = true }
+wasi-preview1-component-adapter-provider = { workspace = true }
+wasm-metadata = { workspace = true }
+wasm-pkg-client = { workspace = true }
+wasmparser = { workspace = true }
+which = { workspace = true }
+wit-bindgen-core = { workspace = true }
+wit-bindgen-rust = { workspace = true }
+wit-component = { workspace = true }
+wit-parser = { workspace = true }
 
 [dev-dependencies]
 assert_cmd = { workspace = true }
 predicates = { workspace = true }
-wat = { workspace = true }
-warg-server = { workspace = true }
 tempfile = { workspace = true }
+warg-server = { workspace = true }
 wasmprinter = { workspace = true }
+wat = { workspace = true }
 
 [workspace]
 members = ["crates/core", "crates/wit"]
 
 [workspace.dependencies]
-cargo-component-core = { path = "crates/core", version = "0.15.0-dev" }
-warg-protocol = "0.7.0"
-warg-crypto = "0.7.0"
-warg-client = "0.7.0"
-warg-server = "0.7.0"
 anyhow = "1.0.82"
-clap = { version = "4.5.4", features = ["derive"] }
-toml_edit = { version = "0.22.9", features = ["serde"] }
-pretty_env_logger = "0.5.0"
-log = "0.4.21"
-tokio = { version = "1.37.0", default-features = false, features = ["macros", "rt-multi-thread"] }
-tokio-util = "0.7.10"
-heck = "0.5.0"
-semver = "1.0.22"
-serde = { version = "1.0.197", features = ["derive"] }
-serde_json = "1.0.115"
-indexmap = "2.2.6"
-url = { version = "2.5.0", features = ["serde"] }
-wit-parser = "0.208.1"
-wit-component = "0.208.1"
-wasm-metadata = "0.208.1"
-parse_arg = "0.1.4"
+assert_cmd = "2.0.14"
+bytes = "1.6.0"
 cargo_metadata = "0.18.1"
+cargo-component-core = { path = "crates/core", version = "0.15.0-dev" }
 cargo-config2 = "0.1.24"
+clap = { version = "4.5.4", features = ["derive", "env"] }
+dirs = "5"
+futures = "0.3.30"
+heck = "0.5.0"
+indexmap = "2.2.6"
 libc = "0.2.153"
+log = "0.4.21"
+oci-distribution = "0.11"
 owo-colors = "4.0.0"
-unicode-width = "0.1.11"
 p256 = "0.13.2"
+parse_arg = "0.1.4"
+predicates = "3.1.0"
+pretty_env_logger = "0.5.0"
 rand_core = "0.6.4"
 rpassword = "7.3.1"
-futures = "0.3.30"
-bytes = "1.6.0"
-which = "6.0.1"
-wit-bindgen-rust = "0.25.0"
-wit-bindgen-core = "0.25.0"
+semver = "1"
+serde = { version = "1.0.197", features = ["derive"] }
+serde_json = "1.0.115"
 tempfile = "3.10.1"
-assert_cmd = "2.0.14"
-predicates = "3.1.0"
+tokio = { version = "1.37.0", default-features = false, features = [
+    "macros",
+    "rt-multi-thread",
+] }
+tokio-util = "0.7.10"
+toml_edit = { version = "0.22.9", features = ["serde"] }
+unicode-width = "0.1.11"
+url = { version = "2.5.0", features = ["serde"] }
+warg-client = "0.7.0"
+warg-crypto = "0.7.0"
+warg-protocol = "0.7.0"
+warg-server = "0.7.0"
+wasi-preview1-component-adapter-provider = "23.0.1"
+wasm-metadata = "0.208.1"
+wasm-pkg-client = { git = "https://github.com/bytecodealliance/wasm-pkg-tools.git", rev = "47ad11a549c23ac48ecee9226d395fc7c6063250" }
 wasmparser = "0.208.1"
-wat = "1.208.1"
 wasmprinter = "0.208.1"
+wat = "1.208.1"
+which = "6.0.1"
+wit-bindgen-core = "0.25.0"
+wit-bindgen-rust = "0.25.0"
+wit-component = "0.208.1"
+wit-parser = "0.208.1"
 
 [profile.release]
 panic = "abort"

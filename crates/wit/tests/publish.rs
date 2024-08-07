@@ -1,22 +1,23 @@
-use std::{fs, rc::Rc};
+use std::fs;
 
-use crate::support::*;
 use anyhow::{Context, Result};
 use assert_cmd::prelude::*;
 use predicates::str::contains;
 use semver::Version;
-use tempfile::TempDir;
 use toml_edit::{value, Array};
 use warg_client::{Client, FileSystemClient};
 use warg_protocol::registry::PackageName;
 use wasm_metadata::LinkType;
+use wasm_pkg_client::warg::WargRegistryConfig;
+
+use crate::support::*;
 
 mod support;
 
 #[test]
 fn help() {
     for arg in ["help publish", "publish -h", "publish --help"] {
-        wit(arg)
+        wit(arg.split_whitespace())
             .assert()
             .stdout(contains("Publish a WIT package to a registry"))
             .success();
@@ -25,7 +26,7 @@ fn help() {
 
 #[test]
 fn it_fails_with_missing_toml_file() -> Result<()> {
-    wit("publish")
+    wit(["publish"])
         .assert()
         .stderr(contains(
             "error: failed to find configuration file `wit.toml`",
@@ -36,14 +37,12 @@ fn it_fails_with_missing_toml_file() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_publishes_a_wit_package() -> Result<()> {
-    let dir = Rc::new(TempDir::new()?);
-    let (_server, config) = spawn_server(dir.path()).await?;
-    config.write_to_file(&dir.path().join("warg-config.json"))?;
+    let (server, _, _) = spawn_server(Vec::<String>::new()).await?;
 
-    let project = Project::with_dir(dir.clone(), "foo", "")?;
+    let project = server.project("foo", Vec::<String>::new())?;
     project.file("baz.wit", "package test:qux;\n")?;
     project
-        .wit("publish --init")
+        .wit(["publish", "--init"])
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("Published package `test:qux` v0.1.0"))
@@ -54,14 +53,14 @@ async fn it_publishes_a_wit_package() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_does_a_dry_run_publish() -> Result<()> {
-    let dir = Rc::new(TempDir::new()?);
-    let (_server, config) = spawn_server(dir.path()).await?;
-    config.write_to_file(&dir.path().join("warg-config.json"))?;
+    let (server, config, registry) = spawn_server(Vec::<String>::new()).await?;
+    let warg_config =
+        WargRegistryConfig::try_from(config.registry_config(&registry).unwrap()).unwrap();
 
-    let project = Project::with_dir(dir.clone(), "foo", "")?;
+    let project = server.project("foo", Vec::<String>::new())?;
     project.file("baz.wit", "package test:qux;\n")?;
     project
-        .wit("publish --init --dry-run")
+        .wit(["publish", "--init", "--dry-run"])
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains(
@@ -69,7 +68,7 @@ async fn it_does_a_dry_run_publish() -> Result<()> {
         ))
         .success();
 
-    let client = FileSystemClient::new_with_config(None, &config, None).await?;
+    let client = FileSystemClient::new_with_config(None, &warg_config.client_config, None).await?;
 
     assert!(client
         .download(&"test:qux".parse().unwrap(), &"0.1.0".parse().unwrap())
@@ -83,9 +82,11 @@ async fn it_does_a_dry_run_publish() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_publishes_with_registry_metadata() -> Result<()> {
-    let dir = Rc::new(TempDir::new()?);
-    let (_server, config) = spawn_server(dir.path()).await?;
-    config.write_to_file(&dir.path().join("warg-config.json"))?;
+    let (server, config, registry) = spawn_server(Vec::<String>::new()).await?;
+    let warg_config =
+        WargRegistryConfig::try_from(config.registry_config(&registry).unwrap()).unwrap();
+
+    let project = server.project("foo", Vec::<String>::new())?;
 
     let authors = ["Jane Doe <jane@example.com>"];
     let categories = ["wasm"];
@@ -95,7 +96,6 @@ async fn it_publishes_with_registry_metadata() -> Result<()> {
     let homepage = "https://example.com/home";
     let repository = "https://example.com/repo";
 
-    let project = Project::with_dir(dir.clone(), "foo", "")?;
     project.file("baz.wit", "package test:qux;\n")?;
 
     project.update_manifest(|mut doc| {
@@ -110,13 +110,13 @@ async fn it_publishes_with_registry_metadata() -> Result<()> {
     })?;
 
     project
-        .wit("publish --init")
+        .wit(["publish", "--init"])
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("Published package `test:qux` v0.1.0"))
         .success();
 
-    let client = Client::new_with_config(None, &config, None).await?;
+    let client = Client::new_with_config(None, &warg_config.client_config, None).await?;
     let download = client
         .download_exact(&PackageName::new("test:qux")?, &Version::parse("0.1.0")?)
         .await?;

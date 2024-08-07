@@ -1,34 +1,35 @@
 //! Module for resolving dependencies from a component registry.
-
-use crate::{
-    lock::{LockFileResolver, LockedPackageVersion},
-    progress::{ProgressBar, ProgressStyle},
-    terminal::{Colors, Terminal},
+use std::{
+    collections::{hash_map, HashMap},
+    fmt::Debug,
+    path::{Path, PathBuf},
+    str::FromStr,
+    sync::Arc,
 };
+
 use anyhow::{bail, Context, Result};
-use futures::{stream::FuturesUnordered, StreamExt};
+use futures::TryStreamExt;
 use indexmap::IndexMap;
 use semver::{Comparator, Op, Version, VersionReq};
 use serde::{
     de::{self, value::MapAccessDeserializer},
     Deserialize, Serialize,
 };
-use std::{
-    collections::{hash_map, HashMap, HashSet},
-    fs,
-    path::{Path, PathBuf},
-    str::FromStr,
-    sync::Arc,
-};
+
+use tokio::io::AsyncReadExt;
 use url::Url;
-use warg_client::{
-    storage::{ContentStorage, PackageInfo},
-    Config, FileSystemClient, StorageLockResult,
+use warg_client::{Config as WargConfig, FileSystemClient, StorageLockResult};
+use wasm_pkg_client::{
+    caching::{CachingClient, FileCache},
+    Client, Config, ContentDigest, Error as WasmPkgError, PackageRef, Release, VersionInfo,
 };
-use warg_crypto::hash::AnyHash;
-use warg_protocol::registry;
 use wit_component::DecodedWasm;
 use wit_parser::{PackageId, PackageName, Resolve, UnresolvedPackage, WorldId};
+
+use crate::{
+    lock::{LockFileResolver, LockedPackageVersion},
+    terminal::{Colors, Terminal},
+};
 
 /// The name of the default registry.
 pub const DEFAULT_REGISTRY_NAME: &str = "default";
@@ -51,7 +52,7 @@ pub fn find_url<'a>(
 
 /// Creates a registry client with the given warg configuration.
 pub async fn create_client(
-    config: &warg_client::Config,
+    config: &WargConfig,
     url: &str,
     terminal: &Terminal,
 ) -> Result<FileSystemClient> {
@@ -92,7 +93,7 @@ impl Serialize for Dependency {
                 } else {
                     #[derive(Serialize)]
                     struct Entry<'a> {
-                        package: Option<&'a registry::PackageName>,
+                        package: Option<&'a PackageRef>,
                         version: &'a str,
                         registry: Option<&'a str>,
                     }
@@ -146,7 +147,7 @@ impl<'de> Deserialize<'de> for Dependency {
                 #[serde(default, deny_unknown_fields)]
                 struct Entry {
                     path: Option<PathBuf>,
-                    package: Option<registry::PackageName>,
+                    package: Option<PackageRef>,
                     version: Option<VersionReq>,
                     registry: Option<String>,
                 }
@@ -196,7 +197,7 @@ pub struct RegistryPackage {
     /// The name of the package.
     ///
     /// If not specified, the name from the mapping will be used.
-    pub name: Option<registry::PackageName>,
+    pub name: Option<PackageRef>,
 
     /// The version requirement of the package.
     pub version: VersionReq,
@@ -222,14 +223,14 @@ impl FromStr for RegistryPackage {
 }
 
 /// Represents information about a resolution of a registry package.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct RegistryResolution {
     /// The name of the dependency that was resolved.
     ///
     /// This may differ from `package` if the dependency was renamed.
-    pub name: registry::PackageName,
+    pub name: PackageRef,
     /// The name of the package from the registry that was resolved.
-    pub package: registry::PackageName,
+    pub package: PackageRef,
     /// The name of the registry used to resolve the package.
     ///
     /// A value of `None` indicates that the default registry was used.
@@ -239,16 +240,29 @@ pub struct RegistryResolution {
     /// The package version that was resolved.
     pub version: Version,
     /// The digest of the package contents.
-    pub digest: AnyHash,
-    /// The path to the resolved dependency.
-    pub path: PathBuf,
+    pub digest: ContentDigest,
+    /// The client to use for fetching the package contents.
+    client: Arc<CachingClient<FileCache>>,
+}
+
+impl Debug for RegistryResolution {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.debug_struct("RegistryResolution")
+            .field("name", &self.name)
+            .field("package", &self.package)
+            .field("registry", &self.registry)
+            .field("requirement", &self.requirement)
+            .field("version", &self.version)
+            .field("digest", &self.digest)
+            .finish()
+    }
 }
 
 /// Represents information about a resolution of a local file.
 #[derive(Clone, Debug)]
 pub struct LocalResolution {
     /// The name of the dependency that was resolved.
-    pub name: registry::PackageName,
+    pub name: PackageRef,
     /// The path to the resolved dependency.
     pub path: PathBuf,
 }
@@ -265,18 +279,10 @@ pub enum DependencyResolution {
 
 impl DependencyResolution {
     /// Gets the name of the dependency that was resolved.
-    pub fn name(&self) -> &registry::PackageName {
+    pub fn name(&self) -> &PackageRef {
         match self {
             Self::Registry(res) => &res.name,
             Self::Local(res) => &res.name,
-        }
-    }
-
-    /// Gets the path to the resolved dependency.
-    pub fn path(&self) -> &Path {
-        match self {
-            Self::Registry(res) => &res.path,
-            Self::Local(res) => &res.path,
         }
     }
 
@@ -293,7 +299,7 @@ impl DependencyResolution {
     /// The key used in sorting and searching the lock file package list.
     ///
     /// Returns `None` if the dependency is not resolved from a registry package.
-    pub fn key(&self) -> Option<(&registry::PackageName, Option<&str>)> {
+    pub fn key(&self) -> Option<(&PackageRef, Option<&str>)> {
         match self {
             DependencyResolution::Registry(pkg) => Some((&pkg.package, pkg.registry.as_deref())),
             DependencyResolution::Local(_) => None,
@@ -301,37 +307,60 @@ impl DependencyResolution {
     }
 
     /// Decodes the resolved dependency.
-    pub fn decode(&self) -> Result<DecodedDependency> {
+    pub async fn decode(&self) -> Result<DecodedDependency> {
         // If the dependency path is a directory, assume it contains wit to parse as a package.
-        if self.path().is_dir() {
-            return Ok(DecodedDependency::Wit {
-                resolution: self,
-                package: UnresolvedPackage::parse_dir(self.path()).with_context(|| {
+        let bytes = match self {
+            DependencyResolution::Local(LocalResolution { path, .. })
+                if tokio::fs::metadata(path).await?.is_dir() =>
+            {
+                return Ok(DecodedDependency::Wit {
+                    resolution: self,
+                    package: UnresolvedPackage::parse_dir(path).with_context(|| {
+                        format!("failed to parse dependency `{path}`", path = path.display())
+                    })?,
+                });
+            }
+            DependencyResolution::Local(LocalResolution { path, .. }) => {
+                tokio::fs::read(path).await.with_context(|| {
                     format!(
-                        "failed to parse dependency `{path}`",
-                        path = self.path().display()
+                        "failed to read content of dependency `{name}` at path `{path}`",
+                        name = self.name(),
+                        path = path.display()
                     )
-                })?,
-            });
-        }
+                })?
+            }
+            DependencyResolution::Registry(res) => {
+                let stream = res
+                    .client
+                    .get_content(
+                        &res.package,
+                        &Release {
+                            version: res.version.clone(),
+                            content_digest: res.digest.clone(),
+                        },
+                    )
+                    .await?;
 
-        let bytes = fs::read(self.path()).with_context(|| {
-            format!(
-                "failed to read content of dependency `{name}` at path `{path}`",
-                name = self.name(),
-                path = self.path().display()
-            )
-        })?;
+                let mut buf = Vec::new();
+                tokio_util::io::StreamReader::new(
+                    stream.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e)),
+                )
+                .read_to_end(&mut buf)
+                .await?;
+                buf
+            }
+        };
 
         if &bytes[0..4] != b"\0asm" {
             return Ok(DecodedDependency::Wit {
                 resolution: self,
                 package: UnresolvedPackage::parse(
-                    self.path(),
+                    // This is fake, but it's needed for the parser to work.
+                    self.name().to_string().as_ref(),
                     std::str::from_utf8(&bytes).with_context(|| {
                         format!(
-                            "dependency `{path}` is not UTF-8 encoded",
-                            path = self.path().display()
+                            "dependency `{name}` is not UTF-8 encoded",
+                            name = self.name()
                         )
                     })?,
                 )?,
@@ -342,9 +371,8 @@ impl DependencyResolution {
             resolution: self,
             decoded: wit_component::decode(&bytes).with_context(|| {
                 format!(
-                    "failed to decode content of dependency `{name}` at path `{path}`",
+                    "failed to decode content of dependency `{name}`",
                     name = self.name(),
-                    path = self.path().display()
                 )
             })?,
         })
@@ -416,39 +444,42 @@ impl<'a> DecodedDependency<'a> {
 
 /// Used to resolve dependencies for a WIT package.
 pub struct DependencyResolver<'a> {
-    terminal: &'a Terminal,
-    registry_urls: &'a HashMap<String, Url>,
-    warg_config: &'a Config,
+    client: Arc<CachingClient<FileCache>>,
     lock_file: Option<LockFileResolver<'a>>,
     registries: IndexMap<&'a str, Registry<'a>>,
-    resolutions: HashMap<registry::PackageName, DependencyResolution>,
-    network_allowed: bool,
+    resolutions: HashMap<PackageRef, DependencyResolution>,
 }
 
 impl<'a> DependencyResolver<'a> {
     /// Creates a new dependency resolver.
-    pub fn new(
-        warg_config: &'a Config,
-        registry_urls: &'a HashMap<String, Url>,
-        lock_file: Option<LockFileResolver<'a>>,
-        terminal: &'a Terminal,
-        network_allowed: bool,
-    ) -> Result<Self> {
-        Ok(DependencyResolver {
-            terminal,
-            registry_urls,
-            warg_config,
+    pub fn new(config: Config, lock_file: Option<LockFileResolver<'a>>, cache: FileCache) -> Self {
+        let client = CachingClient::new(Client::new(config), cache);
+        DependencyResolver {
+            client: Arc::new(client),
             lock_file,
             registries: Default::default(),
             resolutions: Default::default(),
-            network_allowed,
-        })
+        }
+    }
+
+    /// Creates a new dependency resolver with the given client. This is useful when you already
+    /// have a client available
+    pub fn new_with_client(
+        client: Arc<CachingClient<FileCache>>,
+        lock_file: Option<LockFileResolver<'a>>,
+    ) -> Self {
+        DependencyResolver {
+            client,
+            lock_file,
+            registries: Default::default(),
+            resolutions: Default::default(),
+        }
     }
 
     /// Add a dependency to the resolver.
     pub async fn add_dependency(
         &mut self,
-        name: &'a registry::PackageName,
+        name: &'a PackageRef,
         dependency: &'a Dependency,
     ) -> Result<()> {
         match dependency {
@@ -470,25 +501,15 @@ impl<'a> DependencyResolver<'a> {
 
                 let registry = match self.registries.entry(registry_name) {
                     indexmap::map::Entry::Occupied(e) => e.into_mut(),
-                    indexmap::map::Entry::Vacant(e) => {
-                        let url = find_url(
-                            Some(registry_name),
-                            self.registry_urls,
-                            self.warg_config.home_url.as_deref(),
-                        )?;
-                        e.insert(Registry {
-                            client: Arc::new(
-                                create_client(self.warg_config, url, self.terminal).await?,
-                            ),
-                            packages: HashMap::new(),
-                            dependencies: Vec::new(),
-                            upserts: HashSet::new(),
-                        })
-                    }
+                    indexmap::map::Entry::Vacant(e) => e.insert(Registry {
+                        client: self.client.clone(),
+                        packages: HashMap::new(),
+                        dependencies: Vec::new(),
+                    }),
                 };
 
                 registry
-                    .add_dependency(name, package_name, &package.version, registry_name, locked)
+                    .add_dependency(name, package_name, &package.version, locked)
                     .await?;
             }
             Dependency::Local(p) => {
@@ -511,202 +532,44 @@ impl<'a> DependencyResolver<'a> {
     /// This will download all dependencies that are not already present in client storage.
     ///
     /// Returns the dependency resolution map.
-    pub async fn resolve(self) -> Result<DependencyResolutionMap> {
-        let Self {
-            mut registries,
-            mut resolutions,
-            terminal,
-            network_allowed,
-            ..
-        } = self;
-
-        // Start by updating the packages that need updating
-        // This will determine the contents that need to be downloaded
-        let downloads = Self::update_packages(&mut registries, terminal, network_allowed).await?;
-
-        // Finally, download and resolve the dependencies
-        for resolution in
-            Self::download_and_resolve(registries, downloads, terminal, network_allowed).await?
-        {
-            let prev = resolutions.insert(resolution.name().clone(), resolution);
-            assert!(prev.is_none());
+    pub async fn resolve(mut self) -> Result<DependencyResolutionMap> {
+        // Resolve all dependencies
+        for (name, registry) in self.registries.iter_mut() {
+            registry.resolve(name).await?;
         }
 
-        Ok(resolutions)
-    }
-
-    async fn update_packages(
-        registries: &mut IndexMap<&'a str, Registry<'a>>,
-        terminal: &Terminal,
-        network_allowed: bool,
-    ) -> Result<DownloadMap<'a>> {
-        let task_count = registries
-            .iter()
-            .filter(|(_, r)| !r.upserts.is_empty())
-            .count();
-
-        let mut progress = ProgressBar::with_style("Updating", ProgressStyle::Ratio, terminal);
-
-        if task_count > 0 {
-            if !network_allowed {
-                bail!("a component registry update is required but network access is disabled");
-            }
-
-            terminal.status("Updating", "component registry package logs")?;
-            progress.tick_now(0, task_count, "")?;
-        }
-
-        let mut downloads = DownloadMap::new();
-        let mut futures = FuturesUnordered::new();
-        for (index, (name, registry)) in registries.iter_mut().enumerate() {
-            let upserts = std::mem::take(&mut registry.upserts);
-            if upserts.is_empty() {
-                // No upserts needed, add the necessary downloads now
-                registry.add_downloads(name, &mut downloads).await?;
-                continue;
-            }
-
-            log::info!("updating package logs for registry `{name}`");
-
-            let client = registry.client.clone();
-            futures.push(tokio::spawn(async move {
-                (index, client.fetch_packages(upserts.iter()).await)
-            }))
-        }
-
-        assert_eq!(futures.len(), task_count);
-
-        let mut finished = 0;
-        while let Some(res) = futures.next().await {
-            let (index, res) = res.context("failed to join registry update task")?;
-            let (name, registry) = registries
-                .get_index_mut(index)
-                .expect("out of bounds registry index");
-
-            res.with_context(|| {
-                format!("failed to update package logs for component registry `{name}`")
-            })?;
-
-            log::info!("package logs successfully updated for component registry `{name}`");
-            finished += 1;
-            progress.tick_now(finished, task_count, ": updated `{name}`")?;
-            registry.add_downloads(name, &mut downloads).await?;
-        }
-
-        assert_eq!(finished, task_count);
-
-        progress.clear();
-
-        Ok(downloads)
-    }
-
-    async fn download_and_resolve(
-        mut registries: IndexMap<&'a str, Registry<'a>>,
-        downloads: DownloadMap<'a>,
-        terminal: &Terminal,
-        network_allowed: bool,
-    ) -> Result<impl Iterator<Item = DependencyResolution> + 'a> {
-        if !downloads.is_empty() {
-            if !network_allowed {
-                bail!("a component package download is required but network access is disabled");
-            }
-
-            terminal.status("Downloading", "component registry packages")?;
-
-            let mut progress =
-                ProgressBar::with_style("Downloading", ProgressStyle::Ratio, terminal);
-
-            let count = downloads.len();
-            progress.tick_now(0, count, "")?;
-
-            let mut futures = FuturesUnordered::new();
-            for ((registry_name, name, version), deps) in downloads {
-                let registry_index = registries.get_index_of(registry_name).unwrap();
-                let (_, registry) = registries.get_index(registry_index).unwrap();
-
-                log::info!("downloading content for package `{name}` from component registry `{registry_name}`");
-
-                let client = registry.client.clone();
-                futures.push(tokio::spawn(async move {
-                    let res = client.download_exact(&name, &version).await;
-                    (registry_index, name, version, deps, res)
-                }))
-            }
-
-            assert_eq!(futures.len(), count);
-
-            let mut finished = 0;
-            while let Some(res) = futures.next().await {
-                let (registry_index, name, version, deps, res) =
-                    res.context("failed to join content download task")?;
-                let (registry_name, registry) = registries
-                    .get_index_mut(registry_index)
-                    .expect("out of bounds registry index");
-
-                let download = res.with_context(|| {
-                    format!("failed to download package `{name}` (v{version}) from component registry `{registry_name}`")
-                })?;
-
-                log::info!(
-                    "downloaded contents of package `{name}` (v{version}) from component registry `{registry_name}`"
-                );
-
-                finished += 1;
-                progress.tick_now(
-                    finished,
-                    count,
-                    &format!(": downloaded `{name}` (v{version})"),
-                )?;
-
-                for index in deps {
-                    let dependency = &mut registry.dependencies[index];
-                    assert!(dependency.resolution.is_none());
-                    dependency.resolution = Some(RegistryResolution {
-                        name: dependency.name.clone(),
-                        package: dependency.package.clone(),
-                        registry: if *registry_name == DEFAULT_REGISTRY_NAME {
-                            None
-                        } else {
-                            Some(registry_name.to_string())
-                        },
-                        requirement: dependency.version.clone(),
-                        version: download.version.clone(),
-                        digest: download.digest.clone(),
-                        path: download.path.clone(),
-                    });
-                }
-            }
-
-            assert_eq!(finished, count);
-
-            progress.clear();
-        }
-
-        Ok(registries
+        for resolution in self
+            .registries
             .into_values()
             .flat_map(|r| r.dependencies.into_iter())
             .map(|d| {
                 DependencyResolution::Registry(
                     d.resolution.expect("dependency should have been resolved"),
                 )
-            }))
+            })
+        {
+            let prev = self
+                .resolutions
+                .insert(resolution.name().clone(), resolution);
+            assert!(prev.is_none());
+        }
+
+        Ok(self.resolutions)
     }
 }
 
 struct Registry<'a> {
-    client: Arc<FileSystemClient>,
-    packages: HashMap<registry::PackageName, PackageInfo>,
+    client: Arc<CachingClient<FileCache>>,
+    packages: HashMap<PackageRef, Vec<VersionInfo>>,
     dependencies: Vec<RegistryDependency<'a>>,
-    upserts: HashSet<registry::PackageName>,
 }
 
 impl<'a> Registry<'a> {
     async fn add_dependency(
         &mut self,
-        name: &'a registry::PackageName,
-        package: registry::PackageName,
+        name: &'a PackageRef,
+        package: PackageRef,
         version: &'a VersionReq,
-        registry: &str,
         locked: Option<&LockedPackageVersion>,
     ) -> Result<()> {
         let dep = RegistryDependency {
@@ -719,56 +582,28 @@ impl<'a> Registry<'a> {
 
         self.dependencies.push(dep);
 
-        let mut needs_upsert = true;
-        if let Some(locked) = locked {
-            if let Some(package) =
-                Self::load_package(&self.client, &mut self.packages, package.clone()).await?
-            {
-                if package
-                    .state
-                    .release(&locked.version)
-                    .and_then(|r| r.content())
-                    .is_some()
-                {
-                    // Don't need to upsert this package as it is present
-                    // in the lock file and in client storage.
-                    needs_upsert = false;
-                }
-            }
-        }
-
-        if needs_upsert && self.upserts.insert(package.clone()) {
-            log::info!(
-                "package `{package}` from component registry `{registry}` needs to be updated"
-            );
-        }
-
         Ok(())
     }
 
-    async fn add_downloads(
-        &mut self,
-        registry: &'a str,
-        downloads: &mut DownloadMap<'a>,
-    ) -> Result<()> {
-        let Self {
-            dependencies,
-            packages,
-            client,
-            ..
-        } = self;
+    async fn resolve(&mut self, registry: &'a str) -> Result<()> {
+        for dependency in self.dependencies.iter_mut() {
+            // We need to clone a handle to the client because we mutably borrow self below. Might
+            // be worth replacing the mutable borrow with a RwLock down the line.
+            let client = self.client.clone();
+            let versions = load_package(
+                &mut self.packages,
+                &self.client.client,
+                dependency.package.clone(),
+            )
+            .await?
+            .with_context(|| {
+                format!(
+                    "package `{name}` was not found in component registry `{registry}`",
+                    name = dependency.package
+                )
+            })?;
 
-        for (index, dependency) in dependencies.iter_mut().enumerate() {
-            let package = Self::load_package(client, packages, dependency.package.clone())
-                .await?
-                .with_context(|| {
-                    format!(
-                        "package `{name}` was not found in component registry `{registry}`",
-                        name = dependency.package
-                    )
-                })?;
-
-            let release = match &dependency.locked {
+            let (selected_version, digest) = match &dependency.locked {
                 Some((version, digest)) => {
                     // The dependency had a lock file entry, so attempt to do an exact match first
                     let exact_req = VersionReq {
@@ -781,104 +616,86 @@ impl<'a> Registry<'a> {
                         }],
                     };
 
-                    // If an exact match can't be found, fallback to the latest release to
-                    // satisfy the version requirement; this can happen when packages are yanked
-                    package.state.find_latest_release(&exact_req).map(|r| {
-                        // Exact match, verify the content digests match
-                        let content = r.content().expect("release must have content");
-                        if content != digest {
-                            bail!(
-                                "component registry package `{name}` (v`{version}`) has digest `{content}` but the lock file specifies digest `{digest}`",
-                                name = dependency.package,
-                            );
-                        }
-                        Ok(r)
-                    }).transpose()?.or_else(|| package.state.find_latest_release(dependency.version))
+                    // If an exact match can't be found, fallback to the latest release to satisfy
+                    // the version requirement; this can happen when packages are yanked. If we did
+                    // find an exact match, return the digest for comparison after fetching the
+                    // release
+                    find_latest_release(versions, &exact_req).map(|v| (v, Some(digest))).or_else(|| find_latest_release(versions, dependency.version).map(|v| (v, None)))
                 }
-                None => package.state.find_latest_release(dependency.version),
+                None => find_latest_release(versions, dependency.version).map(|v| (v, None)),
             }.with_context(|| format!("component registry package `{name}` has no release matching version requirement `{version}`", name = dependency.package, version = dependency.version))?;
-
-            let digest = release.content().expect("release must have content");
-            match client.content().content_location(digest) {
-                Some(path) => {
-                    // Content is already present, set the resolution
-                    assert!(dependency.resolution.is_none());
-                    dependency.resolution = Some(RegistryResolution {
-                        name: dependency.name.clone(),
-                        package: dependency.package.clone(),
-                        registry: if registry == DEFAULT_REGISTRY_NAME {
-                            None
-                        } else {
-                            Some(registry.to_string())
-                        },
-                        requirement: dependency.version.clone(),
-                        version: release.version.clone(),
-                        digest: digest.clone(),
-                        path,
-                    });
-
-                    log::info!(
-                        "version {version} of registry package `{name}` from registry `{registry}` is already in client storage",
+            // We need to clone a handle to the client because we mutably borrow self above. Might
+            // be worth replacing the mutable borrow with a RwLock down the line.
+            let release = client
+                .client
+                .get_release(&dependency.package, &selected_version.version)
+                .await?;
+            if let Some(digest) = digest {
+                if &release.content_digest != digest {
+                    bail!(
+                        "component registry package `{name}` (v`{version}`) has digest `{content}` but the lock file specifies digest `{digest}`",
                         name = dependency.package,
                         version = release.version,
+                        content = release.content_digest,
                     );
                 }
-                None => {
-                    // Content needs to be downloaded
-                    let indexes = downloads
-                        .entry((
-                            registry,
-                            dependency.package.clone(),
-                            release.version.clone(),
-                        ))
-                        .or_default();
-
-                    if indexes.is_empty() {
-                        log::info!(
-                            "version {version} of registry package `{name}` from registry `{registry}` needs to be downloaded",
-                            name = dependency.package,
-                            version = release.version,
-                        );
-                    }
-
-                    indexes.push(index);
-                }
             }
+
+            dependency.resolution = Some(RegistryResolution {
+                name: dependency.name.clone(),
+                package: dependency.package.clone(),
+                registry: if registry == DEFAULT_REGISTRY_NAME {
+                    None
+                } else {
+                    Some(registry.to_string())
+                },
+                requirement: dependency.version.clone(),
+                version: release.version.clone(),
+                digest: release.content_digest.clone(),
+                client: self.client.clone(),
+            });
         }
 
         Ok(())
     }
+}
 
-    async fn load_package<'b>(
-        client: &FileSystemClient,
-        packages: &'b mut HashMap<registry::PackageName, PackageInfo>,
-        name: registry::PackageName,
-    ) -> Result<Option<&'b PackageInfo>> {
-        match packages.entry(name) {
-            hash_map::Entry::Occupied(e) => Ok(Some(e.into_mut())),
-            hash_map::Entry::Vacant(e) => match client.package(e.key()).await {
-                Ok(p) => Ok(Some(e.insert(p))),
-                Err(warg_client::ClientError::PackageDoesNotExist { .. }) => Ok(None),
-                Err(err) => Err(err.into()),
-            },
-        }
+async fn load_package<'b>(
+    packages: &'b mut HashMap<PackageRef, Vec<VersionInfo>>,
+    client: &Client,
+    package: PackageRef,
+) -> Result<Option<&'b Vec<VersionInfo>>> {
+    match packages.entry(package) {
+        hash_map::Entry::Occupied(e) => Ok(Some(e.into_mut())),
+        hash_map::Entry::Vacant(e) => match client.list_all_versions(e.key()).await {
+            Ok(p) => Ok(Some(e.insert(p))),
+            Err(WasmPkgError::PackageNotFound) => Ok(None),
+            Err(err) => Err(err.into()),
+        },
     }
 }
 
-type DownloadMapKey<'a> = (&'a str, registry::PackageName, Version);
-type DownloadMap<'a> = HashMap<DownloadMapKey<'a>, Vec<usize>>;
-
 struct RegistryDependency<'a> {
     /// The package name assigned in the configuration file.
-    name: &'a registry::PackageName,
+    name: &'a PackageRef,
     /// The package name of the registry package.
-    package: registry::PackageName,
+    package: PackageRef,
     version: &'a VersionReq,
-    locked: Option<(Version, AnyHash)>,
+    locked: Option<(Version, ContentDigest)>,
     resolution: Option<RegistryResolution>,
 }
 
 /// Represents a map of dependency resolutions.
 ///
 /// The key to the map is the package name of the dependency.
-pub type DependencyResolutionMap = HashMap<registry::PackageName, DependencyResolution>;
+pub type DependencyResolutionMap = HashMap<PackageRef, DependencyResolution>;
+
+fn find_latest_release<'a>(
+    versions: &'a [VersionInfo],
+    req: &VersionReq,
+) -> Option<&'a VersionInfo> {
+    versions
+        .iter()
+        .filter(|info| !info.yanked && req.matches(&info.version))
+        .max_by(|a, b| a.version.cmp(&b.version))
+}

@@ -1,21 +1,19 @@
 //! A module for implementing the Rust source generator used for
 //! the `--target` option of the `new` command.
-
-use anyhow::{bail, Context, Result};
-use heck::{AsSnakeCase, ToSnakeCase, ToUpperCamelCase};
-use indexmap::{map::Entry, IndexMap, IndexSet};
 use std::{
     borrow::Cow,
     collections::{BTreeMap, BTreeSet},
     fmt::{self, Write},
-    fs,
     io::Read,
-    path::Path,
     process::{Command, Stdio},
 };
-use warg_protocol::registry::PackageName;
+
+use anyhow::{bail, Context, Result};
+use cargo_component_core::registry::DependencyResolution;
+use heck::{AsSnakeCase, ToSnakeCase, ToUpperCamelCase};
+use indexmap::{map::Entry, IndexMap, IndexSet};
+use wasm_pkg_client::PackageRef;
 use wit_bindgen_rust::to_rust_ident;
-use wit_component::DecodedWasm;
 use wit_parser::{
     Function, FunctionKind, Handle, Interface, Resolve, Type, TypeDef, TypeDefKind, TypeId,
     TypeOwner, World, WorldId, WorldItem, WorldKey,
@@ -741,8 +739,8 @@ impl<'a> ImplementationGenerator<'a> {
 /// The generated source defines a component that will implement the expected
 /// export traits for the given world.
 pub struct SourceGenerator<'a> {
-    name: &'a PackageName,
-    path: &'a Path,
+    resolution: &'a DependencyResolution,
+    name: &'a PackageRef,
     format: bool,
 }
 
@@ -751,13 +749,17 @@ impl<'a> SourceGenerator<'a> {
     /// a binary-encoded target wit package.
     ///
     /// If `format` is true, then `cargo fmt` will be run on the generated source.
-    pub fn new(name: &'a PackageName, path: &'a Path, format: bool) -> Self {
-        Self { name, path, format }
+    pub fn new(resolution: &'a DependencyResolution, name: &'a PackageRef, format: bool) -> Self {
+        Self {
+            resolution,
+            name,
+            format,
+        }
     }
 
     /// Generates the Rust source code for the given world.
-    pub fn generate(&self, world: Option<&str>) -> Result<String> {
-        let (resolve, world) = self.decode(world)?;
+    pub async fn generate(&self, world: Option<&str>) -> Result<String> {
+        let (resolve, world) = self.decode(world).await?;
         let mut names = ReservedNames::default();
         let generator = ImplementationGenerator::new(&resolve, &resolve.worlds[world], &mut names);
 
@@ -815,34 +817,14 @@ impl<'a> SourceGenerator<'a> {
         Ok(source)
     }
 
-    fn decode(&self, world: Option<&str>) -> Result<(Resolve, WorldId)> {
-        let bytes = fs::read(self.path).with_context(|| {
+    async fn decode(&self, world: Option<&str>) -> Result<(Resolve, WorldId)> {
+        let (resolve, pkg_id, _) = self.resolution.decode().await?.resolve()?;
+        let world = resolve.select_world(pkg_id, world).with_context(|| {
             format!(
-                "failed to read the content of target package `{name}` path `{path}`",
-                name = self.name,
-                path = self.path.display()
+                "failed to select world from target package `{name}`",
+                name = self.name
             )
         })?;
-
-        let decoded = wit_component::decode(&bytes).with_context(|| {
-            format!(
-                "failed to decode the content of target package `{name}` path `{path}`",
-                name = self.name,
-                path = self.path.display()
-            )
-        })?;
-
-        match decoded {
-            DecodedWasm::WitPackage(resolve, package) => {
-                let world = resolve.select_world(package, world).with_context(|| {
-                    format!(
-                        "failed to select world from target package `{name}`",
-                        name = self.name
-                    )
-                })?;
-                Ok((resolve, world))
-            }
-            DecodedWasm::Component(..) => bail!("target is not a WIT package"),
-        }
+        Ok((resolve, world))
     }
 }

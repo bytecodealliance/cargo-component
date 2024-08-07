@@ -1,21 +1,23 @@
-use crate::support::*;
+use std::fs;
+
 use anyhow::{Context, Result};
 use assert_cmd::prelude::*;
 use predicates::str::contains;
 use semver::Version;
-use std::{fs, rc::Rc};
-use tempfile::TempDir;
 use toml_edit::{value, Array};
 use warg_client::Client;
 use warg_protocol::registry::PackageName;
 use wasm_metadata::LinkType;
+use wasm_pkg_client::warg::WargRegistryConfig;
+
+use crate::support::*;
 
 mod support;
 
 #[test]
 fn help() {
     for arg in ["help publish", "publish -h", "publish --help"] {
-        cargo_component(arg)
+        cargo_component(arg.split_whitespace())
             .assert()
             .stdout(contains("Publish a package to a registry"))
             .success();
@@ -24,12 +26,13 @@ fn help() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_publishes_a_component() -> Result<()> {
-    let dir = Rc::new(TempDir::new()?);
-    let (_server, config) = spawn_server(dir.path()).await?;
-    config.write_to_file(&dir.path().join("warg-config.json"))?;
+    let (server, config, registry) = spawn_server(Vec::<String>::new()).await?;
+
+    let warg_config =
+        WargRegistryConfig::try_from(config.registry_config(&registry).unwrap()).unwrap();
 
     publish_wit(
-        &config,
+        &warg_config.client_config,
         "test:world",
         "1.0.0",
         r#"package test:%world@1.0.0;
@@ -41,14 +44,18 @@ world foo {
     )
     .await?;
 
-    let project = Project::with_dir(dir.clone(), "foo", "--namespace test --target test:world")?;
+    let project = server.project(
+        "foo",
+        true,
+        ["--namespace", "test", "--target", "test:world"],
+    )?;
 
     // Ensure there's a using declaration in the generated source
     let source = fs::read_to_string(project.root().join("src/lib.rs"))?;
     assert!(source.contains("use bindings::Guest;"));
 
     project
-        .cargo_component("publish --init")
+        .cargo_component(["publish", "--init"])
         .env("CARGO_COMPONENT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("Published package `test:foo` v0.1.0"))
@@ -67,12 +74,13 @@ world foo {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_fails_if_package_does_not_exist() -> Result<()> {
-    let dir = Rc::new(TempDir::new()?);
-    let (_server, config) = spawn_server(dir.path()).await?;
-    config.write_to_file(&dir.path().join("warg-config.json"))?;
+    let (server, config, registry) = spawn_server(Vec::<String>::new()).await?;
+
+    let warg_config =
+        WargRegistryConfig::try_from(config.registry_config(&registry).unwrap()).unwrap();
 
     publish_wit(
-        &config,
+        &warg_config.client_config,
         "test:world",
         "1.0.0",
         r#"package test:%world@1.0.0;
@@ -84,10 +92,13 @@ world foo {
     )
     .await?;
 
-    let project = Project::with_dir(dir.clone(), "foo", "--namespace test --target test:world")?;
-
+    let project = server.project(
+        "foo",
+        true,
+        ["--namespace", "test", "--target", "test:world"],
+    )?;
     project
-        .cargo_component("publish")
+        .cargo_component(["publish"])
         .env("CARGO_COMPONENT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains(
@@ -100,12 +111,13 @@ world foo {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_publishes_a_dependency() -> Result<()> {
-    let dir = Rc::new(TempDir::new()?);
-    let (_server, config) = spawn_server(dir.path()).await?;
-    config.write_to_file(&dir.path().join("warg-config.json"))?;
+    let (server, config, registry) = spawn_server(Vec::<String>::new()).await?;
+
+    let warg_config =
+        WargRegistryConfig::try_from(config.registry_config(&registry).unwrap()).unwrap();
 
     publish_wit(
-        &config,
+        &warg_config.client_config,
         "test:world",
         "1.0.0",
         r#"package test:%world@1.0.0;
@@ -116,14 +128,14 @@ world foo {
     )
     .await?;
 
-    let project = Project::with_dir(
-        dir.clone(),
+    let project = server.project(
         "foo",
-        "--namespace test --target test:world/foo",
+        true,
+        ["--namespace", "test", "--target", "test:world/foo"],
     )?;
 
     project
-        .cargo_component("publish --init")
+        .cargo_component(["publish", "--init"])
         .env("CARGO_COMPONENT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("Published package `test:foo` v0.1.0"))
@@ -131,10 +143,13 @@ world foo {
 
     validate_component(&project.release_wasm("foo"))?;
 
-    let project = Project::with_dir(dir.clone(), "bar", "--namespace test --target test:world")?;
-
+    let project = server.project(
+        "bar",
+        true,
+        ["--namespace", "test", "--target", "test:world"],
+    )?;
     project
-        .cargo_component("add test:foo")
+        .cargo_component(["add", "test:foo"])
         .assert()
         .stderr(contains("Added dependency `test:foo` with version `0.1.0`"))
         .success();
@@ -156,7 +171,7 @@ bindings::export!(Component with_types_in bindings);
     fs::write(project.root().join("src/lib.rs"), source)?;
 
     project
-        .cargo_component("publish --init")
+        .cargo_component(["publish", "--init"])
         .env("CARGO_COMPONENT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("Published package `test:bar` v0.1.0"))
@@ -169,9 +184,10 @@ bindings::export!(Component with_types_in bindings);
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_publishes_with_registry_metadata() -> Result<()> {
-    let dir = Rc::new(TempDir::new()?);
-    let (_server, config) = spawn_server(dir.path()).await?;
-    config.write_to_file(&dir.path().join("warg-config.json"))?;
+    let (server, config, registry) = spawn_server(Vec::<String>::new()).await?;
+
+    let warg_config =
+        WargRegistryConfig::try_from(config.registry_config(&registry).unwrap()).unwrap();
 
     let authors = ["Jane Doe <jane@example.com>"];
     let categories = ["wasm"];
@@ -181,7 +197,7 @@ async fn it_publishes_with_registry_metadata() -> Result<()> {
     let homepage = "https://example.com/home";
     let repository = "https://example.com/repo";
 
-    let project = Project::with_dir(dir.clone(), "foo", "--namespace test")?;
+    let project = server.project("foo", true, ["--namespace", "test"])?;
     project.update_manifest(|mut doc| {
         let package = &mut doc["package"];
         package["authors"] = value(Array::from_iter(authors));
@@ -195,7 +211,7 @@ async fn it_publishes_with_registry_metadata() -> Result<()> {
     })?;
 
     project
-        .cargo_component("publish --init")
+        .cargo_component(["publish", "--init"])
         .env("CARGO_COMPONENT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("Published package `test:foo` v0.1.0"))
@@ -203,7 +219,7 @@ async fn it_publishes_with_registry_metadata() -> Result<()> {
 
     validate_component(&project.release_wasm("foo"))?;
 
-    let client = Client::new_with_config(None, &config, None).await?;
+    let client = Client::new_with_config(None, &warg_config.client_config, None).await?;
     let download = client
         .download_exact(&PackageName::new("test:foo")?, &Version::parse("0.1.0")?)
         .await?;

@@ -1,19 +1,20 @@
 use std::rc::Rc;
 
-use crate::support::*;
 use anyhow::Result;
 use assert_cmd::prelude::*;
 use predicates::{prelude::PredicateBooleanExt, str::contains};
 use tempfile::TempDir;
 
+use crate::support::*;
+
 mod support;
 
 #[test]
 fn it_prints_metadata() -> Result<()> {
-    let project = Project::new("foo")?;
+    let project = Project::new("foo", true)?;
 
     project
-        .cargo_component("metadata --format-version 1")
+        .cargo_component(["metadata", "--format-version", "1"])
         .assert()
         .stdout(contains(r#""name":"foo","version":"0.1.0""#))
         .success();
@@ -23,11 +24,11 @@ fn it_prints_metadata() -> Result<()> {
 
 #[test]
 fn it_rejects_invalid_format_versions() -> Result<()> {
-    let project = Project::new("foo")?;
+    let project = Project::new("foo", true)?;
 
     for arg in ["7", "0", "42"] {
         project
-            .cargo_component(&format!("metadata --format-version {arg}"))
+            .cargo_component(["metadata", "--format-version", arg])
             .assert()
             .stderr(contains("invalid value"))
             .failure();
@@ -39,10 +40,8 @@ fn it_rejects_invalid_format_versions() -> Result<()> {
 #[test]
 fn it_prints_workspace_metadata() -> Result<()> {
     let dir = Rc::new(TempDir::new()?);
-    let project = Project {
-        dir: dir.clone(),
-        root: dir.path().to_owned(),
-    };
+    let root = dir.path().to_owned();
+    let project = Project::new_uninitialized(dir, root);
 
     project.file(
         "baz/Cargo.toml",
@@ -58,13 +57,13 @@ edition = "2021"
     project.file("baz/src/lib.rs", "")?;
 
     project
-        .cargo_component("new --lib foo")
+        .cargo_component(["new", "--lib", "foo"])
         .assert()
         .stderr(contains("Updated manifest of package `foo`"))
         .success();
 
     project
-        .cargo_component("new --lib bar")
+        .cargo_component(["new", "--lib", "bar"])
         .assert()
         .stderr(contains("Updated manifest of package `bar`"))
         .success();
@@ -78,7 +77,7 @@ members = ["foo", "bar", "baz"]
     )?;
 
     project
-        .cargo_component("metadata --format-version 1")
+        .cargo_component(["metadata", "--format-version", "1"])
         .assert()
         .stdout(
             contains(r#"name":"foo","version":"0.1.0""#).and(

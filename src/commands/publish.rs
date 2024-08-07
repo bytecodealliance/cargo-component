@@ -1,13 +1,16 @@
+use std::path::PathBuf;
+
+use anyhow::{bail, Context, Result};
+use cargo_component_core::{command::CommonOptions, registry::find_url};
+use clap::Args;
+use warg_crypto::signing::PrivateKey;
+use warg_protocol::registry::PackageName;
+
 use crate::{
     config::{CargoArguments, CargoPackageSpec, Config},
     is_wasm_target, load_metadata, publish, run_cargo_command, PackageComponentMetadata,
     PublishOptions,
 };
-use anyhow::{bail, Context, Result};
-use cargo_component_core::{command::CommonOptions, registry::find_url};
-use clap::Args;
-use std::path::PathBuf;
-use warg_crypto::signing::PrivateKey;
 
 /// Publish a package to a registry.
 #[derive(Args)]
@@ -79,7 +82,8 @@ impl PublishCommand {
     pub async fn exec(self) -> Result<()> {
         log::debug!("executing publish command");
 
-        let config = Config::new(self.common.new_terminal())?;
+        let config = Config::new(self.common.new_terminal(), self.common.config.clone())?;
+        let client = config.client(self.common.cache_dir.clone()).await?;
 
         if let Some(target) = &self.target {
             if !is_wasm_target(target) {
@@ -153,6 +157,7 @@ impl PublishCommand {
 
         let spawn_args = self.build_args()?;
         let outputs = run_cargo_command(
+            client,
             &config,
             &metadata,
             &packages,
@@ -167,12 +172,13 @@ impl PublishCommand {
                 len = outputs.len()
             );
         }
-
+        // Safe to unwrap here because we already know a PackageRef is valid
+        let package_name = PackageName::new(name.to_string()).unwrap();
         let options = PublishOptions {
             package,
             registry_url,
             init: self.init,
-            name,
+            name: &package_name,
             version: &component_metadata.version,
             path: &outputs[0],
             signing_key,

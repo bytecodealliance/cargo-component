@@ -1,14 +1,16 @@
-use crate::support::*;
+use std::fs;
+
 use anyhow::Result;
 use assert_cmd::prelude::*;
 use predicates::str::contains;
-use std::fs;
+
+use crate::support::*;
 
 mod support;
 
 #[test]
 fn it_runs_test_with_command_component() -> Result<()> {
-    let project = Project::new_bin("foo-bar")?;
+    let project = Project::new("foo-bar", false)?;
 
     fs::create_dir_all(project.root().join(".cargo"))?;
     fs::write(
@@ -70,7 +72,7 @@ pub fn test_random_component() {
     )?;
 
     project
-        .cargo_component("test")
+        .cargo_component(["test"])
         .assert()
         .stdout(contains("test test_random_component ... ok"))
         .stdout(contains("test result: ok."))
@@ -81,7 +83,7 @@ pub fn test_random_component() {
 
 #[test]
 fn it_runs_test_with_reactor_component() -> Result<()> {
-    let project = Project::new("foo-bar")?;
+    let project = Project::new("foo-bar", true)?;
 
     fs::write(
         project.root().join("wit/world.wit"),
@@ -120,7 +122,7 @@ pub fn test_random_component() {
     )?;
 
     project
-        .cargo_component("test")
+        .cargo_component(["test"])
         .assert()
         .stdout(contains("test test_random_component ... ok"))
         .stdout(contains("test result: ok."))

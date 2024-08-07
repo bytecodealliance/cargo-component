@@ -19,14 +19,18 @@
 //! to function.
 
 use anyhow::{anyhow, bail, Context, Result};
+use cargo_component_core::cache_dir;
 use cargo_component_core::terminal::{Color, Terminal};
 use cargo_metadata::Metadata;
 use parse_arg::{iter_short, match_arg};
 use semver::Version;
 use std::fmt;
 use std::str::FromStr;
+use std::sync::Arc;
 use std::{collections::BTreeMap, fmt::Display, path::PathBuf};
 use toml_edit::DocumentMut;
+use wasm_pkg_client::caching::{CachingClient, FileCache};
+use wasm_pkg_client::Client;
 
 /// Represents a cargo package specifier.
 ///
@@ -489,15 +493,22 @@ impl CargoArguments {
 pub struct Config {
     /// The warg client configuration.
     pub warg: warg_client::Config,
+    /// The package configuration to use
+    pub pkg_config: wasm_pkg_client::Config,
     /// The terminal to use.
     terminal: Terminal,
 }
 
 impl Config {
     /// Create a new `Config` with the given terminal.
-    pub fn new(terminal: Terminal) -> Result<Self> {
+    pub fn new(terminal: Terminal, config_path: Option<PathBuf>) -> Result<Self> {
+        let pkg_config = match config_path {
+            Some(path) => wasm_pkg_client::Config::from_file(path)?,
+            None => wasm_pkg_client::Config::global_defaults()?,
+        };
         Ok(Self {
             warg: warg_client::Config::from_default_file()?.unwrap_or_default(),
+            pkg_config,
             terminal,
         })
     }
@@ -507,9 +518,25 @@ impl Config {
         &self.warg
     }
 
+    /// Gets the package configuration.
+    pub fn pkg_config(&self) -> &wasm_pkg_client::Config {
+        &self.pkg_config
+    }
+
     /// Gets a reference to the terminal for writing messages.
     pub fn terminal(&self) -> &Terminal {
         &self.terminal
+    }
+
+    /// Creates a [`Client`] from this configuration.
+    pub async fn client(
+        &self,
+        cache: Option<PathBuf>,
+    ) -> anyhow::Result<Arc<CachingClient<FileCache>>> {
+        Ok(Arc::new(CachingClient::new(
+            Client::new(self.pkg_config.clone()),
+            FileCache::new(cache_dir(cache)?).await?,
+        )))
     }
 }
 

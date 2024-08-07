@@ -1,4 +1,11 @@
-use crate::{config::Config, generator::SourceGenerator, metadata, metadata::DEFAULT_WIT_DIR};
+use std::{
+    borrow::Cow,
+    fs,
+    path::{Path, PathBuf},
+    process::Command,
+    sync::Arc,
+};
+
 use anyhow::{bail, Context, Result};
 use cargo_component_core::{
     command::CommonOptions,
@@ -7,15 +14,10 @@ use cargo_component_core::{
 use clap::Args;
 use heck::ToKebabCase;
 use semver::VersionReq;
-use std::{
-    borrow::Cow,
-    collections::HashMap,
-    fs,
-    path::{Path, PathBuf},
-    process::Command,
-};
 use toml_edit::{table, value, DocumentMut, Item, Table, Value};
-use url::Url;
+use wasm_pkg_client::caching::{CachingClient, FileCache};
+
+use crate::{config::Config, generator::SourceGenerator, metadata, metadata::DEFAULT_WIT_DIR};
 
 const WIT_BINDGEN_RT_CRATE: &str = "wit-bindgen-rt";
 
@@ -143,25 +145,22 @@ impl NewCommand {
     pub async fn exec(self) -> Result<()> {
         log::debug!("executing new command");
 
-        let config = Config::new(self.common.new_terminal())?;
+        let config = Config::new(self.common.new_terminal(), self.common.config.clone())?;
 
         let name = PackageName::new(&self.namespace, self.name.as_deref(), &self.path)?;
 
         let out_dir = std::env::current_dir()
             .with_context(|| "couldn't get the current directory of the process")?
             .join(&self.path);
-        let registries = self.registries()?;
 
         let target: Option<metadata::Target> = match self.target.as_deref() {
             Some(s) if s.contains('@') => Some(s.parse()?),
             Some(s) => Some(format!("{s}@{version}", version = VersionReq::STAR).parse()?),
             None => None,
         };
-
-        let target = self
-            .resolve_target(&config, &registries, target, true)
-            .await?;
-        let source = self.generate_source(&target)?;
+        let client = config.client(self.common.cache_dir.clone()).await?;
+        let target = self.resolve_target(client, target).await?;
+        let source = self.generate_source(&target).await?;
 
         let mut command = self.new_command();
         match command.status() {
@@ -175,7 +174,15 @@ impl NewCommand {
             }
         }
 
-        self.update_manifest(&config, &name, &out_dir, &registries, &target)?;
+        let target = target.map(|(res, world)| {
+            match res {
+                DependencyResolution::Registry(reg) => (reg, world),
+                // This is unreachable because when we got the initial target, we made sure it was a
+                // registry target.
+                _ => unreachable!(),
+            }
+        });
+        self.update_manifest(&config, &name, &out_dir, &target)?;
         self.create_source_file(&config, &out_dir, source.as_ref(), &target)?;
         self.create_targets_file(&name, &out_dir)?;
         self.create_editor_settings_file(&out_dir)?;
@@ -222,7 +229,6 @@ impl NewCommand {
         config: &Config,
         name: &PackageName,
         out_dir: &Path,
-        registries: &HashMap<String, Url>,
         target: &Option<(RegistryResolution, Option<String>)>,
     ) -> Result<()> {
         let manifest_path = out_dir.join("Cargo.toml");
@@ -287,14 +293,6 @@ impl NewCommand {
 
         component["dependencies"] = Item::Table(Table::new());
 
-        if !registries.is_empty() {
-            let mut table = Table::new();
-            for (name, url) in registries {
-                table[name] = value(url.as_str());
-            }
-            component["registries"] = Item::Table(table);
-        }
-
         if self.proxy {
             component["proxy"] = value(true);
         }
@@ -339,15 +337,15 @@ impl NewCommand {
         self.bin || !self.lib
     }
 
-    fn generate_source(
+    async fn generate_source(
         &self,
-        target: &Option<(RegistryResolution, Option<String>)>,
+        target: &Option<(DependencyResolution, Option<String>)>,
     ) -> Result<Cow<str>> {
         match target {
             Some((resolution, world)) => {
                 let generator =
-                    SourceGenerator::new(&resolution.name, &resolution.path, !self.no_rustfmt);
-                generator.generate(world.as_deref()).map(Into::into)
+                    SourceGenerator::new(resolution, resolution.name(), !self.no_rustfmt);
+                generator.generate(world.as_deref()).await.map(Into::into)
             }
             None => {
                 if self.is_command() {
@@ -520,26 +518,20 @@ world example {{
         }
     }
 
+    /// This will always return a registry resolution if it is `Some`, but we return the
+    /// `DependencyResolution` instead so we can actually resolve the dependency.
     async fn resolve_target(
         &self,
-        config: &Config,
-        registries: &HashMap<String, Url>,
+        client: Arc<CachingClient<FileCache>>,
         target: Option<metadata::Target>,
-        network_allowed: bool,
-    ) -> Result<Option<(RegistryResolution, Option<String>)>> {
+    ) -> Result<Option<(DependencyResolution, Option<String>)>> {
         match target {
             Some(metadata::Target::Package {
                 name,
                 package,
                 world,
             }) => {
-                let mut resolver = DependencyResolver::new(
-                    config.warg(),
-                    registries,
-                    None,
-                    config.terminal(),
-                    network_allowed,
-                )?;
+                let mut resolver = DependencyResolver::new_with_client(client, None);
                 let dependency = Dependency::Package(package);
 
                 resolver.add_dependency(&name, &dependency).await?;
@@ -547,29 +539,15 @@ world example {{
                 let dependencies = resolver.resolve().await?;
                 assert_eq!(dependencies.len(), 1);
 
-                match dependencies
-                    .into_values()
-                    .next()
-                    .expect("expected a target resolution")
-                {
-                    DependencyResolution::Registry(resolution) => Ok(Some((resolution, world))),
-                    _ => unreachable!(),
-                }
+                Ok(Some((
+                    dependencies
+                        .into_values()
+                        .next()
+                        .expect("expected a target resolution"),
+                    world,
+                )))
             }
             _ => Ok(None),
         }
-    }
-
-    fn registries(&self) -> Result<HashMap<String, Url>> {
-        let mut registries = HashMap::new();
-
-        if let Some(url) = self.registry.as_deref() {
-            registries.insert(
-                "default".to_string(),
-                url.parse().context("failed to parse registry URL")?,
-            );
-        }
-
-        Ok(registries)
     }
 }

@@ -17,6 +17,7 @@ use warg_client::storage::{ContentStorage, PublishEntry, PublishInfo};
 use warg_crypto::signing::PrivateKey;
 use warg_protocol::registry;
 use wasm_metadata::{Link, LinkType, RegistryMetadata};
+use wasm_pkg_client::caching::FileCache;
 use wit_component::DecodedWasm;
 use wit_parser::{PackageId, PackageName, Resolve, UnresolvedPackage};
 
@@ -27,9 +28,10 @@ mod lock;
 async fn resolve_dependencies(
     config: &Config,
     config_path: &Path,
-    warg_config: &warg_client::Config,
+    pkg_config: wasm_pkg_client::Config,
     terminal: &Terminal,
     update_lock_file: bool,
+    file_cache: FileCache,
 ) -> Result<DependencyResolutionMap> {
     let file_lock = acquire_lock_file_ro(terminal, config_path)?;
     let lock_file = file_lock
@@ -45,12 +47,10 @@ async fn resolve_dependencies(
         .transpose()?;
 
     let mut resolver = DependencyResolver::new(
-        warg_config,
-        &config.registries,
+        pkg_config,
         lock_file.as_ref().map(LockFileResolver::new),
-        terminal,
-        true,
-    )?;
+        file_cache,
+    );
 
     for (name, dep) in &config.dependencies {
         resolver.add_dependency(name, dep).await?;
@@ -78,7 +78,7 @@ async fn resolve_dependencies(
     Ok(map)
 }
 
-fn parse_wit_package(
+async fn parse_wit_package(
     dir: &Path,
     dependencies: &DependencyResolutionMap,
 ) -> Result<(Resolve, PackageId)> {
@@ -87,7 +87,7 @@ fn parse_wit_package(
     // Start by decoding all of the dependencies
     let mut deps = IndexMap::new();
     for (name, resolution) in dependencies {
-        let decoded = resolution.decode()?;
+        let decoded = resolution.decode().await?;
         if let Some(prev) = deps.insert(decoded.package_name().clone(), decoded) {
             bail!(
                 "duplicate definitions of package `{prev}` found while decoding dependency `{name}`",
@@ -222,15 +222,16 @@ fn parse_wit_package(
 async fn build_wit_package(
     config: &Config,
     config_path: &Path,
-    warg_config: &warg_client::Config,
+    pkg_config: wasm_pkg_client::Config,
     terminal: &Terminal,
+    file_cache: FileCache,
 ) -> Result<(registry::PackageName, Vec<u8>)> {
     let dependencies =
-        resolve_dependencies(config, config_path, warg_config, terminal, true).await?;
+        resolve_dependencies(config, config_path, pkg_config, terminal, true, file_cache).await?;
 
     let dir = config_path.parent().unwrap_or_else(|| Path::new("."));
 
-    let (mut resolve, package) = parse_wit_package(dir, &dependencies)?;
+    let (mut resolve, package) = parse_wit_package(dir, &dependencies).await?;
 
     let pkg = &mut resolve.packages[package];
     let name = format!("{ns}:{name}", ns = pkg.name.namespace, name = pkg.name.name).parse()?;
@@ -255,11 +256,13 @@ struct PublishOptions<'a> {
     config: &'a Config,
     config_path: &'a Path,
     warg_config: &'a warg_client::Config,
+    pkg_config: wasm_pkg_client::Config,
     url: &'a str,
     signing_key: Option<PrivateKey>,
     package: Option<&'a registry::PackageName>,
     init: bool,
     dry_run: bool,
+    cache: FileCache,
 }
 
 fn add_registry_metadata(config: &Config, bytes: &[u8]) -> Result<Vec<u8>> {
@@ -316,8 +319,9 @@ async fn publish_wit_package(options: PublishOptions<'_>, terminal: &Terminal) -
     let (name, bytes) = build_wit_package(
         options.config,
         options.config_path,
-        options.warg_config,
+        options.pkg_config,
         terminal,
+        options.cache,
     )
     .await?;
 
@@ -379,13 +383,13 @@ async fn publish_wit_package(options: PublishOptions<'_>, terminal: &Terminal) -
 pub async fn update_lockfile(
     config: &Config,
     config_path: &Path,
-    warg_config: &warg_client::Config,
+    pkg_config: wasm_pkg_client::Config,
     terminal: &Terminal,
     dry_run: bool,
+    file_cache: FileCache,
 ) -> Result<()> {
     // Resolve all dependencies as if the lock file does not exist
-    let mut resolver =
-        DependencyResolver::new(warg_config, &config.registries, None, terminal, true)?;
+    let mut resolver = DependencyResolver::new(pkg_config, None, file_cache);
     for (name, dep) in &config.dependencies {
         resolver.add_dependency(name, dep).await?;
     }
