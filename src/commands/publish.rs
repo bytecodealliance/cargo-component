@@ -83,7 +83,7 @@ impl PublishCommand {
         log::debug!("executing publish command");
 
         let config = Config::new(self.common.new_terminal(), self.common.config.clone())?;
-        let client = config.client(self.common.cache_dir.clone()).await?;
+        let client = config.client(self.common.cache_dir.clone(), false).await?;
 
         if let Some(target) = &self.target {
             if !is_wasm_target(target) {

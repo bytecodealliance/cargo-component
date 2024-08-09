@@ -4527,7 +4527,7 @@ dependencies = [
 [[package]]
 name = "wasm-pkg-client"
 version = "0.4.1"
-source = "git+https://github.com/bytecodealliance/wasm-pkg-tools.git?rev=47ad11a549c23ac48ecee9226d395fc7c6063250#47ad11a549c23ac48ecee9226d395fc7c6063250"
+source = "git+https://github.com/bytecodealliance/wasm-pkg-tools.git?rev=c48006aa1bcff1e69f4f8fc6689249b314985ab1#c48006aa1bcff1e69f4f8fc6689249b314985ab1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4557,7 +4557,7 @@ dependencies = [
 [[package]]
 name = "wasm-pkg-common"
 version = "0.4.1"
-source = "git+https://github.com/bytecodealliance/wasm-pkg-tools.git?rev=47ad11a549c23ac48ecee9226d395fc7c6063250#47ad11a549c23ac48ecee9226d395fc7c6063250"
+source = "git+https://github.com/bytecodealliance/wasm-pkg-tools.git?rev=c48006aa1bcff1e69f4f8fc6689249b314985ab1#c48006aa1bcff1e69f4f8fc6689249b314985ab1"
 dependencies = [
  "anyhow",
  "bytes",

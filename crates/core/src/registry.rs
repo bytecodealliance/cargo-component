@@ -451,29 +451,42 @@ pub struct DependencyResolver<'a> {
 }
 
 impl<'a> DependencyResolver<'a> {
-    /// Creates a new dependency resolver.
-    pub fn new(config: Config, lock_file: Option<LockFileResolver<'a>>, cache: FileCache) -> Self {
-        let client = CachingClient::new(Client::new(config), cache);
-        DependencyResolver {
+    /// Creates a new dependency resolver. If `config` is `None`, then the resolver will be set to
+    /// offline mode and a lock file must be given as well. Anything that will require network
+    /// access will fail in offline mode.
+    pub fn new(
+        config: Option<Config>,
+        lock_file: Option<LockFileResolver<'a>>,
+        cache: FileCache,
+    ) -> anyhow::Result<Self> {
+        if config.is_none() && lock_file.is_none() {
+            anyhow::bail!("lock file must be provided when offline mode is enabled");
+        }
+        let client = CachingClient::new(config.map(Client::new), cache);
+        Ok(DependencyResolver {
             client: Arc::new(client),
             lock_file,
             registries: Default::default(),
             resolutions: Default::default(),
-        }
+        })
     }
 
     /// Creates a new dependency resolver with the given client. This is useful when you already
-    /// have a client available
+    /// have a client available. If the client is set to offline mode, then a lock file must be
+    /// given or this will error
     pub fn new_with_client(
         client: Arc<CachingClient<FileCache>>,
         lock_file: Option<LockFileResolver<'a>>,
-    ) -> Self {
-        DependencyResolver {
+    ) -> anyhow::Result<Self> {
+        if client.is_readonly() && lock_file.is_none() {
+            anyhow::bail!("lock file must be provided when offline mode is enabled");
+        }
+        Ok(DependencyResolver {
             client,
             lock_file,
             registries: Default::default(),
             resolutions: Default::default(),
-        }
+        })
     }
 
     /// Add a dependency to the resolver.
@@ -590,45 +603,53 @@ impl<'a> Registry<'a> {
             // We need to clone a handle to the client because we mutably borrow self below. Might
             // be worth replacing the mutable borrow with a RwLock down the line.
             let client = self.client.clone();
-            let versions = load_package(
-                &mut self.packages,
-                &self.client.client,
-                dependency.package.clone(),
-            )
-            .await?
-            .with_context(|| {
-                format!(
-                    "package `{name}` was not found in component registry `{registry}`",
-                    name = dependency.package
-                )
-            })?;
 
-            let (selected_version, digest) = match &dependency.locked {
-                Some((version, digest)) => {
-                    // The dependency had a lock file entry, so attempt to do an exact match first
-                    let exact_req = VersionReq {
-                        comparators: vec![Comparator {
-                            op: Op::Exact,
-                            major: version.major,
-                            minor: Some(version.minor),
-                            patch: Some(version.patch),
-                            pre: version.pre.clone(),
-                        }],
-                    };
+            let (selected_version, digest) = if client.is_readonly() {
+                dependency
+                    .locked
+                    .as_ref()
+                    .map(|(ver, digest)| (ver, Some(digest)))
+                    .ok_or_else(|| {
+                        anyhow::anyhow!("Couldn't find locked dependency while in offline mode")
+                    })?
+            } else {
+                let versions =
+                    load_package(&mut self.packages, &self.client, dependency.package.clone())
+                        .await?
+                        .with_context(|| {
+                            format!(
+                                "package `{name}` was not found in component registry `{registry}`",
+                                name = dependency.package
+                            )
+                        })?;
 
-                    // If an exact match can't be found, fallback to the latest release to satisfy
-                    // the version requirement; this can happen when packages are yanked. If we did
-                    // find an exact match, return the digest for comparison after fetching the
-                    // release
-                    find_latest_release(versions, &exact_req).map(|v| (v, Some(digest))).or_else(|| find_latest_release(versions, dependency.version).map(|v| (v, None)))
-                }
-                None => find_latest_release(versions, dependency.version).map(|v| (v, None)),
-            }.with_context(|| format!("component registry package `{name}` has no release matching version requirement `{version}`", name = dependency.package, version = dependency.version))?;
+                match &dependency.locked {
+                    Some((version, digest)) => {
+                        // The dependency had a lock file entry, so attempt to do an exact match first
+                        let exact_req = VersionReq {
+                            comparators: vec![Comparator {
+                                op: Op::Exact,
+                                major: version.major,
+                                minor: Some(version.minor),
+                                patch: Some(version.patch),
+                                pre: version.pre.clone(),
+                            }],
+                        };
+
+                        // If an exact match can't be found, fallback to the latest release to satisfy
+                        // the version requirement; this can happen when packages are yanked. If we did
+                        // find an exact match, return the digest for comparison after fetching the
+                        // release
+                        find_latest_release(versions, &exact_req).map(|v| (&v.version, Some(digest))).or_else(|| find_latest_release(versions, dependency.version).map(|v| (&v.version, None)))
+                    }
+                    None => find_latest_release(versions, dependency.version).map(|v| (&v.version, None)),
+                }.with_context(|| format!("component registry package `{name}` has no release matching version requirement `{version}`", name = dependency.package, version = dependency.version))?
+            };
+
             // We need to clone a handle to the client because we mutably borrow self above. Might
             // be worth replacing the mutable borrow with a RwLock down the line.
             let release = client
-                .client
-                .get_release(&dependency.package, &selected_version.version)
+                .get_release(&dependency.package, selected_version)
                 .await?;
             if let Some(digest) = digest {
                 if &release.content_digest != digest {
@@ -662,7 +683,7 @@ impl<'a> Registry<'a> {
 
 async fn load_package<'b>(
     packages: &'b mut HashMap<PackageRef, Vec<VersionInfo>>,
-    client: &Client,
+    client: &CachingClient<FileCache>,
     package: PackageRef,
 ) -> Result<Option<&'b Vec<VersionInfo>>> {
     match packages.entry(package) {

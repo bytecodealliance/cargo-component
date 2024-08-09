@@ -14,12 +14,12 @@ use wasm_pkg_client::{caching::FileCache, PackageRef};
 use crate::config::{Config, CONFIG_FILE_NAME};
 
 async fn resolve_version(
-    pkg_config: wasm_pkg_client::Config,
+    pkg_config: Option<wasm_pkg_client::Config>,
     package: &VersionedPackageName,
     registry: &Option<String>,
     file_cache: FileCache,
 ) -> Result<String> {
-    let mut resolver = DependencyResolver::new(pkg_config, None, file_cache);
+    let mut resolver = DependencyResolver::new(pkg_config, None, file_cache)?;
     let dependency = Dependency::Package(RegistryPackage {
         name: Some(package.name.clone()),
         version: package
@@ -113,7 +113,8 @@ impl AddCommand {
             }
             None => {
                 let version =
-                    resolve_version(pkg_config, &self.package, &self.registry, file_cache).await?;
+                    resolve_version(Some(pkg_config), &self.package, &self.registry, file_cache)
+                        .await?;
 
                 let package = RegistryPackage {
                     name: self.name.is_some().then(|| self.package.name.clone()),

@@ -47,10 +47,10 @@ async fn resolve_dependencies(
         .transpose()?;
 
     let mut resolver = DependencyResolver::new(
-        pkg_config,
+        Some(pkg_config),
         lock_file.as_ref().map(LockFileResolver::new),
         file_cache,
-    );
+    )?;
 
     for (name, dep) in &config.dependencies {
         resolver.add_dependency(name, dep).await?;
@@ -389,7 +389,7 @@ pub async fn update_lockfile(
     file_cache: FileCache,
 ) -> Result<()> {
     // Resolve all dependencies as if the lock file does not exist
-    let mut resolver = DependencyResolver::new(pkg_config, None, file_cache);
+    let mut resolver = DependencyResolver::new(Some(pkg_config), None, file_cache)?;
     for (name, dep) in &config.dependencies {
         resolver.add_dependency(name, dep).await?;
     }

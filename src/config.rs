@@ -532,9 +532,10 @@ impl Config {
     pub async fn client(
         &self,
         cache: Option<PathBuf>,
+        offline: bool,
     ) -> anyhow::Result<Arc<CachingClient<FileCache>>> {
         Ok(Arc::new(CachingClient::new(
-            Client::new(self.pkg_config.clone()),
+            (!offline).then(|| Client::new(self.pkg_config.clone())),
             FileCache::new(cache_dir(cache)?).await?,
         )))
     }
