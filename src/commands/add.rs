@@ -73,7 +73,7 @@ impl AddCommand {
         let config = Config::new(self.common.new_terminal(), self.common.config.clone())?;
         let metadata = load_metadata(self.manifest_path.as_deref())?;
 
-        let client = config.client(self.common.cache_dir.clone()).await?;
+        let client = config.client(self.common.cache_dir.clone(), false).await?;
 
         let spec = match &self.spec {
             Some(spec) => Some(spec.clone()),
@@ -130,7 +130,7 @@ impl AddCommand {
         client: Arc<CachingClient<FileCache>>,
         name: &PackageRef,
     ) -> Result<String> {
-        let mut resolver = DependencyResolver::new_with_client(client, None);
+        let mut resolver = DependencyResolver::new_with_client(client, None)?;
         let dependency = Dependency::Package(RegistryPackage {
             name: Some(self.package.name.clone()),
             version: self

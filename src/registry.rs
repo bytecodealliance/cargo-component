@@ -60,7 +60,7 @@ impl<'a> PackageDependencyResolution<'a> {
             return Ok(Default::default());
         }
 
-        let mut resolver = DependencyResolver::new_with_client(client, lock_file);
+        let mut resolver = DependencyResolver::new_with_client(client, lock_file)?;
 
         for (name, dependency) in target_deps.iter() {
             resolver.add_dependency(name, dependency).await?;
@@ -78,7 +78,7 @@ impl<'a> PackageDependencyResolution<'a> {
             return Ok(Default::default());
         }
 
-        let mut resolver = DependencyResolver::new_with_client(client, lock_file);
+        let mut resolver = DependencyResolver::new_with_client(client, lock_file)?;
 
         for (name, dependency) in &metadata.section.dependencies {
             resolver.add_dependency(name, dependency).await?;

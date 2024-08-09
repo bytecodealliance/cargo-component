@@ -181,7 +181,7 @@ async fn main() -> Result<()> {
             }
 
             let spawn_args: Vec<_> = std::env::args().skip(1).collect();
-            let client = config.client(cache_dir).await?;
+            let client = config.client(cache_dir, cargo_args.offline).await?;
             if let Err(e) = run_cargo_command(
                 client,
                 &config,

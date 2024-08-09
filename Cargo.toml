@@ -107,7 +107,7 @@ warg-protocol = "0.7.0"
 warg-server = "0.7.0"
 wasi-preview1-component-adapter-provider = "23.0.1"
 wasm-metadata = "0.208.1"
-wasm-pkg-client = { git = "https://github.com/bytecodealliance/wasm-pkg-tools.git", rev = "47ad11a549c23ac48ecee9226d395fc7c6063250" }
+wasm-pkg-client = { git = "https://github.com/bytecodealliance/wasm-pkg-tools.git", rev = "c48006aa1bcff1e69f4f8fc6689249b314985ab1" }
 wasmparser = "0.208.1"
 wasmprinter = "0.208.1"
 wat = "1.208.1"

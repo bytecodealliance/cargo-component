@@ -43,7 +43,7 @@ impl UpdateCommand {
         let packages = load_component_metadata(&metadata, [].iter(), true)?;
 
         let lock_update_allowed = !self.frozen && !self.locked;
-        let client = config.client(self.common.cache_dir).await?;
+        let client = config.client(self.common.cache_dir, false).await?;
         crate::update_lockfile(
             client,
             &config,

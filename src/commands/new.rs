@@ -158,7 +158,7 @@ impl NewCommand {
             Some(s) => Some(format!("{s}@{version}", version = VersionReq::STAR).parse()?),
             None => None,
         };
-        let client = config.client(self.common.cache_dir.clone()).await?;
+        let client = config.client(self.common.cache_dir.clone(), false).await?;
         let target = self.resolve_target(client, target).await?;
         let source = self.generate_source(&target).await?;
 
@@ -531,7 +531,7 @@ world example {{
                 package,
                 world,
             }) => {
-                let mut resolver = DependencyResolver::new_with_client(client, None);
+                let mut resolver = DependencyResolver::new_with_client(client, None)?;
                 let dependency = Dependency::Package(package);
 
                 resolver.add_dependency(&name, &dependency).await?;
