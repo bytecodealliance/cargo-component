@@ -446,7 +446,7 @@ impl<'a> UnimplementedFunction<'a> {
                             .exports
                             .values()
                             .any(|world_item| match world_item {
-                                WorldItem::Interface(id) => *id == interface_id,
+                                WorldItem::Interface { id, stability: _ } => *id == interface_id,
                                 _ => false,
                             })
                     }
@@ -460,7 +460,7 @@ impl<'a> UnimplementedFunction<'a> {
                         .exports
                         .values()
                         .any(|world_item| match world_item {
-                            WorldItem::Interface(id) => *id == interface_id,
+                            WorldItem::Interface { id, stability: _ } => *id == interface_id,
                             _ => false,
                         })
                 }
@@ -684,7 +684,10 @@ impl<'a> ImplementationGenerator<'a> {
                 WorldItem::Function(f) => {
                     functions.push(f);
                 }
-                WorldItem::Interface(iface) => {
+                WorldItem::Interface {
+                    id: iface,
+                    stability: _,
+                } => {
                     let interface = &resolve.interfaces[*iface];
                     interfaces.push(InterfaceGenerator::new(
                         resolve, key, interface, names, world,

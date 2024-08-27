@@ -34,14 +34,16 @@ fn it_builds() -> Result<()> {
     let project = Project::new("foo")?;
     project.file(
         "bar.wit",
-        r#"package foo:bar;
+        r#"package foo:bar@1.2.3;
+@since(version = 1.2.3)
 interface bar {}
+@since(version = 1.2.3)
 world bar-world {}
 "#,
     )?;
     project.file(
         "baz.wit",
-        r#"package foo:bar;
+        r#"package foo:bar@1.2.3;
 interface baz {}
 world baz-world {}
 "#,
