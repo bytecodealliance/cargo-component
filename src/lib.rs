@@ -829,14 +829,17 @@ async fn generate_package_bindings(
         None => return Ok(HashMap::new()),
     };
 
-    // TODO: make the output path configurable
-    let output_dir = resolution
-        .metadata
-        .manifest_path
-        .parent()
-        .unwrap()
-        .join("src");
-    let bindings_path = output_dir.join("bindings.rs");
+    let bindings_path_meta = &resolution.metadata.section.bindings.path;
+    let bindings_path = if bindings_path_meta.is_absolute() {
+        bindings_path_meta
+    } else {
+        &resolution
+            .metadata
+            .manifest_path
+            .parent()
+            .unwrap()
+            .join(bindings_path_meta)
+    };
 
     config.terminal().status(
         "Generating",
@@ -845,20 +848,22 @@ async fn generate_package_bindings(
             name = resolution.metadata.name,
             path = bindings_path
                 .strip_prefix(cwd)
-                .unwrap_or(&bindings_path)
+                .unwrap_or(bindings_path)
                 .display()
         ),
     )?;
 
     let bindings = generator.generate()?;
-    fs::create_dir_all(&output_dir).with_context(|| {
-        format!(
-            "failed to create output directory `{path}`",
-            path = output_dir.display()
-        )
-    })?;
+    if let Some(output_dir) = bindings_path.parent() {
+        fs::create_dir_all(output_dir).with_context(|| {
+            format!(
+                "failed to create output directory `{path}`",
+                path = output_dir.display()
+            )
+        })?;
+    }
 
-    fs::write(&bindings_path, bindings).with_context(|| {
+    fs::write(bindings_path, bindings).with_context(|| {
         format!(
             "failed to write bindings file `{path}`",
             path = bindings_path.display()

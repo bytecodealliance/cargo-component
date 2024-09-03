@@ -60,6 +60,8 @@ impl FromStr for Ownership {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
 pub struct Bindings {
+    /// The path where bindings will be generated (default to `src/bindings.rs`).
+    pub path: PathBuf,
     /// Whether or not to run `rustfmt` on the bindings; defaults to true.
     pub format: bool,
     /// The ownership model for generated types.
@@ -106,6 +108,7 @@ pub struct Bindings {
 impl Default for Bindings {
     fn default() -> Self {
         Self {
+            path: PathBuf::from("src/bindings.rs"),
             format: true,
             ownership: Default::default(),
             derives: Default::default(),
