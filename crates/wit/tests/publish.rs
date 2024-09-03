@@ -1,14 +1,10 @@
-use std::fs;
-
 use anyhow::{Context, Result};
 use assert_cmd::prelude::*;
+use futures::TryStreamExt;
 use predicates::str::contains;
-use semver::Version;
 use toml_edit::{value, Array};
-use warg_client::{Client, FileSystemClient};
-use warg_protocol::registry::PackageName;
 use wasm_metadata::LinkType;
-use wasm_pkg_client::warg::WargRegistryConfig;
+use wasm_pkg_client::{Client, Error};
 
 use crate::support::*;
 
@@ -42,7 +38,7 @@ async fn it_publishes_a_wit_package() -> Result<()> {
     let project = server.project("foo", Vec::<String>::new())?;
     project.file("baz.wit", "package test:qux;\n")?;
     project
-        .wit(["publish", "--init"])
+        .wit(["publish"])
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("Published package `test:qux` v0.1.0"))
@@ -53,14 +49,12 @@ async fn it_publishes_a_wit_package() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_does_a_dry_run_publish() -> Result<()> {
-    let (server, config, registry) = spawn_server(Vec::<String>::new()).await?;
-    let warg_config =
-        WargRegistryConfig::try_from(config.registry_config(&registry).unwrap()).unwrap();
+    let (server, config, _) = spawn_server(Vec::<String>::new()).await?;
 
     let project = server.project("foo", Vec::<String>::new())?;
     project.file("baz.wit", "package test:qux;\n")?;
     project
-        .wit(["publish", "--init", "--dry-run"])
+        .wit(["publish", "--dry-run"])
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains(
@@ -68,23 +62,23 @@ async fn it_does_a_dry_run_publish() -> Result<()> {
         ))
         .success();
 
-    let client = FileSystemClient::new_with_config(None, &warg_config.client_config, None).await?;
+    let client = Client::new(config);
 
-    assert!(client
-        .download(&"test:qux".parse().unwrap(), &"0.1.0".parse().unwrap())
+    let err = client
+        .get_release(&"test:qux".parse().unwrap(), &"0.1.0".parse().unwrap())
         .await
-        .unwrap_err()
-        .to_string()
-        .contains("package `test:qux` does not exist"));
+        .expect_err("Should not be able to get release after dry run");
+    assert!(
+        matches!(err, Error::PackageNotFound),
+        "Expected PackageNotFound"
+    );
 
     Ok(())
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_publishes_with_registry_metadata() -> Result<()> {
-    let (server, config, registry) = spawn_server(Vec::<String>::new()).await?;
-    let warg_config =
-        WargRegistryConfig::try_from(config.registry_config(&registry).unwrap()).unwrap();
+    let (server, config, _) = spawn_server(Vec::<String>::new()).await?;
 
     let project = server.project("foo", Vec::<String>::new())?;
 
@@ -110,31 +104,23 @@ async fn it_publishes_with_registry_metadata() -> Result<()> {
     })?;
 
     project
-        .wit(["publish", "--init"])
+        .wit(["publish"])
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("Published package `test:qux` v0.1.0"))
         .success();
 
-    let client = Client::new_with_config(None, &warg_config.client_config, None).await?;
-    let download = client
-        .download_exact(&PackageName::new("test:qux")?, &Version::parse("0.1.0")?)
+    let client = Client::new(config);
+    let package_ref = "test:qux".parse().unwrap();
+    let release = client
+        .get_release(&package_ref, &"0.1.0".parse().unwrap())
         .await?;
+    let stream = client.stream_content(&package_ref, &release).await?;
 
-    let bytes = fs::read(&download.path).with_context(|| {
-        format!(
-            "failed to read downloaded package `{path}`",
-            path = download.path.display()
-        )
-    })?;
+    let bytes = stream.map_ok(Vec::from).try_concat().await?;
 
     let metadata = wasm_metadata::RegistryMetadata::from_wasm(&bytes)
-        .with_context(|| {
-            format!(
-                "failed to parse registry metadata from `{path}`",
-                path = download.path.display()
-            )
-        })?
+        .context("failed to parse registry metadata from bytes")?
         .expect("missing registry metadata");
 
     assert_eq!(

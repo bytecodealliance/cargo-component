@@ -456,7 +456,7 @@ impl<'a> BindingsGenerator<'a> {
                         used.insert(
                             WorldKey::Interface(id),
                             WorldItem::Interface {
-                                id: id,
+                                id,
                                 stability: Default::default(),
                             },
                         );
@@ -556,7 +556,7 @@ impl<'a> BindingsGenerator<'a> {
                 .insert(
                     WorldKey::Interface(name_id),
                     WorldItem::Interface {
-                        id: id,
+                        id,
                         stability: Default::default(),
                     },
                 )

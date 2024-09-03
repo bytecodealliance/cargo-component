@@ -4,7 +4,6 @@ use anyhow::Result;
 use assert_cmd::prelude::*;
 use predicates::{str::contains, Predicate};
 use tempfile::TempDir;
-use wasm_pkg_client::warg::WargRegistryConfig;
 
 use crate::support::*;
 
@@ -135,13 +134,10 @@ fn it_rejects_rust_keywords() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn it_targets_a_world() -> Result<()> {
-    let (server, config, registry) = spawn_server(Vec::<String>::new()).await?;
-
-    let warg_config =
-        WargRegistryConfig::try_from(config.registry_config(&registry).unwrap()).unwrap();
+    let (server, config, _) = spawn_server(Vec::<String>::new()).await?;
 
     publish_wit(
-        &warg_config.client_config,
+        config,
         "test:bar",
         "1.2.3",
         r#"package test:bar@1.2.3;
@@ -241,7 +237,6 @@ world foo {
     export another-func: func(yet: borrow<yet-another>) -> result;
     export another-func-empty: func(empty: borrow<empty>) -> result;
 }"#,
-        true,
     )
     .await?;
 

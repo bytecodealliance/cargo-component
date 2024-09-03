@@ -36,7 +36,7 @@ async fn update_without_changes_is_a_noop() -> Result<()> {
     let project = server.project("bar", Vec::<String>::new())?;
     project.file("bar.wit", "package test:bar;\n")?;
     project
-        .wit(["publish", "--init"])
+        .wit(["publish"])
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("Published package `test:bar` v0.1.0"))
@@ -73,7 +73,7 @@ async fn test_update_without_compatible_changes_is_a_noop() -> Result<()> {
     project1.file("bar.wit", "package test:bar;\n")?;
 
     project1
-        .wit(["publish", "--init"])
+        .wit(["publish"])
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("Published package `test:bar` v0.1.0"))
@@ -126,7 +126,7 @@ async fn update_with_compatible_changes() -> Result<()> {
     )?;
 
     project1
-        .wit(["publish", "--init"])
+        .wit(["publish"])
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("Published package `test:bar` v1.0.0"))
@@ -182,7 +182,7 @@ async fn update_with_compatible_changes_is_noop_for_dryrun() -> Result<()> {
     )?;
 
     project1
-        .wit(["publish", "--init"])
+        .wit(["publish"])
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("Published package `test:bar` v1.0.0"))
@@ -242,7 +242,7 @@ async fn update_with_changed_dependencies() -> Result<()> {
     )?;
 
     project
-        .wit(["publish", "--init"])
+        .wit(["publish"])
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("Published package `test:bar` v1.0.0"))
@@ -256,7 +256,7 @@ async fn update_with_changed_dependencies() -> Result<()> {
     )?;
 
     project
-        .wit(["publish", "--init"])
+        .wit(["publish"])
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("Published package `test:baz` v1.0.0"))

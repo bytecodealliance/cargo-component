@@ -5,6 +5,7 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
     rc::Rc,
+    sync::Arc,
     time::Duration,
 };
 
@@ -16,14 +17,10 @@ use tempfile::TempDir;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use toml_edit::DocumentMut;
-use warg_client::{
-    storage::{ContentStorage, PublishEntry, PublishInfo},
-    FileSystemClient,
-};
 use warg_crypto::signing::PrivateKey;
-use warg_protocol::{operator::NamespaceState, registry::PackageName};
+use warg_protocol::operator::NamespaceState;
 use warg_server::{policy::content::WasmContentPolicy, Config, Server};
-use wasm_pkg_client::Registry;
+use wasm_pkg_client::{Client, PackageRef, PublishOpts, Registry};
 use wasmparser::{Chunk, Encoding, Parser, Payload, Validator};
 use wit_parser::{Resolve, UnresolvedPackageGroup};
 
@@ -57,74 +54,46 @@ where
 }
 
 pub async fn publish(
-    config: &warg_client::Config,
-    name: &PackageName,
+    config: wasm_pkg_client::Config,
+    name: &PackageRef,
     version: &str,
     content: Vec<u8>,
-    init: bool,
 ) -> Result<()> {
-    let client = FileSystemClient::new_with_config(None, config, None).await?;
-
-    let digest = client
-        .content()
-        .store_content(
-            Box::pin(futures::stream::once(async move { Ok(content.into()) })),
-            None,
-        )
-        .await
-        .context("failed to store component for publishing")?;
-
-    let mut entries = Vec::with_capacity(2);
-    if init {
-        entries.push(PublishEntry::Init);
-    }
-    entries.push(PublishEntry::Release {
-        version: version.parse().unwrap(),
-        content: digest,
-    });
-
-    let record_id = client
-        .publish_with_info(
-            &PrivateKey::decode(test_signing_key().to_string()).unwrap(),
-            PublishInfo {
-                name: name.clone(),
-                head: None,
-                entries,
-            },
-        )
-        .await
-        .context("failed to publish component")?;
+    let client = Client::new(config);
 
     client
-        .wait_for_publish(name, &record_id, Duration::from_secs(1))
+        .publish_release_data(
+            Box::pin(std::io::Cursor::new(content)),
+            PublishOpts {
+                package: Some((name.to_owned(), version.parse().unwrap())),
+                ..Default::default()
+            },
+        )
         .await?;
 
     Ok(())
 }
 
 pub async fn publish_component(
-    config: &warg_client::Config,
+    config: wasm_pkg_client::Config,
     id: &str,
     version: &str,
     wat: &str,
-    init: bool,
 ) -> Result<()> {
     publish(
         config,
         &id.parse()?,
         version,
         wat::parse_str(wat).context("failed to parse component for publishing")?,
-        init,
     )
     .await
 }
 
 pub async fn publish_wit(
-    config: &warg_client::Config,
+    config: wasm_pkg_client::Config,
     id: &str,
     version: &str,
     wit: &str,
-    init: bool,
 ) -> Result<()> {
     let mut resolve = Resolve::new();
     let pkg = resolve
@@ -137,7 +106,7 @@ pub async fn publish_wit(
     let bytes = wit_component::encode(Some(true), &resolve, pkg)
         .context("failed to encode wit for publishing")?;
 
-    publish(config, &id.parse()?, version, bytes, init).await
+    publish(config, &id.parse()?, version, bytes).await
 }
 
 pub struct ServerInstance {
@@ -237,6 +206,7 @@ where
             wasm_pkg_client::warg::WargRegistryConfig {
                 client_config: warg_config,
                 auth_token: None,
+                signing_key: Some(Arc::new(test_signing_key().to_string().try_into()?)),
                 config_file: Some(config_file),
             },
         )

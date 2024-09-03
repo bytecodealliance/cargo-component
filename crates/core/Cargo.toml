@@ -25,9 +25,6 @@ tokio-util = { workspace = true, features = ["io"] }
 toml_edit = { workspace = true }
 unicode-width = { workspace = true }
 url = { workspace = true }
-warg-client = { workspace = true }
-warg-crypto = { workspace = true }
-warg-protocol = { workspace = true }
 wasm-pkg-client = { workspace = true }
 wit-component = { workspace = true }
 wit-parser = { workspace = true }

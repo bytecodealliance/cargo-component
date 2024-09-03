@@ -118,13 +118,6 @@ To publish the WIT package to a registry, use the `publish` command:
 wit publish
 ```
 
-For new packages, the `--init` option must be used to initialize a new package
-log for the package being published:
-
-```
-wit publish --init
-```
-
 The command will publish the package to the default registry using the default
 signing key.
 

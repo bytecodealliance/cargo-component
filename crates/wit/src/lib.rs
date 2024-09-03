@@ -2,22 +2,21 @@
 
 #![deny(missing_docs)]
 
+use std::{collections::HashSet, path::Path, sync::Arc};
+
 use anyhow::{bail, Context, Result};
-use bytes::Bytes;
 use cargo_component_core::{
     lock::{LockFile, LockFileResolver, LockedPackage, LockedPackageVersion},
-    registry::{create_client, DecodedDependency, DependencyResolutionMap, DependencyResolver},
+    registry::{DecodedDependency, DependencyResolutionMap, DependencyResolver},
     terminal::{Colors, Terminal},
 };
 use config::Config;
 use indexmap::{IndexMap, IndexSet};
 use lock::{acquire_lock_file_ro, acquire_lock_file_rw, to_lock_file};
-use std::{collections::HashSet, path::Path, time::Duration};
-use warg_client::storage::{ContentStorage, PublishEntry, PublishInfo};
-use warg_crypto::signing::PrivateKey;
-use warg_protocol::registry;
 use wasm_metadata::{Link, LinkType, RegistryMetadata};
-use wasm_pkg_client::caching::FileCache;
+use wasm_pkg_client::{
+    caching::FileCache, warg::WargRegistryConfig, Client, PackageRef, PublishOpts, Registry,
+};
 use wit_component::DecodedWasm;
 use wit_parser::{PackageId, PackageName, Resolve, UnresolvedPackageGroup};
 
@@ -229,7 +228,7 @@ async fn build_wit_package(
     pkg_config: wasm_pkg_client::Config,
     terminal: &Terminal,
     file_cache: FileCache,
-) -> Result<(registry::PackageName, Vec<u8>)> {
+) -> Result<(PackageRef, Vec<u8>)> {
     let dependencies =
         resolve_dependencies(config, config_path, pkg_config, terminal, true, file_cache).await?;
 
@@ -259,12 +258,9 @@ async fn build_wit_package(
 struct PublishOptions<'a> {
     config: &'a Config,
     config_path: &'a Path,
-    warg_config: &'a warg_client::Config,
     pkg_config: wasm_pkg_client::Config,
-    url: &'a str,
-    signing_key: Option<PrivateKey>,
-    package: Option<&'a registry::PackageName>,
-    init: bool,
+    registry: Option<&'a Registry>,
+    package: Option<&'a PackageRef>,
     dry_run: bool,
     cache: FileCache,
 }
@@ -319,11 +315,11 @@ fn add_registry_metadata(config: &Config, bytes: &[u8]) -> Result<Vec<u8>> {
         .context("failed to add registry metadata to component")
 }
 
-async fn publish_wit_package(options: PublishOptions<'_>, terminal: &Terminal) -> Result<()> {
+async fn publish_wit_package(mut options: PublishOptions<'_>, terminal: &Terminal) -> Result<()> {
     let (name, bytes) = build_wit_package(
         options.config,
         options.config_path,
-        options.pkg_config,
+        options.pkg_config.clone(),
         terminal,
         options.cache,
     )
@@ -336,53 +332,40 @@ async fn publish_wit_package(options: PublishOptions<'_>, terminal: &Terminal) -
 
     let bytes = add_registry_metadata(options.config, &bytes)?;
     let name = options.package.unwrap_or(&name);
-    let client = create_client(options.warg_config, options.url, terminal).await?;
 
-    let content = client
-        .content()
-        .store_content(
-            Box::pin(futures::stream::once(async { Ok(Bytes::from(bytes)) })),
-            None,
+    if let Ok(key) = std::env::var("WIT_PUBLISH_KEY") {
+        let registry = options.pkg_config.resolve_registry(name).ok_or_else(|| anyhow::anyhow!("Tried to set a signing key, but registry was not set and no default registry was found. Try setting the `--registry` option."))?.to_owned();
+        // NOTE(thomastaylor312): If config doesn't already exist, this will essentially force warg
+        // usage because we'll be creating a config for warg, which means it will default to that
+        // protocol. So for all intents and purposes, setting a publish key forces warg usage.
+        let reg_config = options
+            .pkg_config
+            .get_or_insert_registry_config_mut(&registry);
+        let mut warg_conf = WargRegistryConfig::try_from(&*reg_config).unwrap_or_default();
+        warg_conf.signing_key = Some(Arc::new(
+            key.try_into().context("Failed to parse signing key")?,
+        ));
+        reg_config.set_backend_config("warg", warg_conf)?;
+    }
+
+    terminal.status("Publishing", format!("package `{name}`"))?;
+
+    let client = Client::new(options.pkg_config);
+
+    let (name, version) = client
+        .publish_release_data(
+            Box::pin(std::io::Cursor::new(bytes)),
+            PublishOpts {
+                package: Some((name.to_owned(), options.config.version.to_owned())),
+                registry: options.registry.cloned(),
+            },
         )
         .await?;
 
-    terminal.status("Publishing", format!("package `{name}` ({content})"))?;
-
-    let mut info = PublishInfo {
-        name: name.clone(),
-        head: None,
-        entries: Default::default(),
-    };
-
-    if options.init {
-        info.entries.push(PublishEntry::Init);
-    }
-
-    info.entries.push(PublishEntry::Release {
-        version: options.config.version.clone(),
-        content,
-    });
-
-    let record_id = if let Some(signing_key) = &options.signing_key {
-        client.publish_with_info(signing_key, info).await?
-    } else {
-        client.sign_with_keyring_and_publish(Some(info)).await?
-    };
-    client
-        .wait_for_publish(name, &record_id, Duration::from_secs(1))
-        .await?;
-
-    terminal.status(
-        "Published",
-        format!(
-            "package `{name}` v{version}",
-            version = options.config.version
-        ),
-    )?;
+    terminal.status("Published", format!("package `{name}` v{version}",))?;
 
     Ok(())
 }
-
 /// Update the dependencies in the lock file.
 pub async fn update_lockfile(
     config: &Config,

@@ -12,15 +12,13 @@ use std::{
     path::{Path, PathBuf},
     process::{Command, Stdio},
     sync::Arc,
-    time::{Duration, SystemTime},
+    time::SystemTime,
 };
 
 use anyhow::{bail, Context, Result};
 use bindings::BindingsGenerator;
-use bytes::Bytes;
 use cargo_component_core::{
     lock::{LockFile, LockFileResolver, LockedPackage, LockedPackageVersion},
-    registry::create_client,
     terminal::Colors,
 };
 use cargo_config2::{PathAndArgs, TargetTripleRef};
@@ -28,11 +26,11 @@ use cargo_metadata::{Artifact, Message, Metadata, MetadataCommand, Package};
 use semver::Version;
 use shell_escape::escape;
 use tempfile::NamedTempFile;
-use warg_client::storage::{ContentStorage, PublishEntry, PublishInfo};
-use warg_crypto::signing::PrivateKey;
-use warg_protocol::registry::PackageName;
 use wasm_metadata::{Link, LinkType, RegistryMetadata};
-use wasm_pkg_client::caching::{CachingClient, FileCache};
+use wasm_pkg_client::{
+    caching::{CachingClient, FileCache},
+    PackageRef, PublishOpts, Registry,
+};
 use wasmparser::{Parser, Payload};
 use wit_component::ComponentEncoder;
 
@@ -1013,17 +1011,13 @@ pub struct PublishOptions<'a> {
     /// The package to publish.
     pub package: &'a Package,
     /// The registry URL to publish to.
-    pub registry_url: &'a str,
-    /// Whether to initialize the package or not.
-    pub init: bool,
+    pub registry: Option<&'a Registry>,
     /// The name of the package being published.
-    pub name: &'a PackageName,
+    pub name: &'a PackageRef,
     /// The version of the package being published.
     pub version: &'a Version,
     /// The path to the package being published.
     pub path: &'a Path,
-    /// The signing key to use for the publish operation.
-    pub signing_key: Option<PrivateKey>,
     /// Whether to perform a dry run or not.
     pub dry_run: bool,
 }
@@ -1082,15 +1076,17 @@ fn add_registry_metadata(package: &Package, bytes: &[u8], path: &Path) -> Result
 }
 
 /// Publish a component for the given workspace and publish options.
-pub async fn publish(config: &Config, options: &PublishOptions<'_>) -> Result<()> {
+pub async fn publish(
+    config: &Config,
+    client: Arc<CachingClient<FileCache>>,
+    options: &PublishOptions<'_>,
+) -> Result<()> {
     if options.dry_run {
         config
             .terminal()
             .warn("not publishing component to the registry due to the --dry-run option")?;
         return Ok(());
     }
-
-    let client = create_client(config.warg(), options.registry_url, config.terminal()).await?;
 
     let bytes = fs::read(options.path).with_context(|| {
         format!(
@@ -1101,54 +1097,25 @@ pub async fn publish(config: &Config, options: &PublishOptions<'_>) -> Result<()
 
     let bytes = add_registry_metadata(options.package, &bytes, options.path)?;
 
-    let content = client
-        .content()
-        .store_content(
-            Box::pin(futures::stream::once(async { Ok(Bytes::from(bytes)) })),
-            None,
+    config.terminal().status(
+        "Publishing",
+        format!("component {path}", path = options.path.display()),
+    )?;
+
+    let (name, version) = client
+        .client()?
+        .publish_release_data(
+            Box::pin(std::io::Cursor::new(bytes)),
+            PublishOpts {
+                package: Some((options.name.to_owned(), options.version.to_owned())),
+                registry: options.registry.cloned(),
+            },
         )
         .await?;
 
-    config.terminal().status(
-        "Publishing",
-        format!(
-            "component {path} ({content})",
-            path = options.path.display()
-        ),
-    )?;
-
-    let mut info = PublishInfo {
-        name: options.name.clone(),
-        head: None,
-        entries: Default::default(),
-    };
-
-    if options.init {
-        info.entries.push(PublishEntry::Init);
-    }
-
-    info.entries.push(PublishEntry::Release {
-        version: options.version.clone(),
-        content,
-    });
-
-    let record_id = if let Some(signing_key) = &options.signing_key {
-        client.publish_with_info(signing_key, info).await?
-    } else {
-        client.sign_with_keyring_and_publish(Some(info)).await?
-    };
-    client
-        .wait_for_publish(options.name, &record_id, Duration::from_secs(1))
-        .await?;
-
-    config.terminal().status(
-        "Published",
-        format!(
-            "package `{name}` v{version}",
-            name = options.name,
-            version = options.version
-        ),
-    )?;
+    config
+        .terminal()
+        .status("Published", format!("package `{name}` v{version}"))?;
 
     Ok(())
 }
