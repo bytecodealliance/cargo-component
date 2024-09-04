@@ -24,7 +24,7 @@ use wasm_pkg_client::{
     Client, Config, ContentDigest, Error as WasmPkgError, PackageRef, Release, VersionInfo,
 };
 use wit_component::DecodedWasm;
-use wit_parser::{PackageId, PackageName, Resolve, UnresolvedPackage, WorldId};
+use wit_parser::{PackageId, PackageName, Resolve, UnresolvedPackageGroup, WorldId};
 
 use crate::{
     lock::{LockFileResolver, LockedPackageVersion},
@@ -315,7 +315,7 @@ impl DependencyResolution {
             {
                 return Ok(DecodedDependency::Wit {
                     resolution: self,
-                    package: UnresolvedPackage::parse_dir(path).with_context(|| {
+                    package: UnresolvedPackageGroup::parse_dir(path).with_context(|| {
                         format!("failed to parse dependency `{path}`", path = path.display())
                     })?,
                 });
@@ -354,9 +354,9 @@ impl DependencyResolution {
         if &bytes[0..4] != b"\0asm" {
             return Ok(DecodedDependency::Wit {
                 resolution: self,
-                package: UnresolvedPackage::parse(
+                package: UnresolvedPackageGroup::parse(
                     // This is fake, but it's needed for the parser to work.
-                    self.name().to_string().as_ref(),
+                    self.name().to_string(),
                     std::str::from_utf8(&bytes).with_context(|| {
                         format!(
                             "dependency `{name}` is not UTF-8 encoded",
@@ -386,7 +386,7 @@ pub enum DecodedDependency<'a> {
         /// The resolution related to the decoded dependency.
         resolution: &'a DependencyResolution,
         /// The unresolved WIT package.
-        package: UnresolvedPackage,
+        package: UnresolvedPackageGroup,
     },
     /// The dependency decoded from a Wasm file.
     Wasm {
@@ -406,8 +406,12 @@ impl<'a> DecodedDependency<'a> {
         match self {
             Self::Wit { package, .. } => {
                 let mut resolve = Resolve::new();
-                let source_files = package.source_files().map(Path::to_path_buf).collect();
-                let pkg = resolve.push(package)?;
+                let source_files = package
+                    .source_map
+                    .source_files()
+                    .map(Path::to_path_buf)
+                    .collect();
+                let pkg = resolve.push_group(package)?;
                 Ok((resolve, pkg, source_files))
             }
             Self::Wasm { decoded, .. } => match decoded {
@@ -423,7 +427,7 @@ impl<'a> DecodedDependency<'a> {
     /// Gets the package name of the decoded dependency.
     pub fn package_name(&self) -> &PackageName {
         match self {
-            Self::Wit { package, .. } => &package.name,
+            Self::Wit { package, .. } => &package.main.name,
             Self::Wasm { decoded, .. } => &decoded.resolve().packages[decoded.package()].name,
         }
     }

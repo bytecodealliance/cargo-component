@@ -11,10 +11,10 @@ use indexmap::{IndexMap, IndexSet};
 use semver::Version;
 use wasm_pkg_client::PackageRef;
 use wit_bindgen_core::Files;
-use wit_bindgen_rust::Opts;
+use wit_bindgen_rust::{Opts, WithOption};
 use wit_component::DecodedWasm;
 use wit_parser::{
-    Interface, Package, PackageName, Resolve, Type, TypeDefKind, TypeOwner, UnresolvedPackage,
+    Interface, Package, PackageName, Resolve, Type, TypeDefKind, TypeOwner, UnresolvedPackageGroup,
     World, WorldId, WorldItem, WorldKey,
 };
 
@@ -95,7 +95,7 @@ impl<'a> BindingsGenerator<'a> {
     pub fn generate(self) -> Result<String> {
         let settings = &self.resolution.metadata.section.bindings;
         let opts = Opts {
-            rustfmt: settings.format,
+            format: settings.format,
             ownership: match settings.ownership {
                 Ownership::Owning => wit_bindgen_rust::Ownership::Owning,
                 Ownership::Borrowing => wit_bindgen_rust::Ownership::Borrowing {
@@ -118,7 +118,7 @@ impl<'a> BindingsGenerator<'a> {
             with: settings
                 .with
                 .iter()
-                .map(|(key, value)| (key.clone(), value.clone()))
+                .map(|(key, value)| (key.clone(), WithOption::Path(value.clone())))
                 .collect(),
             type_section_suffix: settings.type_section_suffix.clone(),
             disable_run_ctors_once_workaround: settings.disable_run_ctors_once_workaround,
@@ -126,6 +126,9 @@ impl<'a> BindingsGenerator<'a> {
             export_macro_name: settings.export_macro_name.clone(),
             pub_export_macro: settings.pub_export_macro,
             generate_unused_types: settings.generate_unused_types,
+            // todo - add support for these settings
+            generate_all: true,
+            disable_custom_section_link_helpers: false,
         };
 
         let mut files = Files::default();
@@ -193,7 +196,8 @@ impl<'a> BindingsGenerator<'a> {
             let source = merged
                 .merge(resolve)
                 .with_context(|| format!("failed to merge world of dependency `{id}`"))?
-                .worlds[component_world_id.index()];
+                .worlds[component_world_id.index()]
+            .unwrap();
             Self::import_world(
                 &mut merged,
                 source,
@@ -254,14 +258,14 @@ impl<'a> BindingsGenerator<'a> {
 
         // Parse the target package itself
         let root = if path.is_dir() {
-            UnresolvedPackage::parse_dir(path).with_context(|| {
+            UnresolvedPackageGroup::parse_dir(path).with_context(|| {
                 format!(
                     "failed to parse local target from directory `{}`",
                     path.display()
                 )
             })?
         } else {
-            UnresolvedPackage::parse_file(path).with_context(|| {
+            UnresolvedPackageGroup::parse_file(path).with_context(|| {
                 format!(
                     "failed to parse local target `{path}`",
                     path = path.display()
@@ -269,7 +273,11 @@ impl<'a> BindingsGenerator<'a> {
             })?
         };
 
-        let mut source_files: Vec<_> = root.source_files().map(Path::to_path_buf).collect();
+        let mut source_files: Vec<_> = root
+            .source_map
+            .source_files()
+            .map(Path::to_path_buf)
+            .collect();
 
         // Do a topological sort of the dependencies
         let mut order = IndexSet::new();
@@ -287,8 +295,8 @@ impl<'a> BindingsGenerator<'a> {
                     resolution,
                     package,
                 } => {
-                    source_files.extend(package.source_files().map(Path::to_path_buf));
-                    merged.push(package).with_context(|| {
+                    source_files.extend(package.source_map.source_files().map(Path::to_path_buf));
+                    merged.push_group(package).with_context(|| {
                         format!(
                             "failed to merge target dependency `{name}`",
                             name = resolution.name()
@@ -314,7 +322,7 @@ impl<'a> BindingsGenerator<'a> {
             }
         }
 
-        let package = merged.push(root).with_context(|| {
+        let package = merged.push_group(root).with_context(|| {
             format!(
                 "failed to merge local target `{path}`",
                 path = path.display()
@@ -354,7 +362,7 @@ impl<'a> BindingsGenerator<'a> {
                     package,
                     resolution,
                 } => {
-                    for name in package.foreign_deps.keys() {
+                    for name in package.main.foreign_deps.keys() {
                         if !visiting.insert(name) {
                             bail!("foreign dependency `{name}` forms a dependency cycle while parsing target dependency `{other}`", other = resolution.name());
                         }
@@ -406,6 +414,7 @@ impl<'a> BindingsGenerator<'a> {
             package: Some(package),
             includes: Default::default(),
             include_names: Default::default(),
+            stability: Default::default(),
         });
 
         resolve.packages[package].worlds.insert(name, world);
@@ -444,7 +453,13 @@ impl<'a> BindingsGenerator<'a> {
                             ty = resolve.types[ty].name.as_deref().unwrap_or("<unnamed>")
                         );
 
-                        used.insert(WorldKey::Interface(id), WorldItem::Interface(id));
+                        used.insert(
+                            WorldKey::Interface(id),
+                            WorldItem::Interface {
+                                id: id,
+                                stability: Default::default(),
+                            },
+                        );
                     }
                 }
             }
@@ -457,7 +472,7 @@ impl<'a> BindingsGenerator<'a> {
                     log::debug!("importing function `{name}`", name = f.name);
                     functions.insert(key.clone().unwrap_name(), f.clone());
                 }
-                WorldItem::Interface(id) => {
+                WorldItem::Interface { id, stability: _ } => {
                     let name = match key {
                         WorldKey::Name(name) => name.clone(),
                         WorldKey::Interface(id) => {
@@ -495,7 +510,10 @@ impl<'a> BindingsGenerator<'a> {
 
                                     used.insert(
                                         WorldKey::Interface(other),
-                                        WorldItem::Interface(other),
+                                        WorldItem::Interface {
+                                            id: other,
+                                            stability: Default::default(),
+                                        },
                                     );
                                 }
                             }
@@ -526,6 +544,7 @@ impl<'a> BindingsGenerator<'a> {
                 functions: Default::default(),
                 docs: Default::default(),
                 package,
+                stability: Default::default(),
             });
 
             let import_name =
@@ -534,7 +553,13 @@ impl<'a> BindingsGenerator<'a> {
 
             if resolve.worlds[target_id]
                 .imports
-                .insert(WorldKey::Interface(name_id), WorldItem::Interface(id))
+                .insert(
+                    WorldKey::Interface(name_id),
+                    WorldItem::Interface {
+                        id: id,
+                        stability: Default::default(),
+                    },
+                )
                 .is_some()
             {
                 let iface = &resolve.interfaces[id];
@@ -564,6 +589,7 @@ impl<'a> BindingsGenerator<'a> {
                 types: Default::default(),
                 functions,
                 package: source.package,
+                stability: Default::default(),
             });
 
             // Add any types owned by the world to the interface
@@ -580,7 +606,10 @@ impl<'a> BindingsGenerator<'a> {
                 .imports
                 .insert(
                     WorldKey::Name(name.clone()),
-                    WorldItem::Interface(interface),
+                    WorldItem::Interface {
+                        id: interface,
+                        stability: Default::default(),
+                    },
                 )
                 .is_some()
             {

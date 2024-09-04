@@ -25,7 +25,7 @@ use warg_protocol::{operator::NamespaceState, registry::PackageName};
 use warg_server::{policy::content::WasmContentPolicy, Config, Server};
 use wasm_pkg_client::Registry;
 use wasmparser::{Chunk, Encoding, Parser, Payload, Validator};
-use wit_parser::{Resolve, UnresolvedPackage};
+use wit_parser::{Resolve, UnresolvedPackageGroup};
 
 const WARG_CONFIG_NAME: &str = "warg-config.json";
 const WASM_PKG_CONFIG_NAME: &str = "wasm-pkg-config.json";
@@ -128,8 +128,8 @@ pub async fn publish_wit(
 ) -> Result<()> {
     let mut resolve = Resolve::new();
     let pkg = resolve
-        .push(
-            UnresolvedPackage::parse(Path::new("foo.wit"), wit)
+        .push_group(
+            UnresolvedPackageGroup::parse(Path::new("foo.wit"), wit)
                 .context("failed to parse wit for publishing")?,
         )
         .context("failed to resolve wit for publishing")?;
