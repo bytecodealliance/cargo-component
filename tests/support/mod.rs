@@ -184,7 +184,8 @@ where
         keyring_auth: false,
         keyring_backend: None,
         ignore_federation_hints: false,
-        auto_accept_federation_hints: false,
+        disable_auto_accept_federation_hints: false,
+        disable_auto_package_init: false,
         disable_interactive: true,
     };
 

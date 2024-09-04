@@ -3959,9 +3959,9 @@ dependencies = [
 
 [[package]]
 name = "warg-api"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11e958a13d0e3e99acdada1b94d1f5af5380f0eb4699d880ce5a326d2103b0fa"
+checksum = "a44b422328c3a86be288f569694aa97df958ade0cd9514ed00bc562952c6778e"
 dependencies = [
  "indexmap 2.5.0",
  "itertools 0.12.1",
@@ -3974,9 +3974,9 @@ dependencies = [
 
 [[package]]
 name = "warg-client"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3a26a25483e385ccdc388c9d51308a2352d9ae9d9b4a1153ad42464fdbea24a"
+checksum = "dd1af3c0a73c56613c152fb99048af889a57063756299460c8fc26fea52ddccc"
 dependencies = [
  "anyhow",
  "async-recursion",
@@ -4020,9 +4020,9 @@ dependencies = [
 
 [[package]]
 name = "warg-crypto"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dea87da2d18d20415ad051e6ad90ddbd4dc75180a0cc2a3835538c405ca332c7"
+checksum = "52fb6f3a64e3fef5425a0ab2b4354f1e49a699b76d58dd91d632483634f10474"
 dependencies = [
  "anyhow",
  "base64 0.21.7",
@@ -4041,9 +4041,9 @@ dependencies = [
 
 [[package]]
 name = "warg-protobuf"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b048cf2d6a96a1642fcdb393e1072bda9323a8c11a8e11a1731c6bb81680b6d9"
+checksum = "9bbb2d353497af3f6334bce11bfe69d638eedbb6d5059992acb2a05dd0beef5b"
 dependencies = [
  "anyhow",
  "pbjson",
@@ -4060,9 +4060,9 @@ dependencies = [
 
 [[package]]
 name = "warg-protocol"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1ecc07de013b974e97af83afac2476117e6ee9e9b49bff75b261e961e66c6d0c"
+checksum = "e3a710c66d8b5f2a7b046ecd2d45121530f561fd5c699b9c85ee49d332cfe773"
 dependencies = [
  "anyhow",
  "base64 0.21.7",
@@ -4083,9 +4083,9 @@ dependencies = [
 
 [[package]]
 name = "warg-server"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36f1905c04c8b77bcde6898936f25af2b13083296334c0192cb57b879f716059"
+checksum = "331adb004508a909dfae729efb708a762fdfbdcb7dd5a1ac14db46a7aa1532ac"
 dependencies = [
  "anyhow",
  "axum",
@@ -4114,9 +4114,9 @@ dependencies = [
 
 [[package]]
 name = "warg-transparency"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d915717817f515a9dd723edbb9c0419d1d0c408d0f586719614a80ed3c7a6f8"
+checksum = "5b950a71a544b7ac8f5a5e95f43886ac97c3fe5c7080b955b1b534037596d7be"
 dependencies = [
  "anyhow",
  "indexmap 2.5.0",
@@ -4290,8 +4290,8 @@ dependencies = [
 
 [[package]]
 name = "wasm-pkg-client"
-version = "0.4.1"
-source = "git+https://github.com/bytecodealliance/wasm-pkg-tools.git?rev=75d76192c30e718d5b76123720c79153083ed3e6#75d76192c30e718d5b76123720c79153083ed3e6"
+version = "0.5.0"
+source = "git+https://github.com/bytecodealliance/wasm-pkg-tools.git?rev=5f92186a928b78b740a220fa0d4c66887cbdd382#5f92186a928b78b740a220fa0d4c66887cbdd382"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4322,8 +4322,8 @@ dependencies = [
 
 [[package]]
 name = "wasm-pkg-common"
-version = "0.4.1"
-source = "git+https://github.com/bytecodealliance/wasm-pkg-tools.git?rev=75d76192c30e718d5b76123720c79153083ed3e6#75d76192c30e718d5b76123720c79153083ed3e6"
+version = "0.5.0"
+source = "git+https://github.com/bytecodealliance/wasm-pkg-tools.git?rev=5f92186a928b78b740a220fa0d4c66887cbdd382#5f92186a928b78b740a220fa0d4c66887cbdd382"
 dependencies = [
  "anyhow",
  "bytes",
