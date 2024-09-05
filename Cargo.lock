@@ -553,7 +553,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-component"
-version = "0.16.0-dev"
+version = "0.17.0-dev"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -601,7 +601,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-component-core"
-version = "0.16.0-dev"
+version = "0.17.0-dev"
 dependencies = [
  "anyhow",
  "clap",
@@ -4712,7 +4712,7 @@ checksum = "d135d17ab770252ad95e9a872d365cf3090e3be864a34ab46f48555993efc904"
 
 [[package]]
 name = "wit"
-version = "0.16.0-dev"
+version = "0.17.0-dev"
 dependencies = [
  "anyhow",
  "assert_cmd",
