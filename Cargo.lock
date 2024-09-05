@@ -553,7 +553,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-component"
-version = "0.15.0-dev"
+version = "0.16.0-dev"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -601,7 +601,7 @@ dependencies = [
 
 [[package]]
 name = "cargo-component-core"
-version = "0.15.0-dev"
+version = "0.16.0-dev"
 dependencies = [
  "anyhow",
  "clap",
@@ -4291,7 +4291,8 @@ dependencies = [
 [[package]]
 name = "wasm-pkg-client"
 version = "0.5.0"
-source = "git+https://github.com/bytecodealliance/wasm-pkg-tools.git?rev=5f92186a928b78b740a220fa0d4c66887cbdd382#5f92186a928b78b740a220fa0d4c66887cbdd382"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c828d761faaf6ddefa63666ebce1b950059807eb61b68a6bdbecc9f0c1afcae8"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4323,7 +4324,8 @@ dependencies = [
 [[package]]
 name = "wasm-pkg-common"
 version = "0.5.0"
-source = "git+https://github.com/bytecodealliance/wasm-pkg-tools.git?rev=5f92186a928b78b740a220fa0d4c66887cbdd382#5f92186a928b78b740a220fa0d4c66887cbdd382"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6f2754ba9e374f6042c834716f0a84dd4da1efce9507eda1ddd1f2f744db1462"
 dependencies = [
  "anyhow",
  "bytes",
@@ -4710,7 +4712,7 @@ checksum = "d135d17ab770252ad95e9a872d365cf3090e3be864a34ab46f48555993efc904"
 
 [[package]]
 name = "wit"
-version = "0.15.0-dev"
+version = "0.16.0-dev"
 dependencies = [
  "anyhow",
  "assert_cmd",

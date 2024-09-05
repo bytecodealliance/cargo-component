@@ -9,7 +9,7 @@ repository = { workspace = true }
 readme = "README.md"
 
 [workspace.package]
-version = "0.15.0-dev"
+version = "0.16.0-dev"
 edition = "2021"
 authors = ["Peter Huene <peter@huene.dev>"]
 license = "Apache-2.0 WITH LLVM-exception"
@@ -72,7 +72,7 @@ anyhow = "1.0.82"
 assert_cmd = "2.0.14"
 bytes = "1.6.0"
 cargo_metadata = "0.18.1"
-cargo-component-core = { path = "crates/core", version = "0.15.0-dev" }
+cargo-component-core = { path = "crates/core", version = "0.16.0-dev" }
 cargo-config2 = "0.1.24"
 clap = { version = "4.5.4", features = ["derive", "env"] }
 dirs = "5"
@@ -107,7 +107,7 @@ warg-protocol = "0.9.0"
 warg-server = "0.9.0"
 wasi-preview1-component-adapter-provider = "24"
 wasm-metadata = "0.215.0"
-wasm-pkg-client = { git = "https://github.com/bytecodealliance/wasm-pkg-tools.git", rev = "5f92186a928b78b740a220fa0d4c66887cbdd382" }
+wasm-pkg-client = "0.5.0"
 wasmparser = "0.215.0"
 wasmprinter = "0.216.0"
 wat = "1.208.1"
