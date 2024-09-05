@@ -29,9 +29,6 @@ tokio = { workspace = true }
 toml_edit = { workspace = true }
 url = { workspace = true }
 wasm-pkg-client = { workspace = true }
-warg-client = { workspace = true }
-warg-crypto = { workspace = true }
-warg-protocol = { workspace = true }
 wasm-metadata = { workspace = true }
 wit-component = { workspace = true }
 wit-parser = { workspace = true }
@@ -39,6 +36,9 @@ wit-parser = { workspace = true }
 [dev-dependencies]
 assert_cmd = { workspace = true }
 predicates = { workspace = true }
+warg-client = { workspace = true }
+warg-crypto = { workspace = true }
+warg-protocol = { workspace = true }
 warg-server = { workspace = true }
 tokio-util = { workspace = true }
 wasmparser = { workspace = true }

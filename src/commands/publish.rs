@@ -1,10 +1,9 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
 use anyhow::{bail, Context, Result};
-use cargo_component_core::{command::CommonOptions, registry::find_url};
+use cargo_component_core::command::CommonOptions;
 use clap::Args;
-use warg_crypto::signing::PrivateKey;
-use warg_protocol::registry::PackageName;
+use wasm_pkg_client::{warg::WargRegistryConfig, Registry};
 
 use crate::{
     config::{CargoArguments, CargoPackageSpec, Config},
@@ -70,11 +69,7 @@ pub struct PublishCommand {
 
     /// The registry to publish to.
     #[clap(long = "registry", value_name = "REGISTRY")]
-    pub registry: Option<String>,
-
-    /// Initialize a new package in the registry.
-    #[clap(long = "init")]
-    pub init: bool,
+    pub registry: Option<Registry>,
 }
 
 impl PublishCommand {
@@ -82,7 +77,7 @@ impl PublishCommand {
     pub async fn exec(self) -> Result<()> {
         log::debug!("executing publish command");
 
-        let config = Config::new(self.common.new_terminal(), self.common.config.clone())?;
+        let mut config = Config::new(self.common.new_terminal(), self.common.config.clone())?;
         let client = config.client(self.common.cache_dir.clone(), false).await?;
 
         if let Some(target) = &self.target {
@@ -127,17 +122,20 @@ impl PublishCommand {
             )
         })?;
 
-        let registry_url = find_url(
-            self.registry.as_deref(),
-            &component_metadata.section.registries,
-            config.warg().home_url.as_deref(),
-        )?;
-
-        let signing_key = if let Ok(key) = std::env::var("CARGO_COMPONENT_PUBLISH_KEY") {
-            Some(PrivateKey::decode(key).context("failed to parse signing key from `CARGO_COMPONENT_PUBLISH_KEY` environment variable")?)
-        } else {
-            None
-        };
+        if let Ok(key) = std::env::var("CARGO_COMPONENT_PUBLISH_KEY") {
+            let registry = config.pkg_config.resolve_registry(name).ok_or_else(|| anyhow::anyhow!("Tried to set a signing key, but registry was not set and no default registry was found. Try setting the `--registry` option."))?.to_owned();
+            // NOTE(thomastaylor312): If config doesn't already exist, this will essentially force warg
+            // usage because we'll be creating a config for warg, which means it will default to that
+            // protocol. So for all intents and purposes, setting a publish key forces warg usage.
+            let reg_config = config
+                .pkg_config
+                .get_or_insert_registry_config_mut(&registry);
+            let mut warg_conf = WargRegistryConfig::try_from(&*reg_config).unwrap_or_default();
+            warg_conf.signing_key = Some(Arc::new(
+                key.try_into().context("Failed to parse signing key")?,
+            ));
+            reg_config.set_backend_config("warg", warg_conf)?;
+        }
 
         let cargo_build_args = CargoArguments {
             color: self.common.color,
@@ -157,7 +155,7 @@ impl PublishCommand {
 
         let spawn_args = self.build_args()?;
         let outputs = run_cargo_command(
-            client,
+            client.clone(),
             &config,
             &metadata,
             &packages,
@@ -172,20 +170,17 @@ impl PublishCommand {
                 len = outputs.len()
             );
         }
-        // Safe to unwrap here because we already know a PackageRef is valid
-        let package_name = PackageName::new(name.to_string()).unwrap();
+
         let options = PublishOptions {
             package,
-            registry_url,
-            init: self.init,
-            name: &package_name,
+            name,
+            registry: self.registry.as_ref(),
             version: &component_metadata.version,
             path: &outputs[0],
-            signing_key,
             dry_run: self.dry_run,
         };
 
-        publish(&config, &options).await
+        publish(&config, client, &options).await
     }
 
     fn build_args(&self) -> Result<Vec<String>> {

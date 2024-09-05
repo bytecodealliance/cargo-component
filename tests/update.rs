@@ -4,7 +4,6 @@ use anyhow::{Context, Result};
 use assert_cmd::prelude::*;
 use predicates::{prelude::PredicateBooleanExt, str::contains};
 use toml_edit::value;
-use wasm_pkg_client::warg::WargRegistryConfig;
 
 use crate::support::*;
 
@@ -24,13 +23,10 @@ fn help() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn update_without_changes_is_a_noop() -> Result<()> {
-    let (server, config, registry) = spawn_server(Vec::<String>::new()).await?;
-
-    let warg_config =
-        WargRegistryConfig::try_from(config.registry_config(&registry).unwrap()).unwrap();
+    let (server, config, _) = spawn_server(Vec::<String>::new()).await?;
 
     publish_wit(
-        &warg_config.client_config,
+        config,
         "test:bar",
         "1.0.0",
         r#"package test:bar@1.0.0;
@@ -38,7 +34,6 @@ world foo {
     import foo: func() -> string;
     export bar: func() -> string;
 }"#,
-        true,
     )
     .await?;
 
@@ -63,13 +58,10 @@ world foo {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn update_without_compatible_changes_is_a_noop() -> Result<()> {
-    let (server, config, registry) = spawn_server(Vec::<String>::new()).await?;
-
-    let warg_config =
-        WargRegistryConfig::try_from(config.registry_config(&registry).unwrap()).unwrap();
+    let (server, config, _) = spawn_server(Vec::<String>::new()).await?;
 
     publish_wit(
-        &warg_config.client_config,
+        config.clone(),
         "test:bar",
         "1.0.0",
         r#"package test:bar@1.0.0;
@@ -77,7 +69,6 @@ world foo {
     import foo: func() -> string;
     export bar: func() -> string;
 }"#,
-        true,
     )
     .await?;
 
@@ -92,14 +83,13 @@ world foo {
     validate_component(&project.debug_wasm("component"))?;
 
     publish_wit(
-        &warg_config.client_config,
+        config,
         "test:bar",
         "2.0.0",
         r#"package test:bar@2.0.0;
 world foo {
     export bar: func() -> string;
 }"#,
-        false,
     )
     .await?;
 
@@ -123,13 +113,10 @@ world foo {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn update_with_compatible_changes() -> Result<()> {
-    let (server, config, registry) = spawn_server(Vec::<String>::new()).await?;
-
-    let warg_config =
-        WargRegistryConfig::try_from(config.registry_config(&registry).unwrap()).unwrap();
+    let (server, config, _) = spawn_server(Vec::<String>::new()).await?;
 
     publish_wit(
-        &warg_config.client_config,
+        config.clone(),
         "test:bar",
         "1.0.0",
         r#"package test:bar@1.0.0;
@@ -137,7 +124,6 @@ world foo {
     import foo: func() -> string;
     export bar: func() -> string;
 }"#,
-        true,
     )
     .await?;
 
@@ -152,7 +138,7 @@ world foo {
     validate_component(&project.debug_wasm("component"))?;
 
     publish_wit(
-        &warg_config.client_config,
+        config,
         "test:bar",
         "1.1.0",
         r#"package test:bar@1.1.0;
@@ -161,7 +147,6 @@ world foo {
     import baz: func() -> string;
     export bar: func() -> string;
 }"#,
-        false,
     )
     .await?;
 
@@ -201,13 +186,10 @@ bindings::export!(Component with_types_in bindings);
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn update_with_compatible_changes_is_noop_for_dryrun() -> Result<()> {
-    let (server, config, registry) = spawn_server(Vec::<String>::new()).await?;
-
-    let warg_config =
-        WargRegistryConfig::try_from(config.registry_config(&registry).unwrap()).unwrap();
+    let (server, config, _) = spawn_server(Vec::<String>::new()).await?;
 
     publish_wit(
-        &warg_config.client_config,
+        config.clone(),
         "test:bar",
         "1.0.0",
         r#"package test:bar@1.0.0;
@@ -215,7 +197,6 @@ world foo {
     import foo: func() -> string;
     export bar: func() -> string;
 }"#,
-        true,
     )
     .await?;
 
@@ -230,7 +211,7 @@ world foo {
     validate_component(&project.debug_wasm("component"))?;
 
     publish_wit(
-        &warg_config.client_config,
+        config.clone(),
         "test:bar",
         "1.1.0",
         r#"package test:bar@1.1.0;
@@ -239,7 +220,6 @@ world foo {
     import baz: func() -> string;
     export bar: func() -> string;
 }"#,
-        false,
     )
     .await?;
 
@@ -266,27 +246,10 @@ world foo {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn update_with_changed_dependencies() -> Result<()> {
-    let (server, config, registry) = spawn_server(Vec::<String>::new()).await?;
+    let (server, config, _) = spawn_server(Vec::<String>::new()).await?;
 
-    let warg_config =
-        WargRegistryConfig::try_from(config.registry_config(&registry).unwrap()).unwrap();
-
-    publish_component(
-        &warg_config.client_config,
-        "test:bar",
-        "1.0.0",
-        "(component)",
-        true,
-    )
-    .await?;
-    publish_component(
-        &warg_config.client_config,
-        "test:baz",
-        "1.0.0",
-        "(component)",
-        true,
-    )
-    .await?;
+    publish_component(config.clone(), "test:bar", "1.0.0", "(component)").await?;
+    publish_component(config, "test:baz", "1.0.0", "(component)").await?;
 
     let project = server.project("foo", true, Vec::<String>::new())?;
 

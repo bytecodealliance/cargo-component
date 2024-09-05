@@ -5,7 +5,6 @@ use assert_cmd::prelude::*;
 use predicates::{prelude::*, str::contains};
 use tempfile::TempDir;
 use toml_edit::value;
-use wasm_pkg_client::warg::WargRegistryConfig;
 
 use crate::support::*;
 
@@ -46,20 +45,9 @@ async fn validate_the_package_exists() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn validate_the_version_exists() -> Result<()> {
-    let (server, config, registry) = spawn_server(Vec::<String>::new()).await?;
+    let (server, config, _) = spawn_server(Vec::<String>::new()).await?;
 
-    // NOTE(thomastaylor312): Once we have publishing in wasm_pkg_client, we won't need to get the config directly like this
-    let warg_config =
-        WargRegistryConfig::try_from(config.registry_config(&registry).unwrap()).unwrap();
-
-    publish_component(
-        &warg_config.client_config,
-        "test:bar",
-        "1.1.0",
-        "(component)",
-        true,
-    )
-    .await?;
+    publish_component(config, "test:bar", "1.1.0", "(component)").await?;
 
     let project = server.project("foo", true, Vec::<String>::new())?;
 
@@ -85,19 +73,9 @@ async fn validate_the_version_exists() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn adds_dependencies_to_target_component() -> Result<()> {
-    let (server, config, registry) = spawn_server(Vec::<String>::new()).await?;
+    let (server, config, _) = spawn_server(Vec::<String>::new()).await?;
 
-    let warg_config =
-        WargRegistryConfig::try_from(config.registry_config(&registry).unwrap()).unwrap();
-
-    publish_component(
-        &warg_config.client_config,
-        "test:bar",
-        "1.1.0",
-        "(component)",
-        true,
-    )
-    .await?;
+    publish_component(config, "test:bar", "1.1.0", "(component)").await?;
 
     let project = server.project("foo_target", true, Vec::<String>::new())?;
 
@@ -144,19 +122,9 @@ fn checks_for_duplicate_dependencies() -> Result<()> {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 1)]
 async fn prints_modified_manifest_for_dry_run() -> Result<()> {
-    let (server, config, registry) = spawn_server(Vec::<String>::new()).await?;
+    let (server, config, _) = spawn_server(Vec::<String>::new()).await?;
 
-    let warg_config =
-        WargRegistryConfig::try_from(config.registry_config(&registry).unwrap()).unwrap();
-
-    publish_component(
-        &warg_config.client_config,
-        "test:bar",
-        "1.2.3",
-        "(component)",
-        true,
-    )
-    .await?;
+    publish_component(config, "test:bar", "1.2.3", "(component)").await?;
 
     let project = server.project("foo", true, Vec::<String>::new())?;
 

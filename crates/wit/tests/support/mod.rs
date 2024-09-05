@@ -1,9 +1,5 @@
 #![allow(dead_code)]
 
-use anyhow::{bail, Context, Result};
-use assert_cmd::prelude::OutputAssertExt;
-use cargo_component_core::command::{CACHE_DIR_ENV_VAR, CONFIG_FILE_ENV_VAR};
-use indexmap::IndexSet;
 use std::{
     env,
     ffi::OsStr,
@@ -11,8 +7,14 @@ use std::{
     path::{Path, PathBuf},
     process::Command,
     rc::Rc,
+    sync::Arc,
     time::Duration,
 };
+
+use anyhow::{bail, Context, Result};
+use assert_cmd::prelude::OutputAssertExt;
+use cargo_component_core::command::{CACHE_DIR_ENV_VAR, CONFIG_FILE_ENV_VAR};
+use indexmap::IndexSet;
 use tempfile::TempDir;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
@@ -156,7 +158,8 @@ where
         keyring_auth: false,
         keyring_backend: None,
         ignore_federation_hints: false,
-        auto_accept_federation_hints: false,
+        disable_auto_accept_federation_hints: false,
+        disable_auto_package_init: false,
         disable_interactive: true,
     };
 
@@ -178,6 +181,7 @@ where
             wasm_pkg_client::warg::WargRegistryConfig {
                 client_config: warg_config,
                 auth_token: None,
+                signing_key: Some(Arc::new(test_signing_key().to_string().try_into()?)),
                 config_file: Some(config_file),
             },
         )

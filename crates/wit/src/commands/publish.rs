@@ -1,9 +1,7 @@
 use anyhow::{Context, Result};
-use cargo_component_core::{cache_dir, command::CommonOptions, registry::find_url};
+use cargo_component_core::{cache_dir, command::CommonOptions};
 use clap::Args;
-use warg_crypto::signing::PrivateKey;
-use warg_protocol::registry::PackageName;
-use wasm_pkg_client::caching::FileCache;
+use wasm_pkg_client::{caching::FileCache, PackageRef, Registry};
 
 use crate::{
     config::{Config, CONFIG_FILE_NAME},
@@ -22,17 +20,13 @@ pub struct PublishCommand {
     #[clap(long = "dry-run")]
     pub dry_run: bool,
 
-    /// Initialize a new package in the registry.
-    #[clap(long = "init")]
-    pub init: bool,
-
     /// Use the specified registry name when publishing the package.
     #[clap(long = "registry", value_name = "REGISTRY")]
-    pub registry: Option<String>,
+    pub registry: Option<Registry>,
 
     /// Override the package name to publish.
     #[clap(long, value_name = "NAME")]
-    pub package: Option<PackageName>,
+    pub package: Option<PackageRef>,
 }
 
 impl PublishCommand {
@@ -44,7 +38,6 @@ impl PublishCommand {
             .with_context(|| format!("failed to find configuration file `{CONFIG_FILE_NAME}`"))?;
 
         let terminal = self.common.new_terminal();
-        let warg_config = warg_client::Config::from_default_file()?.unwrap_or_default();
         let pkg_config = if let Some(config_file) = self.common.config {
             wasm_pkg_client::Config::from_file(&config_file).context(format!(
                 "failed to load configuration file from {}",
@@ -55,31 +48,14 @@ impl PublishCommand {
         };
         let file_cache = FileCache::new(cache_dir(self.common.cache_dir)?).await?;
 
-        let url = find_url(
-            self.registry.as_deref(),
-            &config.registries,
-            warg_config.home_url.as_deref(),
-        )?;
-
-        let signing_key = if let Ok(key) = std::env::var("WIT_PUBLISH_KEY") {
-            Some(PrivateKey::decode(key).context(
-                "failed to parse signing key from `WIT_PUBLISH_KEY` environment variable",
-            )?)
-        } else {
-            None
-        };
-
         publish_wit_package(
             PublishOptions {
                 config: &config,
                 config_path: &config_path,
-                warg_config: &warg_config,
                 pkg_config,
                 cache: file_cache,
-                url,
-                signing_key,
+                registry: self.registry.as_ref(),
                 package: self.package.as_ref(),
-                init: self.init,
                 dry_run: self.dry_run,
             },
             &terminal,

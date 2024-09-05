@@ -61,7 +61,7 @@ async fn validate_the_version_exists() -> Result<()> {
     let project = server.project("foo", Vec::<String>::new())?;
     project.file("foo.wit", "package test:bar;\n")?;
     project
-        .wit(["publish", "--init"])
+        .wit(["publish"])
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("Published package `test:bar` v0.1.0"))
@@ -95,7 +95,7 @@ async fn checks_for_duplicate_dependencies() -> Result<()> {
     let project = server.project("foo", Vec::<String>::new())?;
     project.file("foo.wit", "package test:bar;\n")?;
     project
-        .wit(["publish", "--init"])
+        .wit(["publish"])
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("Published package `test:bar` v0.1.0"))
@@ -129,7 +129,7 @@ async fn does_not_modify_manifest_for_dry_run() -> Result<()> {
     let project = server.project("foo", Vec::<String>::new())?;
     project.file("foo.wit", "package test:bar;\n")?;
     project
-        .wit(["publish", "--init"])
+        .wit(["publish"])
         .env("WIT_PUBLISH_KEY", test_signing_key())
         .assert()
         .stderr(contains("Published package `test:bar` v0.1.0"))

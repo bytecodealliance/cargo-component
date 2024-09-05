@@ -491,8 +491,6 @@ impl CargoArguments {
 /// This is used to configure the behavior of cargo-component.
 #[derive(Debug)]
 pub struct Config {
-    /// The warg client configuration.
-    pub warg: warg_client::Config,
     /// The package configuration to use
     pub pkg_config: wasm_pkg_client::Config,
     /// The terminal to use.
@@ -507,15 +505,9 @@ impl Config {
             None => wasm_pkg_client::Config::global_defaults()?,
         };
         Ok(Self {
-            warg: warg_client::Config::from_default_file()?.unwrap_or_default(),
             pkg_config,
             terminal,
         })
-    }
-
-    /// Gets the warg client configuration.
-    pub fn warg(&self) -> &warg_client::Config {
-        &self.warg
     }
 
     /// Gets the package configuration.

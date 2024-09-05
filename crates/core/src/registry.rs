@@ -17,8 +17,6 @@ use serde::{
 };
 
 use tokio::io::AsyncReadExt;
-use url::Url;
-use warg_client::{Config as WargConfig, FileSystemClient, StorageLockResult};
 use wasm_pkg_client::{
     caching::{CachingClient, FileCache},
     Client, Config, ContentDigest, Error as WasmPkgError, PackageRef, Release, VersionInfo,
@@ -26,49 +24,10 @@ use wasm_pkg_client::{
 use wit_component::DecodedWasm;
 use wit_parser::{PackageId, PackageName, Resolve, UnresolvedPackageGroup, WorldId};
 
-use crate::{
-    lock::{LockFileResolver, LockedPackageVersion},
-    terminal::{Colors, Terminal},
-};
+use crate::lock::{LockFileResolver, LockedPackageVersion};
 
 /// The name of the default registry.
 pub const DEFAULT_REGISTRY_NAME: &str = "default";
-
-/// Finds the URL for the given registry name.
-pub fn find_url<'a>(
-    name: Option<&str>,
-    urls: &'a HashMap<String, Url>,
-    default: Option<&'a str>,
-) -> Result<&'a str> {
-    let name = name.unwrap_or(DEFAULT_REGISTRY_NAME);
-    match urls.get(name) {
-        Some(url) => Ok(url.as_str()),
-        None if name != DEFAULT_REGISTRY_NAME => {
-            bail!("component registry `{name}` does not exist in the configuration")
-        }
-        None => default.context("a default component registry has not been set"),
-    }
-}
-
-/// Creates a registry client with the given warg configuration.
-pub async fn create_client(
-    config: &WargConfig,
-    url: &str,
-    terminal: &Terminal,
-) -> Result<FileSystemClient> {
-    match FileSystemClient::try_new_with_config(Some(url), config, None).await? {
-        StorageLockResult::Acquired(client) => Ok(client),
-        StorageLockResult::NotAcquired(path) => {
-            terminal.status_with_color(
-                "Blocking",
-                format!("waiting for file lock on `{path}`", path = path.display()),
-                Colors::Cyan,
-            )?;
-
-            Ok(FileSystemClient::new_with_config(Some(url), config, None).await?)
-        }
-    }
-}
 
 /// Represents a WIT package dependency.
 #[derive(Debug, Clone)]
