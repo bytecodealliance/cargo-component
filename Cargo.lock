@@ -587,16 +587,16 @@ dependencies = [
  "warg-protocol",
  "warg-server",
  "wasi-preview1-component-adapter-provider",
- "wasm-metadata 0.215.0",
+ "wasm-metadata 0.216.0",
  "wasm-pkg-client",
- "wasmparser 0.215.0",
+ "wasmparser 0.216.0",
  "wasmprinter 0.216.0",
  "wat",
  "which",
  "wit-bindgen-core",
  "wit-bindgen-rust",
- "wit-component 0.215.0",
- "wit-parser 0.215.0",
+ "wit-component 0.216.0",
+ "wit-parser 0.216.0",
 ]
 
 [[package]]
@@ -620,8 +620,8 @@ dependencies = [
  "url",
  "wasm-pkg-client",
  "windows-sys 0.52.0",
- "wit-component 0.215.0",
- "wit-parser 0.215.0",
+ "wit-component 0.216.0",
+ "wit-parser 0.216.0",
 ]
 
 [[package]]
@@ -4378,7 +4378,6 @@ dependencies = [
  "hashbrown 0.14.5",
  "indexmap 2.5.0",
  "semver",
- "serde 1.0.209",
 ]
 
 [[package]]
@@ -4392,6 +4391,7 @@ dependencies = [
  "hashbrown 0.14.5",
  "indexmap 2.5.0",
  "semver",
+ "serde 1.0.209",
 ]
 
 [[package]]
@@ -4738,38 +4738,38 @@ dependencies = [
  "warg-crypto",
  "warg-protocol",
  "warg-server",
- "wasm-metadata 0.215.0",
+ "wasm-metadata 0.216.0",
  "wasm-pkg-client",
- "wasmparser 0.215.0",
- "wit-component 0.215.0",
- "wit-parser 0.215.0",
+ "wasmparser 0.216.0",
+ "wit-component 0.216.0",
+ "wit-parser 0.216.0",
 ]
 
 [[package]]
 name = "wit-bindgen-core"
-version = "0.30.0"
+version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bb7e3df01cd43cfa1cb52602e4fc05cb2b62217655f6705639b6953eb0a3fed2"
+checksum = "175a2edcf18d1efd1412cb560b895dd09903f4fe73c3a597fbb0075ad86a03e8"
 dependencies = [
  "anyhow",
  "heck 0.5.0",
- "wit-parser 0.215.0",
+ "wit-parser 0.216.0",
 ]
 
 [[package]]
 name = "wit-bindgen-rust"
-version = "0.30.0"
+version = "0.31.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61a767d1a8eb4e908bfc53febc48b87ada545703b16fe0148ee7736a29a01417"
+checksum = "5a1c119b99edc4fc44ebfd3c461337b18f9db35388358344750b4fcfc788986b"
 dependencies = [
  "anyhow",
  "heck 0.5.0",
  "indexmap 2.5.0",
  "prettyplease",
  "syn 2.0.77",
- "wasm-metadata 0.215.0",
+ "wasm-metadata 0.216.0",
  "wit-bindgen-core",
- "wit-component 0.215.0",
+ "wit-component 0.216.0",
 ]
 
 [[package]]
