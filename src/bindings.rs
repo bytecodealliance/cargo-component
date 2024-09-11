@@ -120,15 +120,14 @@ impl<'a> BindingsGenerator<'a> {
                 .iter()
                 .map(|(key, value)| (key.clone(), WithOption::Path(value.clone())))
                 .collect(),
+            generate_all: settings.generate_all,
             type_section_suffix: settings.type_section_suffix.clone(),
             disable_run_ctors_once_workaround: settings.disable_run_ctors_once_workaround,
             default_bindings_module: settings.default_bindings_module.clone(),
             export_macro_name: settings.export_macro_name.clone(),
             pub_export_macro: settings.pub_export_macro,
             generate_unused_types: settings.generate_unused_types,
-            // todo - add support for these settings
-            generate_all: true,
-            disable_custom_section_link_helpers: false,
+            disable_custom_section_link_helpers: settings.disable_custom_section_link_helpers,
         };
 
         let mut files = Files::default();
