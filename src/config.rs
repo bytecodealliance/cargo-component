@@ -499,10 +499,10 @@ pub struct Config {
 
 impl Config {
     /// Create a new `Config` with the given terminal.
-    pub fn new(terminal: Terminal, config_path: Option<PathBuf>) -> Result<Self> {
+    pub async fn new(terminal: Terminal, config_path: Option<PathBuf>) -> Result<Self> {
         let pkg_config = match config_path {
-            Some(path) => wasm_pkg_client::Config::from_file(path)?,
-            None => wasm_pkg_client::Config::global_defaults()?,
+            Some(path) => wasm_pkg_client::Config::from_file(path).await?,
+            None => wasm_pkg_client::Config::global_defaults().await?,
         };
         Ok(Self {
             pkg_config,

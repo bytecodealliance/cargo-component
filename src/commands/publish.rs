@@ -77,7 +77,8 @@ impl PublishCommand {
     pub async fn exec(self) -> Result<()> {
         log::debug!("executing publish command");
 
-        let mut config = Config::new(self.common.new_terminal(), self.common.config.clone())?;
+        let mut config =
+            Config::new(self.common.new_terminal(), self.common.config.clone()).await?;
         let client = config.client(self.common.cache_dir.clone(), false).await?;
 
         if let Some(target) = &self.target {

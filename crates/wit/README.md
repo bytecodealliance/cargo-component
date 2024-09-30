@@ -1,5 +1,7 @@
 # The `wit` tool
 
+## DEPRECATED. Please use the `wkg wit` subcommand in the [wkg crate](https://crates.io/crates/wkg).
+
 A tool for creating and publishing WIT packages to a [WebAssembly component
 registry](https://github.com/bytecodealliance/registry/).
 

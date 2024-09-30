@@ -164,7 +164,8 @@ async fn main() -> Result<()> {
                     cargo_args.color.unwrap_or_default(),
                 ),
                 config_file,
-            )?;
+            )
+            .await?;
 
             let metadata = load_metadata(cargo_args.manifest_path.as_deref())?;
             let packages = load_component_metadata(
