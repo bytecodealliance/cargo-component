@@ -195,9 +195,10 @@ where
     let mut config = wasm_pkg_client::Config::default();
     // We should probably update wasm-pkg-tools to use http for "localhost" or "127.0.0.1"
     let registry: Registry = format!("localhost:{}", addr.port()).parse().unwrap();
-    config.set_namespace_registry("test".parse().unwrap(), registry.clone());
+    let registry_mapping = wasm_pkg_client::RegistryMapping::Registry(registry.clone());
+    config.set_namespace_registry("test".parse().unwrap(), registry_mapping.clone());
     for ns in additional_namespaces {
-        config.set_namespace_registry(ns.as_ref().parse().unwrap(), registry.clone());
+        config.set_namespace_registry(ns.as_ref().parse().unwrap(), registry_mapping.clone());
     }
     let reg_conf = config.get_or_insert_registry_config_mut(&registry);
     reg_conf.set_default_backend(Some("warg".to_string()));
@@ -213,7 +214,9 @@ where
         )
         .expect("Should be able to set backend config");
 
-    config.to_file(root.path().join(WASM_PKG_CONFIG_NAME))?;
+    config
+        .to_file(root.path().join(WASM_PKG_CONFIG_NAME))
+        .await?;
 
     Ok((instance, config, registry))
 }

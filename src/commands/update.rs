@@ -38,7 +38,7 @@ impl UpdateCommand {
     /// Executes the command.
     pub async fn exec(self) -> Result<()> {
         log::debug!("executing update command");
-        let config = Config::new(self.common.new_terminal(), self.common.config)?;
+        let config = Config::new(self.common.new_terminal(), self.common.config).await?;
         let metadata = load_metadata(self.manifest_path.as_deref())?;
         let packages = load_component_metadata(&metadata, [].iter(), true)?;
 

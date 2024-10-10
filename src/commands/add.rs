@@ -70,7 +70,7 @@ pub struct AddCommand {
 impl AddCommand {
     /// Executes the command
     pub async fn exec(self) -> Result<()> {
-        let config = Config::new(self.common.new_terminal(), self.common.config.clone())?;
+        let config = Config::new(self.common.new_terminal(), self.common.config.clone()).await?;
         let metadata = load_metadata(self.manifest_path.as_deref())?;
 
         let client = config.client(self.common.cache_dir.clone(), false).await?;

@@ -145,7 +145,7 @@ impl NewCommand {
     pub async fn exec(self) -> Result<()> {
         log::debug!("executing new command");
 
-        let config = Config::new(self.common.new_terminal(), self.common.config.clone())?;
+        let config = Config::new(self.common.new_terminal(), self.common.config.clone()).await?;
 
         let name = PackageName::new(&self.namespace, self.name.as_deref(), &self.path)?;
 
