@@ -855,13 +855,14 @@ async fn generate_package_bindings(
             path = output_dir.display()
         )
     })?;
-
-    fs::write(&bindings_path, bindings).with_context(|| {
-        format!(
-            "failed to write bindings file `{path}`",
-            path = bindings_path.display()
-        )
-    })?;
+    if fs::read_to_string(&bindings_path).unwrap_or_default() != bindings {
+        fs::write(&bindings_path, bindings).with_context(|| {
+            format!(
+                "failed to write bindings file `{path}`",
+                path = bindings_path.display()
+            )
+        })?;
+    }
 
     Ok(import_name_map)
 }
