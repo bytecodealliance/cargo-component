@@ -284,7 +284,7 @@ fn get_runner(cargo_config: &cargo_config2::Config, serve: bool) -> Result<PathA
                     .args(if serve {
                         vec!["serve", "-S", "cli", "-S", "http"]
                     } else {
-                        vec!["-S", "preview2", "-S", "cli"]
+                        vec!["-S", "preview2", "-S", "cli", "-S", "http"]
                     })
                     .to_owned(),
                 true,
