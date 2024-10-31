@@ -1,5 +1,6 @@
 use std::{
     borrow::Cow,
+    collections::HashMap,
     fs,
     path::{Path, PathBuf},
     process::Command,
@@ -7,15 +8,18 @@ use std::{
 };
 
 use anyhow::{bail, Context, Result};
-use cargo_component_core::{
-    command::CommonOptions,
-    registry::{Dependency, DependencyResolution, DependencyResolver, RegistryResolution},
-};
+use cargo_component_core::command::CommonOptions;
 use clap::Args;
 use heck::ToKebabCase;
 use semver::VersionReq;
 use toml_edit::{table, value, DocumentMut, Item, Table, Value};
-use wasm_pkg_client::caching::{CachingClient, FileCache};
+use wasm_pkg_client::{
+    caching::{CachingClient, FileCache},
+    PackageRef,
+};
+use wasm_pkg_core::resolver::{
+    Dependency, DependencyResolution, DependencyResolver, RegistryResolution,
+};
 
 use crate::{config::Config, generator::SourceGenerator, metadata, metadata::DEFAULT_WIT_DIR};
 
@@ -540,7 +544,7 @@ world example {{
                 assert_eq!(dependencies.len(), 1);
 
                 Ok(Some((
-                    dependencies
+                    <HashMap<PackageRef, wasm_pkg_core::resolver::DependencyResolution> as Clone>::clone(&dependencies)
                         .into_values()
                         .next()
                         .expect("expected a target resolution"),

@@ -2,15 +2,15 @@
 use std::{collections::HashMap, sync::Arc};
 
 use anyhow::Result;
-use cargo_component_core::{
-    lock::{LockFile, LockFileResolver, LockedPackage, LockedPackageVersion},
-    registry::{DependencyResolution, DependencyResolutionMap, DependencyResolver},
-};
 use cargo_metadata::PackageId;
-use semver::Version;
+use semver::{Version, VersionReq};
 use wasm_pkg_client::{
     caching::{CachingClient, FileCache},
     ContentDigest, PackageRef,
+};
+use wasm_pkg_core::{
+    lock::{LockFile, LockedPackage, LockedPackageVersion},
+    resolver::{DependencyResolution, DependencyResolutionMap, DependencyResolver},
 };
 
 use crate::metadata::ComponentMetadata;
@@ -33,7 +33,7 @@ impl<'a> PackageDependencyResolution<'a> {
     pub async fn new(
         client: Arc<CachingClient<FileCache>>,
         metadata: &'a ComponentMetadata,
-        lock_file: Option<LockFileResolver<'_>>,
+        lock_file: &LockFile,
     ) -> Result<PackageDependencyResolution<'a>> {
         Ok(Self {
             metadata,
@@ -53,14 +53,14 @@ impl<'a> PackageDependencyResolution<'a> {
     async fn resolve_target_deps(
         client: Arc<CachingClient<FileCache>>,
         metadata: &ComponentMetadata,
-        lock_file: Option<LockFileResolver<'_>>,
+        lock_file: &LockFile,
     ) -> Result<DependencyResolutionMap> {
         let target_deps = metadata.section.target.dependencies();
         if target_deps.is_empty() {
             return Ok(Default::default());
         }
 
-        let mut resolver = DependencyResolver::new_with_client(client, lock_file)?;
+        let mut resolver = DependencyResolver::new_with_client(client, Some(lock_file))?;
 
         for (name, dependency) in target_deps.iter() {
             resolver.add_dependency(name, dependency).await?;
@@ -72,13 +72,13 @@ impl<'a> PackageDependencyResolution<'a> {
     async fn resolve_deps(
         client: Arc<CachingClient<FileCache>>,
         metadata: &ComponentMetadata,
-        lock_file: Option<LockFileResolver<'_>>,
+        lock_file: &LockFile,
     ) -> Result<DependencyResolutionMap> {
         if metadata.section.dependencies.is_empty() {
             return Ok(Default::default());
         }
 
-        let mut resolver = DependencyResolver::new_with_client(client, lock_file)?;
+        let mut resolver = DependencyResolver::new_with_client(client, Some(lock_file))?;
 
         for (name, dependency) in &metadata.section.dependencies {
             resolver.add_dependency(name, dependency).await?;
@@ -111,7 +111,7 @@ impl<'a> PackageResolutionMap<'a> {
     }
 
     /// Converts the resolution map into a lock file.
-    pub fn to_lock_file(&self) -> LockFile {
+    pub async fn to_lock_file(&self) -> LockFile {
         type PackageKey = (PackageRef, Option<String>);
         type VersionsMap = HashMap<String, (Version, ContentDigest)>;
         let mut packages: HashMap<PackageKey, VersionsMap> = HashMap::new();
@@ -149,13 +149,13 @@ impl<'a> PackageResolutionMap<'a> {
                 let mut versions: Vec<LockedPackageVersion> = versions
                     .into_iter()
                     .map(|(requirement, (version, digest))| LockedPackageVersion {
-                        requirement,
+                        requirement: VersionReq::parse(&requirement).unwrap(),
                         version,
                         digest,
                     })
                     .collect();
 
-                versions.sort_by(|a, b| a.key().cmp(b.key()));
+                versions.sort_by(|a, b| a.key().cmp(&b.key()));
 
                 LockedPackage {
                     name,
@@ -167,6 +167,6 @@ impl<'a> PackageResolutionMap<'a> {
 
         packages.sort_by(|a, b| a.key().cmp(&b.key()));
 
-        LockFile::new(packages)
+        LockFile::new_with_path(packages, "wkg.lock").await.unwrap()
     }
 }

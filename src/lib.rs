@@ -17,27 +17,25 @@ use std::{
 
 use anyhow::{bail, Context, Result};
 use bindings::BindingsGenerator;
-use cargo_component_core::{
-    lock::{LockFile, LockFileResolver, LockedPackage, LockedPackageVersion},
-    terminal::Colors,
-};
+use cargo_component_core::terminal::Colors;
 use cargo_config2::{PathAndArgs, TargetTripleRef};
 use cargo_metadata::{Artifact, Message, Metadata, MetadataCommand, Package};
 use semver::Version;
 use shell_escape::escape;
 use tempfile::NamedTempFile;
+use terminal_link::Link as TerminalLink;
 use wasm_metadata::{Link, LinkType, RegistryMetadata};
 use wasm_pkg_client::{
     caching::{CachingClient, FileCache},
     PackageRef, PublishOpts, Registry,
 };
+use wasm_pkg_core::lock::LockFile;
 use wasmparser::{Parser, Payload};
 use wit_component::ComponentEncoder;
 
 use crate::target::install_wasm32_wasip1;
 
 use config::{CargoArguments, CargoPackageSpec, Config};
-use lock::{acquire_lock_file_ro, acquire_lock_file_rw};
 use metadata::ComponentMetadata;
 use registry::{PackageDependencyResolution, PackageResolutionMap};
 
@@ -45,7 +43,6 @@ mod bindings;
 pub mod commands;
 pub mod config;
 mod generator;
-mod lock;
 mod metadata;
 mod registry;
 mod target;
@@ -146,7 +143,7 @@ pub async fn run_cargo_command(
     cargo_args: &CargoArguments,
     spawn_args: &[String],
 ) -> Result<Vec<PathBuf>> {
-    let import_name_map = generate_bindings(client, config, metadata, packages, cargo_args).await?;
+    let import_name_map = generate_bindings(client, config, packages).await?;
 
     let cargo_path = std::env::var("CARGO")
         .map(PathBuf::from)
@@ -260,7 +257,8 @@ pub async fn run_cargo_command(
         &import_name_map,
         command,
         output_args,
-    )?;
+    )
+    .await?;
 
     if let Some(runner) = runner {
         spawn_outputs(config, &runner, output_args, &outputs, command)?;
@@ -392,7 +390,7 @@ struct Output {
     display: Option<String>,
 }
 
-fn componentize_artifacts(
+async fn componentize_artifacts(
     config: &Config,
     cargo_metadata: &Metadata,
     artifacts: &[Artifact],
@@ -406,7 +404,7 @@ fn componentize_artifacts(
         env::current_dir().with_context(|| "couldn't get the current directory of the process")?;
 
     // Acquire the lock file to ensure any other cargo-component process waits for this to complete
-    let _file_lock = acquire_lock_file_ro(config.terminal(), cargo_metadata)?;
+    let _file_lock = LockFile::load(false).await?;
 
     for artifact in artifacts {
         for path in artifact
@@ -735,28 +733,34 @@ pub fn load_component_metadata<'a>(
 async fn generate_bindings(
     client: Arc<CachingClient<FileCache>>,
     config: &Config,
-    metadata: &Metadata,
     packages: &[PackageComponentMetadata<'_>],
-    cargo_args: &CargoArguments,
 ) -> Result<HashMap<String, HashMap<String, String>>> {
-    let file_lock = acquire_lock_file_ro(config.terminal(), metadata)?;
-    let lock_file = file_lock
-        .as_ref()
-        .map(|f| {
-            LockFile::read(f.file()).with_context(|| {
-                format!(
-                    "failed to read lock file `{path}`",
-                    path = f.path().display()
+    let lock_file = if Path::exists(&PathBuf::from("Cargo-component.lock")) {
+        config.terminal().status_with_color(
+            "Warning",
+            format!(
+                "It seems you are using `Cargo-component.lock` for your lock file.
+             As of version 0.19.0, cargo-component uses `wkg.lock` from {}.
+             You will notice that your lock file has been renamed.",
+                TerminalLink::new(
+                    "wasm-pkg-tools",
+                    "https://github.com/bytecodealliance/wasm-pkg-tools"
                 )
-            })
-        })
-        .transpose()?;
+            ),
+            Colors::Yellow,
+        )?;
+        let lock = LockFile::load_from_path("Cargo-component.lock", true).await?;
+        let mut new_lock = LockFile::new_with_path(lock.packages, "wkg.lock").await?;
+        new_lock.write().await?;
+        std::fs::remove_file("Cargo-component.lock")?;
+        new_lock
+    } else {
+        LockFile::load(true).await?
+    };
 
     let cwd =
         env::current_dir().with_context(|| "couldn't get the current directory of the process")?;
-
-    let resolver = lock_file.as_ref().map(LockFileResolver::new);
-    let resolution_map = create_resolution_map(client, packages, resolver).await?;
+    let resolution_map = create_resolution_map(client, packages, &lock_file).await?;
     let mut import_name_map = HashMap::new();
     for PackageComponentMetadata { package, .. } in packages {
         let resolution = resolution_map.get(&package.id).expect("missing resolution");
@@ -766,27 +770,9 @@ async fn generate_bindings(
         );
     }
 
-    // Update the lock file if it exists or if the new lock file is non-empty
-    let new_lock_file = resolution_map.to_lock_file();
-    if (lock_file.is_some() || !new_lock_file.packages.is_empty())
-        && Some(&new_lock_file) != lock_file.as_ref()
-    {
-        drop(file_lock);
-        let file_lock = acquire_lock_file_rw(
-            config.terminal(),
-            metadata,
-            cargo_args.lock_update_allowed(),
-            cargo_args.locked,
-        )?;
-        new_lock_file
-            .write(file_lock.file(), "cargo-component")
-            .with_context(|| {
-                format!(
-                    "failed to write lock file `{path}`",
-                    path = file_lock.path().display()
-                )
-            })?;
-    }
+    drop(lock_file);
+    let mut new_lock_file = resolution_map.to_lock_file().await;
+    new_lock_file.write().await?;
 
     Ok(import_name_map)
 }
@@ -794,7 +780,7 @@ async fn generate_bindings(
 async fn create_resolution_map<'a>(
     client: Arc<CachingClient<FileCache>>,
     packages: &'a [PackageComponentMetadata<'_>],
-    lock_file: Option<LockFileResolver<'_>>,
+    lock_file: &LockFile,
 ) -> Result<PackageResolutionMap<'a>> {
     let mut map = PackageResolutionMap::default();
 
@@ -946,7 +932,7 @@ fn componentize(
         )?;
     }
 
-    let encoder = ComponentEncoder::default()
+    let mut encoder = ComponentEncoder::default()
         .module(bytes)?
         .import_name_map(import_name_map.clone())
         .adapter(
@@ -1116,168 +1102,6 @@ pub async fn publish(
     config
         .terminal()
         .status("Published", format!("package `{name}` v{version}"))?;
-
-    Ok(())
-}
-
-/// Update the dependencies in the lock file.
-///
-/// This updates only `Cargo-component.lock`.
-pub async fn update_lockfile(
-    client: Arc<CachingClient<FileCache>>,
-    config: &Config,
-    metadata: &Metadata,
-    packages: &[PackageComponentMetadata<'_>],
-    lock_update_allowed: bool,
-    locked: bool,
-    dry_run: bool,
-) -> Result<()> {
-    // Read the current lock file and generate a new one
-    let map = create_resolution_map(client, packages, None).await?;
-
-    let file_lock = acquire_lock_file_ro(config.terminal(), metadata)?;
-    let orig_lock_file = file_lock
-        .as_ref()
-        .map(|f| {
-            LockFile::read(f.file()).with_context(|| {
-                format!(
-                    "failed to read lock file `{path}`",
-                    path = f.path().display()
-                )
-            })
-        })
-        .transpose()?
-        .unwrap_or_default();
-
-    let new_lock_file = map.to_lock_file();
-
-    for old_pkg in &orig_lock_file.packages {
-        let new_pkg = match new_lock_file
-            .packages
-            .binary_search_by_key(&old_pkg.key(), LockedPackage::key)
-            .map(|index| &new_lock_file.packages[index])
-        {
-            Ok(pkg) => pkg,
-            Err(_) => {
-                // The package is no longer a dependency
-                for old_ver in &old_pkg.versions {
-                    config.terminal().status_with_color(
-                        if dry_run { "Would remove" } else { "Removing" },
-                        format!(
-                            "dependency `{name}` v{version}",
-                            name = old_pkg.name,
-                            version = old_ver.version,
-                        ),
-                        Colors::Red,
-                    )?;
-                }
-                continue;
-            }
-        };
-
-        for old_ver in &old_pkg.versions {
-            let new_ver = match new_pkg
-                .versions
-                .binary_search_by_key(&old_ver.key(), LockedPackageVersion::key)
-                .map(|index| &new_pkg.versions[index])
-            {
-                Ok(ver) => ver,
-                Err(_) => {
-                    // The version of the package is no longer a dependency
-                    config.terminal().status_with_color(
-                        if dry_run { "Would remove" } else { "Removing" },
-                        format!(
-                            "dependency `{name}` v{version}",
-                            name = old_pkg.name,
-                            version = old_ver.version,
-                        ),
-                        Colors::Red,
-                    )?;
-                    continue;
-                }
-            };
-
-            // The version has changed
-            if old_ver.version != new_ver.version {
-                config.terminal().status_with_color(
-                    if dry_run { "Would update" } else { "Updating" },
-                    format!(
-                        "dependency `{name}` v{old} -> v{new}",
-                        name = old_pkg.name,
-                        old = old_ver.version,
-                        new = new_ver.version
-                    ),
-                    Colors::Cyan,
-                )?;
-            }
-        }
-    }
-
-    for new_pkg in &new_lock_file.packages {
-        let old_pkg = match orig_lock_file
-            .packages
-            .binary_search_by_key(&new_pkg.key(), LockedPackage::key)
-            .map(|index| &orig_lock_file.packages[index])
-        {
-            Ok(pkg) => pkg,
-            Err(_) => {
-                // The package is new
-                for new_ver in &new_pkg.versions {
-                    config.terminal().status_with_color(
-                        if dry_run { "Would add" } else { "Adding" },
-                        format!(
-                            "dependency `{name}` v{version}",
-                            name = new_pkg.name,
-                            version = new_ver.version,
-                        ),
-                        Colors::Green,
-                    )?;
-                }
-                continue;
-            }
-        };
-
-        for new_ver in &new_pkg.versions {
-            if old_pkg
-                .versions
-                .binary_search_by_key(&new_ver.key(), LockedPackageVersion::key)
-                .map(|index| &old_pkg.versions[index])
-                .is_err()
-            {
-                // The version is new
-                config.terminal().status_with_color(
-                    if dry_run { "Would add" } else { "Adding" },
-                    format!(
-                        "dependency `{name}` v{version}",
-                        name = new_pkg.name,
-                        version = new_ver.version,
-                    ),
-                    Colors::Green,
-                )?;
-            }
-        }
-    }
-
-    if dry_run {
-        config
-            .terminal()
-            .warn("not updating component lock file due to --dry-run option")?;
-    } else {
-        // Update the lock file
-        if new_lock_file != orig_lock_file {
-            drop(file_lock);
-            let file_lock =
-                acquire_lock_file_rw(config.terminal(), metadata, lock_update_allowed, locked)?;
-            new_lock_file
-                .write(file_lock.file(), "cargo-component")
-                .with_context(|| {
-                    format!(
-                        "failed to write lock file `{path}`",
-                        path = file_lock.path().display()
-                    )
-                })?;
-        }
-    }
 
     Ok(())
 }

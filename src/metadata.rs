@@ -8,7 +8,6 @@ use std::{
 };
 
 use anyhow::{bail, Context, Result};
-use cargo_component_core::registry::{Dependency, RegistryPackage};
 use cargo_metadata::Package;
 use semver::{Version, VersionReq};
 use serde::{
@@ -18,6 +17,7 @@ use serde::{
 use serde_json::from_value;
 use url::Url;
 use wasm_pkg_client::PackageRef;
+use wasm_pkg_core::resolver::{Dependency, RegistryPackage};
 
 /// The default directory to look for a target WIT file.
 pub const DEFAULT_WIT_DIR: &str = "wit";

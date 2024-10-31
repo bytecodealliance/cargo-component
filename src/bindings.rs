@@ -5,11 +5,11 @@ use std::{
 };
 
 use anyhow::{bail, Context, Result};
-use cargo_component_core::registry::DecodedDependency;
 use heck::ToKebabCase;
 use indexmap::{IndexMap, IndexSet};
 use semver::Version;
 use wasm_pkg_client::PackageRef;
+use wasm_pkg_core::resolver::DecodedDependency;
 use wit_bindgen_core::Files;
 use wit_bindgen_rust::{Opts, WithOption};
 use wit_component::DecodedWasm;
@@ -173,7 +173,7 @@ impl<'a> BindingsGenerator<'a> {
         };
 
         // Merge all component dependencies as interface imports
-        for (id, dependency) in &resolution.resolutions {
+        for (id, dependency) in resolution.resolutions.iter() {
             log::debug!("importing component dependency `{id}`");
             empty_target = false;
 
@@ -186,7 +186,6 @@ impl<'a> BindingsGenerator<'a> {
             // Set the world name as currently it defaults to "root"
             // For now, set it to the name from the id
             let world = &mut resolve.worlds[component_world_id];
-            world.name = id.name().to_string();
 
             let pkg = &mut resolve.packages[world.package.unwrap()];
             pkg.name.namespace = id.namespace().to_string();
@@ -246,7 +245,7 @@ impl<'a> BindingsGenerator<'a> {
 
         // Start by decoding all of the target dependencies
         let mut deps = IndexMap::new();
-        for (id, resolution) in &resolution.target_resolutions {
+        for (id, resolution) in resolution.target_resolutions.iter() {
             let decoded = resolution.decode().await?;
             let name = decoded.package_name();
 

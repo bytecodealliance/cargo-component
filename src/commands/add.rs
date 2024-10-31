@@ -5,11 +5,7 @@ use std::{
 };
 
 use anyhow::{bail, Context, Result};
-use cargo_component_core::{
-    command::CommonOptions,
-    registry::{Dependency, DependencyResolution, DependencyResolver, RegistryPackage},
-    VersionedPackageName,
-};
+use cargo_component_core::{command::CommonOptions, VersionedPackageName};
 use cargo_metadata::Package;
 use clap::Args;
 use semver::VersionReq;
@@ -17,6 +13,9 @@ use toml_edit::{value, DocumentMut, InlineTable, Item, Table, Value};
 use wasm_pkg_client::{
     caching::{CachingClient, FileCache},
     PackageRef,
+};
+use wasm_pkg_core::resolver::{
+    Dependency, DependencyResolution, DependencyResolver, RegistryPackage,
 };
 
 use crate::{

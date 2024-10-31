@@ -26,6 +26,7 @@ toml_edit = { workspace = true }
 unicode-width = { workspace = true }
 url = { workspace = true }
 wasm-pkg-client = { workspace = true }
+wasm-pkg-core = { workspace = true }
 wit-component = { workspace = true }
 wit-parser = { workspace = true }
 
