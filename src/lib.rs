@@ -545,9 +545,9 @@ fn spawn_outputs(
         .collect::<Vec<_>>();
 
     if matches!(command, CargoCommand::Run | CargoCommand::Serve) && executables.len() > 1 {
-        config.terminal().error(
+        config.terminal().error(format!(
             "`cargo component {command}` can run at most one component, but multiple were specified",
-        )
+        ))
     } else if executables.is_empty() {
         config.terminal().error(format!(
             "a component {ty} target must be available for `cargo component {command}`",
