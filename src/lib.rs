@@ -946,7 +946,7 @@ fn componentize(
         )?;
     }
 
-    let encoder = ComponentEncoder::default()
+    let mut encoder = ComponentEncoder::default()
         .module(bytes)?
         .import_name_map(import_name_map.clone())
         .adapter(

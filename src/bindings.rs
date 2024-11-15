@@ -1,13 +1,14 @@
 //! Module for bindings generation.
 use std::{
     collections::{HashMap, HashSet},
+    mem,
     path::{Path, PathBuf},
 };
 
 use anyhow::{bail, Context, Result};
 use cargo_component_core::registry::DecodedDependency;
 use heck::ToKebabCase;
-use indexmap::{IndexMap, IndexSet};
+use indexmap::{map::MutableKeys, IndexMap, IndexSet};
 use semver::Version;
 use wasm_pkg_client::PackageRef;
 use wit_bindgen_core::Files;
@@ -186,11 +187,15 @@ impl<'a> BindingsGenerator<'a> {
             // Set the world name as currently it defaults to "root"
             // For now, set it to the name from the id
             let world = &mut resolve.worlds[component_world_id];
-            world.name = id.name().to_string();
+            let old_name = mem::replace(&mut world.name, id.name().to_string());
 
             let pkg = &mut resolve.packages[world.package.unwrap()];
             pkg.name.namespace = id.namespace().to_string();
             pkg.name.name = id.name().to_string();
+
+            // Update the world name in the `pkg.worlds` map too.
+            let (_index, key, _value) = pkg.worlds.get_full_mut2(&old_name).unwrap();
+            *key = id.name().to_string();
 
             let source = merged
                 .merge(resolve)
