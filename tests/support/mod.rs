@@ -103,7 +103,7 @@ pub async fn publish_wit(
         )
         .context("failed to resolve wit for publishing")?;
 
-    let bytes = wit_component::encode(Some(true), &resolve, pkg)
+    let bytes = wit_component::encode(&resolve, pkg)
         .context("failed to encode wit for publishing")?;
 
     publish(config, &id.parse()?, version, bytes).await
