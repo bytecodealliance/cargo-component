@@ -8,7 +8,7 @@ use std::{
 use anyhow::{bail, Context, Result};
 use cargo_component_core::registry::DecodedDependency;
 use heck::ToKebabCase;
-use indexmap::{map::MutableKeys, IndexMap, IndexSet};
+use indexmap::{IndexMap, IndexSet};
 use semver::Version;
 use wasm_pkg_client::PackageRef;
 use wit_bindgen_core::Files;
@@ -193,9 +193,19 @@ impl<'a> BindingsGenerator<'a> {
             pkg.name.namespace = id.namespace().to_string();
             pkg.name.name = id.name().to_string();
 
-            // Update the world name in the `pkg.worlds` map too.
-            let (_index, key, _value) = pkg.worlds.get_full_mut2(&old_name).unwrap();
-            *key = id.name().to_string();
+            // Update the world name in the `pkg.worlds` map too. Don't use
+            // `MutableKeys` because the new world name may not have the same
+            // hash as the old world name.
+            let mut new_worlds = IndexMap::new();
+            for (name, world) in pkg.worlds.iter() {
+                if name == &old_name {
+                    new_worlds.insert(id.name().to_string(), *world);
+                } else {
+                    new_worlds.insert(name.clone(), *world);
+                }
+            }
+            assert_eq!(pkg.worlds.len(), new_worlds.len());
+            pkg.worlds = new_worlds;
 
             let source = merged
                 .merge(resolve)
