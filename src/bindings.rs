@@ -110,8 +110,13 @@ impl<'a> BindingsGenerator<'a> {
             },
             additional_derive_attributes: settings.derives.clone(),
             std_feature: settings.std_feature,
+            // We use pregenerated bindings, rather than the `generate!` macro
+            // from the `wit-bindgen` crate, so instead of getting the runtime
+            // from the default path of `wit_bindgen::rt`, which is a re-export
+            // of the `wit-bindgen-rt` API, we just use the `wit-bindgen-rt`
+            // crate directly.
             runtime_path: Some("wit_bindgen_rt".to_string()),
-            bitflags_path: Some("wit_bindgen_rt::bitflags".to_string()),
+            bitflags_path: None,
             raw_strings: settings.raw_strings,
             skip: settings.skip.clone(),
             stubs: settings.stubs,
