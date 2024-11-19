@@ -1,7 +1,6 @@
 use std::{
     fs,
     path::{Path, PathBuf},
-    sync::Arc,
 };
 
 use anyhow::{bail, Context, Result};
@@ -126,7 +125,7 @@ impl AddCommand {
 
     async fn resolve_version(
         &self,
-        client: Arc<CachingClient<FileCache>>,
+        client: CachingClient<FileCache>,
         name: &PackageRef,
     ) -> Result<String> {
         let mut resolver = DependencyResolver::new_with_client(client, None)?;

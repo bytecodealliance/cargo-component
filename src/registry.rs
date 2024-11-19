@@ -1,5 +1,5 @@
 //! Module for interacting with component registries.
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use anyhow::Result;
 use cargo_metadata::PackageId;
@@ -10,7 +10,7 @@ use wasm_pkg_client::{
 };
 use wasm_pkg_core::{
     lock::{LockFile, LockedPackage, LockedPackageVersion},
-    resolver::{DependencyResolution, DependencyResolutionMap, DependencyResolver},
+    resolver::{Dependency, DependencyResolution, DependencyResolutionMap, DependencyResolver},
 };
 
 use crate::metadata::ComponentMetadata;
@@ -31,7 +31,7 @@ impl<'a> PackageDependencyResolution<'a> {
     ///
     /// Returns `Ok(None)` if the package is not a component package.
     pub async fn new(
-        client: Arc<CachingClient<FileCache>>,
+        client: CachingClient<FileCache>,
         metadata: &'a ComponentMetadata,
         lock_file: &LockFile,
     ) -> Result<PackageDependencyResolution<'a>> {
@@ -51,7 +51,7 @@ impl<'a> PackageDependencyResolution<'a> {
     }
 
     async fn resolve_target_deps(
-        client: Arc<CachingClient<FileCache>>,
+        client: CachingClient<FileCache>,
         metadata: &ComponentMetadata,
         lock_file: &LockFile,
     ) -> Result<DependencyResolutionMap> {
@@ -63,14 +63,17 @@ impl<'a> PackageDependencyResolution<'a> {
         let mut resolver = DependencyResolver::new_with_client(client, Some(lock_file))?;
 
         for (name, dependency) in target_deps.iter() {
-            resolver.add_dependency(name, dependency).await?;
+            resolver.add_shallow_dependency(name, &dependency.0).await?;
         }
+        // for (name, dependency) in target_deps.iter() {
+        //     resolver.add_dependency(name, &dependency.0).await?;
+        // }
 
         resolver.resolve().await
     }
 
     async fn resolve_deps(
-        client: Arc<CachingClient<FileCache>>,
+        client: CachingClient<FileCache>,
         metadata: &ComponentMetadata,
         lock_file: &LockFile,
     ) -> Result<DependencyResolutionMap> {
@@ -81,7 +84,11 @@ impl<'a> PackageDependencyResolution<'a> {
         let mut resolver = DependencyResolver::new_with_client(client, Some(lock_file))?;
 
         for (name, dependency) in &metadata.section.dependencies {
-            resolver.add_dependency(name, dependency).await?;
+            if let Dependency::Local(path) = dependency.clone().0 {
+                resolver.add_shallow_dependency(name, &Dependency::Local(path)).await?;
+                
+            }
+            resolver.add_dependency(name, &dependency.0).await?;
         }
 
         resolver.resolve().await

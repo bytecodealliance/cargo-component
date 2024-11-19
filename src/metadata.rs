@@ -12,7 +12,7 @@ use cargo_metadata::Package;
 use semver::{Version, VersionReq};
 use serde::{
     de::{self, value::MapAccessDeserializer},
-    Deserialize,
+    Deserialize, Serialize
 };
 use serde_json::from_value;
 use url::Url;
@@ -169,17 +169,17 @@ pub enum Target {
         /// [select-world]: https://docs.rs/wit-parser/latest/wit_parser/struct.Resolve.html#method.select_world
         world: Option<String>,
         /// The dependencies of the wit document being targeted.
-        dependencies: HashMap<PackageRef, Dependency>,
+        dependencies: HashMap<PackageRef, WasmDependency>,
     },
 }
 
 impl Target {
     /// Gets the dependencies of the target.
-    pub fn dependencies(&self) -> Cow<HashMap<PackageRef, Dependency>> {
+    pub fn dependencies(&self) -> Cow<HashMap<PackageRef, WasmDependency>> {
         match self {
             Self::Package { name, package, .. } => Cow::Owned(HashMap::from_iter([(
                 name.clone(),
-                Dependency::Package(package.clone()),
+                WasmDependency(Dependency::Package(package.clone())),
             )])),
             Self::Local { dependencies, .. } => Cow::Borrowed(dependencies),
         }
@@ -271,7 +271,7 @@ impl<'de> Deserialize<'de> for Target {
                     world: Option<String>,
                     registry: Option<String>,
                     path: Option<PathBuf>,
-                    dependencies: HashMap<PackageRef, Dependency>,
+                    dependencies: HashMap<PackageRef, WasmDependency>,
                 }
 
                 let entry = Entry::deserialize(MapAccessDeserializer::new(map))?;
@@ -326,6 +326,112 @@ impl<'de> Deserialize<'de> for Target {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct WasmDependency(pub Dependency);
+
+impl Serialize for WasmDependency {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        match &self.0 {
+            Dependency::Package(package) => {
+                if package.name.is_none() && package.registry.is_none() {
+                    let version = package.version.to_string();
+                    version.trim_start_matches('^').serialize(serializer)
+                } else {
+                    #[derive(Serialize)]
+                    struct Entry<'a> {
+                        package: Option<&'a PackageRef>,
+                        version: &'a str,
+                        registry: Option<&'a str>,
+                    }
+
+                    Entry {
+                        package: package.name.as_ref(),
+                        version: package.version.to_string().trim_start_matches('^'),
+                        registry: package.registry.as_deref(),
+                    }
+                    .serialize(serializer)
+                }
+            }
+            Dependency::Local(path) => {
+                #[derive(Serialize)]
+                struct Entry<'a> {
+                    path: &'a PathBuf,
+                }
+
+                Entry { path }.serialize(serializer)
+            }
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for WasmDependency {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        struct Visitor;
+
+        impl<'de> de::Visitor<'de> for Visitor {
+            type Value = WasmDependency;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                write!(formatter, "a string or a table")
+            }
+
+            fn visit_str<E>(self, s: &str) -> Result<Self::Value, E>
+            where
+                E: de::Error,
+            {
+                Ok(WasmDependency(Dependency::Package(
+                    s.parse().map_err(de::Error::custom)?,
+                )))
+            }
+
+            fn visit_map<A>(self, map: A) -> Result<Self::Value, A::Error>
+            where
+                A: de::MapAccess<'de>,
+            {
+                #[derive(Default, Deserialize)]
+                #[serde(default, deny_unknown_fields)]
+                struct Entry {
+                    path: Option<PathBuf>,
+                    package: Option<PackageRef>,
+                    version: Option<VersionReq>,
+                    registry: Option<String>,
+                }
+
+                let entry = Entry::deserialize(MapAccessDeserializer::new(map))?;
+
+                match (entry.path, entry.package, entry.version, entry.registry) {
+                    (Some(path), None, None, None) => Ok(WasmDependency(Dependency::Local(path))),
+                    (None, name, Some(version), registry) => {
+                        Ok(WasmDependency(Dependency::Package(RegistryPackage {
+                            name,
+                            version,
+                            registry,
+                        })))
+                    }
+                    (Some(_), None, Some(_), _) => Err(de::Error::custom(
+                        "cannot specify both `path` and `version` fields in a dependency entry",
+                    )),
+                    (Some(_), None, None, Some(_)) => Err(de::Error::custom(
+                        "cannot specify both `path` and `registry` fields in a dependency entry",
+                    )),
+                    (Some(_), Some(_), _, _) => Err(de::Error::custom(
+                        "cannot specify both `path` and `package` fields in a dependency entry",
+                    )),
+                    (None, None, _, _) => Err(de::Error::missing_field("package")),
+                    (None, Some(_), None, _) => Err(de::Error::missing_field("version")),
+                }
+            }
+        }
+
+        deserializer.deserialize_any(Visitor)
+    }
+}
 /// Represents the `package.metadata.component` section in `Cargo.toml`.
 #[derive(Default, Debug, Clone, Deserialize)]
 #[serde(default, deny_unknown_fields)]
@@ -337,7 +443,7 @@ pub struct ComponentSection {
     /// The path to the WASI adapter to use.
     pub adapter: Option<PathBuf>,
     /// The dependencies of the component.
-    pub dependencies: HashMap<PackageRef, Dependency>,
+    pub dependencies: HashMap<PackageRef, WasmDependency>,
     /// The registries to use for the component.
     pub registries: HashMap<String, Url>,
     /// The configuration for bindings generation.
@@ -415,14 +521,14 @@ impl ComponentMetadata {
             }
 
             for dependency in dependencies.values_mut() {
-                if let Dependency::Local(path) = dependency {
+                if let Dependency::Local(path) = &mut dependency.0 {
                     *path = manifest_dir.join(path.as_path());
                 }
             }
         }
 
         for dependency in section.dependencies.values_mut() {
-            if let Dependency::Local(path) = dependency {
+            if let Dependency::Local(path) = &mut dependency.0 {
                 *path = manifest_dir.join(path.as_path());
             }
         }

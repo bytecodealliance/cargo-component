@@ -11,7 +11,6 @@ use std::{
     io::{BufRead, BufReader, Read, Seek, SeekFrom},
     path::{Path, PathBuf},
     process::{Command, Stdio},
-    sync::Arc,
     time::SystemTime,
 };
 
@@ -135,7 +134,7 @@ impl From<&str> for CargoCommand {
 ///
 /// Returns any relevant output components.
 pub async fn run_cargo_command(
-    client: Arc<CachingClient<FileCache>>,
+    client: CachingClient<FileCache>,
     config: &Config,
     metadata: &Metadata,
     packages: &[PackageComponentMetadata<'_>],
@@ -731,7 +730,7 @@ pub fn load_component_metadata<'a>(
 }
 
 async fn generate_bindings(
-    client: Arc<CachingClient<FileCache>>,
+    client: CachingClient<FileCache>,
     config: &Config,
     packages: &[PackageComponentMetadata<'_>],
 ) -> Result<HashMap<String, HashMap<String, String>>> {
@@ -778,7 +777,7 @@ async fn generate_bindings(
 }
 
 async fn create_resolution_map<'a>(
-    client: Arc<CachingClient<FileCache>>,
+    client: CachingClient<FileCache>,
     packages: &'a [PackageComponentMetadata<'_>],
     lock_file: &LockFile,
 ) -> Result<PackageResolutionMap<'a>> {
@@ -1064,7 +1063,7 @@ fn add_registry_metadata(package: &Package, bytes: &[u8], path: &Path) -> Result
 /// Publish a component for the given workspace and publish options.
 pub async fn publish(
     config: &Config,
-    client: Arc<CachingClient<FileCache>>,
+    client: CachingClient<FileCache>,
     options: &PublishOptions<'_>,
 ) -> Result<()> {
     if options.dry_run {

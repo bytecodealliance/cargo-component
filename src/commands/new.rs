@@ -4,7 +4,6 @@ use std::{
     fs,
     path::{Path, PathBuf},
     process::Command,
-    sync::Arc,
 };
 
 use anyhow::{bail, Context, Result};
@@ -526,7 +525,7 @@ world example {{
     /// `DependencyResolution` instead so we can actually resolve the dependency.
     async fn resolve_target(
         &self,
-        client: Arc<CachingClient<FileCache>>,
+        client: CachingClient<FileCache>,
         target: Option<metadata::Target>,
     ) -> Result<Option<(DependencyResolution, Option<String>)>> {
         match target {

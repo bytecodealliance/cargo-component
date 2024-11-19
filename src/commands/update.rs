@@ -9,7 +9,6 @@ use terminal_link::Link as TerminalLink;
 use wasm_pkg_core::{
     lock::{LockFile, LockedPackageVersion},
     resolver::{DependencyResolver, RegistryPackage},
-    wit::add_packages_to_resolver,
 };
 
 use crate::{
@@ -88,7 +87,7 @@ impl UpdateCommand {
         {
             let target_deps = section.target.dependencies();
             for (name, dep) in target_deps.iter() {
-                match dep {
+                match &dep.0 {
                     wasm_pkg_core::resolver::Dependency::Package(RegistryPackage {
                         version,
                         ..
@@ -99,7 +98,7 @@ impl UpdateCommand {
                 }
             }
             for (name, dep) in section.dependencies.iter() {
-                match dep {
+                match &dep.0 {
                     wasm_pkg_core::resolver::Dependency::Package(RegistryPackage {
                         version,
                         ..
@@ -111,7 +110,7 @@ impl UpdateCommand {
             }
         }
         let mut resolver = DependencyResolver::new_with_client(client, None)?;
-        add_packages_to_resolver(&mut resolver, new_packages).await?;
+        resolver.add_packages(new_packages).await?;
         let deps = resolver.resolve().await?;
 
         let mut new_lock_file = LockFile::from_dependencies(&deps, "wkg.lock").await?;
