@@ -1,6 +1,7 @@
 //! Module for bindings generation.
 use std::{
     collections::{HashMap, HashSet},
+    mem,
     path::{Path, PathBuf},
 };
 
@@ -109,8 +110,13 @@ impl<'a> BindingsGenerator<'a> {
             },
             additional_derive_attributes: settings.derives.clone(),
             std_feature: settings.std_feature,
+            // We use pregenerated bindings, rather than the `generate!` macro
+            // from the `wit-bindgen` crate, so instead of getting the runtime
+            // from the default path of `wit_bindgen::rt`, which is a re-export
+            // of the `wit-bindgen-rt` API, we just use the `wit-bindgen-rt`
+            // crate directly.
             runtime_path: Some("wit_bindgen_rt".to_string()),
-            bitflags_path: Some("wit_bindgen_rt::bitflags".to_string()),
+            bitflags_path: None,
             raw_strings: settings.raw_strings,
             skip: settings.skip.clone(),
             stubs: settings.stubs,
@@ -186,10 +192,25 @@ impl<'a> BindingsGenerator<'a> {
             // Set the world name as currently it defaults to "root"
             // For now, set it to the name from the id
             let world = &mut resolve.worlds[component_world_id];
+            let old_name = mem::replace(&mut world.name, id.name().to_string());
 
             let pkg = &mut resolve.packages[world.package.unwrap()];
             pkg.name.namespace = id.namespace().to_string();
             pkg.name.name = id.name().to_string();
+
+            // Update the world name in the `pkg.worlds` map too. Don't use
+            // `MutableKeys` because the new world name may not have the same
+            // hash as the old world name.
+            let mut new_worlds = IndexMap::new();
+            for (name, world) in pkg.worlds.iter() {
+                if name == &old_name {
+                    new_worlds.insert(id.name().to_string(), *world);
+                } else {
+                    new_worlds.insert(name.clone(), *world);
+                }
+            }
+            assert_eq!(pkg.worlds.len(), new_worlds.len());
+            pkg.worlds = new_worlds;
 
             let source = merged
                 .merge(resolve)

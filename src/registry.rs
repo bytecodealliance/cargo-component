@@ -65,9 +65,6 @@ impl<'a> PackageDependencyResolution<'a> {
         for (name, dependency) in target_deps.iter() {
             resolver.add_shallow_dependency(name, &dependency.0).await?;
         }
-        // for (name, dependency) in target_deps.iter() {
-        //     resolver.add_dependency(name, &dependency.0).await?;
-        // }
 
         resolver.resolve().await
     }
@@ -87,8 +84,9 @@ impl<'a> PackageDependencyResolution<'a> {
             if let Dependency::Local(path) = dependency.clone().0 {
                 resolver.add_shallow_dependency(name, &Dependency::Local(path)).await?;
                 
+            } else {
+                resolver.add_dependency(name, &dependency.0).await?;
             }
-            resolver.add_dependency(name, &dependency.0).await?;
         }
 
         resolver.resolve().await

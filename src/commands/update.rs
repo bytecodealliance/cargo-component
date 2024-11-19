@@ -52,15 +52,14 @@ impl UpdateCommand {
         let config = Config::new(self.common.new_terminal(), self.common.config).await?;
         let metadata = load_metadata(self.manifest_path.as_deref())?;
         let packages = load_component_metadata(&metadata, [].iter(), true)?;
-
         let client = config.client(self.common.cache_dir, false).await?;
         let lock_file = if Path::exists(&PathBuf::from("Cargo-component.lock")) {
             config.terminal().status_with_color(
                 "Warning",
                 format!(
                     "It seems you are using `Cargo-component.lock` for your lock file.
-               As of version 0.19.0, cargo-component uses `wkg.lock` from {}.
-               You will notice that your lock file has been renamed.",
+               As of version 0.20.0, cargo-component uses `wkg.lock` from {}.
+               It is recommended you switch to `wkg.lock` by deleting your `Cargo-component.lock",
                     TerminalLink::new(
                         "wasm-pkg-tools",
                         "https://github.com/bytecodealliance/wasm-pkg-tools"
@@ -68,11 +67,7 @@ impl UpdateCommand {
                 ),
                 Colors::Yellow,
             )?;
-            let lock = LockFile::load_from_path("Cargo-component.lock", true).await?;
-            let mut new_lock = LockFile::new_with_path(lock.packages, "wkg.lock").await?;
-            new_lock.write().await?;
-            std::fs::remove_file("Cargo-component.lock")?;
-            new_lock
+            LockFile::load_from_path("Cargo-component.lock", true).await?
         } else {
             LockFile::load(true).await?
         };

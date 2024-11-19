@@ -542,9 +542,9 @@ fn spawn_outputs(
         .collect::<Vec<_>>();
 
     if matches!(command, CargoCommand::Run | CargoCommand::Serve) && executables.len() > 1 {
-        config.terminal().error(
+        config.terminal().error(format!(
             "`cargo component {command}` can run at most one component, but multiple were specified",
-        )
+        ))
     } else if executables.is_empty() {
         config.terminal().error(format!(
             "a component {ty} target must be available for `cargo component {command}`",
@@ -739,8 +739,8 @@ async fn generate_bindings(
             "Warning",
             format!(
                 "It seems you are using `Cargo-component.lock` for your lock file.
-             As of version 0.19.0, cargo-component uses `wkg.lock` from {}.
-             You will notice that your lock file has been renamed.",
+             As of version 0.20.0, cargo-component uses `wkg.lock` from {}.
+             It is recommended you switch to `wkg.lock` by deleting your `Cargo-component.lock",
                 TerminalLink::new(
                     "wasm-pkg-tools",
                     "https://github.com/bytecodealliance/wasm-pkg-tools"
@@ -748,11 +748,7 @@ async fn generate_bindings(
             ),
             Colors::Yellow,
         )?;
-        let lock = LockFile::load_from_path("Cargo-component.lock", true).await?;
-        let mut new_lock = LockFile::new_with_path(lock.packages, "wkg.lock").await?;
-        new_lock.write().await?;
-        std::fs::remove_file("Cargo-component.lock")?;
-        new_lock
+        LockFile::load_from_path("Cargo-component.lock", true).await?
     } else {
         LockFile::load(true).await?
     };
@@ -840,13 +836,14 @@ async fn generate_package_bindings(
             path = output_dir.display()
         )
     })?;
-
-    fs::write(&bindings_path, bindings).with_context(|| {
-        format!(
-            "failed to write bindings file `{path}`",
-            path = bindings_path.display()
-        )
-    })?;
+    if fs::read_to_string(&bindings_path).unwrap_or_default() != bindings {
+        fs::write(&bindings_path, bindings).with_context(|| {
+            format!(
+                "failed to write bindings file `{path}`",
+                path = bindings_path.display()
+            )
+        })?;
+    }
 
     Ok(import_name_map)
 }
