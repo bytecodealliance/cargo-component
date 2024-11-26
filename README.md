@@ -186,6 +186,24 @@ support in `cargo component` for adapting a _preview1_ module will be removed.
 
 [1]: https://github.com/rust-lang/compiler-team/issues/594
 
+## Relationship with wasm32-wasip2
+
+As of Rust 1.82, there is now an [upstream Rust wasm32-wasip2 target], which
+produces components using plain `cargo`, and doesn't use `cargo-component`.
+Programs using this target can access WASI by using [the `wasi` crate].
+
+This may be easier to use than `cargo component` in some situations, however
+it doesn't yet support all things that cargo-component does, so at this time,
+it's not a complete replacement.
+
+So for now, if you only need WASI interfaces, then the wasm32-wasip2 target
+and the `wasi` crate should work. If you have non-WASI WIT interfaces, whether
+third-party WIT interfaces or your own custom WIT interfaces, then use
+`cargo component`.
+
+[the `wasi` crate]: https://docs.rs/wasi
+[upstream Rust wasm32-wasip2 target]: https://blog.rust-lang.org/2024/11/26/wasip2-tier-2.html
+
 ## Getting Started
 
 Use `cargo component new --lib <name>` to create a new library (reactor)
