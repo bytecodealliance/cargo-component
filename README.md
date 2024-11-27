@@ -142,11 +142,8 @@ Until that time, there's `cargo component`!
 
 ## WASI Support
 
-Currently `cargo component` targets `wasm32-wasip1` by default.
-
-As this target is for a _preview1_ release of WASI, the WebAssembly module
-produced by the Rust compiler must be adapted to the _preview2_ version of WASI
-supported by the component model.
+Currently `cargo component` uses the `wasm32-wasip1` target to produce core
+Wasm modules, and then adapts them into WASIp2 aka "preview2" components.
 
 The adaptation is automatically performed when `wasm32-wasip1` is targeted using
 a built-in WASI adapter snapshotted out of the Wasmtime repository.
@@ -181,10 +178,10 @@ Next, edit `Cargo.toml` to point at the adapter:
 adapter = "wasi_snapshot_preview1.wasm"
 ```
 
-When the Rust compiler supports a [_preview2_ version of the WASI target][1],
-support in `cargo component` for adapting a _preview1_ module will be removed.
+The Rust compiler now has an [upstream Rust wasm32-wasip2] target that produces
+components. In the future, we hope to update `cargo component` to use it directly.
 
-[1]: https://github.com/rust-lang/compiler-team/issues/594
+[upstream Rust wasm32-wasip2 target]: https://blog.rust-lang.org/2024/11/26/wasip2-tier-2.html
 
 ## Relationship with wasm32-wasip2
 
