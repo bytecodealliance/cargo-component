@@ -57,7 +57,7 @@ world foo {
 
     validate_component(&project.release_wasm("foo"))?;
 
-    let path = project.root().join("Cargo-component.lock");
+    let path = project.root().join("wkg.lock");
     let contents = fs::read_to_string(&path)
         .with_context(|| format!("failed to read lock file `{path}`", path = path.display()))?;
 

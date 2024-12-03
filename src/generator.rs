@@ -9,10 +9,10 @@ use std::{
 };
 
 use anyhow::{bail, Context, Result};
-use cargo_component_core::registry::DependencyResolution;
 use heck::{AsSnakeCase, ToSnakeCase, ToUpperCamelCase};
 use indexmap::{map::Entry, IndexMap, IndexSet};
 use wasm_pkg_client::PackageRef;
+use wasm_pkg_core::resolver::DependencyResolution;
 use wit_bindgen_rust::to_rust_ident;
 use wit_parser::{
     Function, FunctionKind, Handle, Interface, Resolve, Type, TypeDef, TypeDefKind, TypeId,

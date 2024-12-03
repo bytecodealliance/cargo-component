@@ -26,7 +26,6 @@ use parse_arg::{iter_short, match_arg};
 use semver::Version;
 use std::fmt;
 use std::str::FromStr;
-use std::sync::Arc;
 use std::{collections::BTreeMap, fmt::Display, path::PathBuf};
 use toml_edit::DocumentMut;
 use wasm_pkg_client::caching::{CachingClient, FileCache};
@@ -525,11 +524,11 @@ impl Config {
         &self,
         cache: Option<PathBuf>,
         offline: bool,
-    ) -> anyhow::Result<Arc<CachingClient<FileCache>>> {
-        Ok(Arc::new(CachingClient::new(
+    ) -> anyhow::Result<CachingClient<FileCache>> {
+        Ok(CachingClient::new(
             (!offline).then(|| Client::new(self.pkg_config.clone())),
             FileCache::new(cache_dir(cache)?).await?,
-        )))
+        ))
     }
 }
 
