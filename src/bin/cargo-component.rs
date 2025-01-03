@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use anyhow::{bail, Result};
 use cargo_component::{
-    commands::{AddCommand, NewCommand, PublishCommand, UpdateCommand},
+    commands::{AddCommand, BindingsCommand, NewCommand, PublishCommand, UpdateCommand},
     config::{CargoArguments, Config},
     load_component_metadata, load_metadata, run_cargo_command,
 };
@@ -19,6 +19,7 @@ fn version() -> &'static str {
 /// The list of commands that are built-in to `cargo-component`.
 const BUILTIN_COMMANDS: &[&str] = &[
     "add",
+    "bindings",
     "component", // for indirection via `cargo component`
     "help",
     "init",
@@ -71,6 +72,7 @@ enum CargoComponent {
 #[derive(Parser)]
 enum Command {
     Add(AddCommand),
+    Bindings(BindingsCommand),
     // TODO: Init(InitCommand),
     New(NewCommand),
     // TODO: Remove(RemoveCommand),
@@ -115,6 +117,7 @@ async fn main() -> Result<()> {
             if let Err(e) = match CargoComponent::parse() {
                 CargoComponent::Component(cmd) | CargoComponent::Command(cmd) => match cmd {
                     Command::Add(cmd) => cmd.exec().await,
+                    Command::Bindings(cmd) => cmd.exec().await,
                     Command::New(cmd) => cmd.exec().await,
                     Command::Update(cmd) => cmd.exec().await,
                     Command::Publish(cmd) => cmd.exec().await,
