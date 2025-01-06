@@ -1,15 +1,10 @@
 use std::{
     fs,
     path::{Path, PathBuf},
-    sync::Arc,
 };
 
 use anyhow::{bail, Context, Result};
-use cargo_component_core::{
-    command::CommonOptions,
-    registry::{Dependency, DependencyResolution, DependencyResolver, RegistryPackage},
-    VersionedPackageName,
-};
+use cargo_component_core::{command::CommonOptions, VersionedPackageName};
 use cargo_metadata::Package;
 use clap::Args;
 use semver::VersionReq;
@@ -17,6 +12,9 @@ use toml_edit::{value, DocumentMut, InlineTable, Item, Table, Value};
 use wasm_pkg_client::{
     caching::{CachingClient, FileCache},
     PackageRef,
+};
+use wasm_pkg_core::resolver::{
+    Dependency, DependencyResolution, DependencyResolver, RegistryPackage,
 };
 
 use crate::{
@@ -127,7 +125,7 @@ impl AddCommand {
 
     async fn resolve_version(
         &self,
-        client: Arc<CachingClient<FileCache>>,
+        client: CachingClient<FileCache>,
         name: &PackageRef,
     ) -> Result<String> {
         let mut resolver = DependencyResolver::new_with_client(client, None)?;

@@ -10,9 +10,7 @@ use semver::VersionReq;
 use wasm_pkg_client::PackageRef;
 
 pub mod command;
-pub mod lock;
 pub mod progress;
-pub mod registry;
 pub mod terminal;
 
 /// The root directory name used for default cargo component directories

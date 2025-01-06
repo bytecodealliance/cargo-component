@@ -46,12 +46,14 @@ url = { workspace = true }
 wasi-preview1-component-adapter-provider = { workspace = true }
 wasm-metadata = { workspace = true }
 wasm-pkg-client = { workspace = true }
+wasm-pkg-core = { workspace = true }
 wasmparser = { workspace = true }
 which = { workspace = true }
 wit-bindgen-core = { workspace = true }
 wit-bindgen-rust = { workspace = true }
 wit-component = { workspace = true }
 wit-parser = { workspace = true }
+terminal-link = "0.1.0"
 
 [dev-dependencies]
 assert_cmd = { workspace = true }
@@ -107,7 +109,8 @@ warg-protocol = "0.9.0"
 warg-server = "0.9.0"
 wasi-preview1-component-adapter-provider = "24"
 wasm-metadata = "0.220.0"
-wasm-pkg-client = "0.8.0"
+wasm-pkg-client = { path = "../wasm-pkg-tools/crates/wasm-pkg-client" }
+wasm-pkg-core = { path = "../wasm-pkg-tools/crates/wasm-pkg-core" }
 wasmparser = "0.220.0"
 wasmprinter = "0.220.0"
 wat = "1.220.0"

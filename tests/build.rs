@@ -24,10 +24,6 @@ fn it_builds_debug() -> Result<()> {
 
     validate_component(&project.debug_wasm("foo"))?;
 
-    // A lock file should only be generated for projects with
-    // registry dependencies
-    assert!(!project.root().join("Cargo-component.lock").exists());
-
     Ok(())
 }
 
