@@ -22,7 +22,7 @@ use cargo_component_core::{
     terminal::Colors,
 };
 use cargo_config2::{PathAndArgs, TargetTripleRef};
-use cargo_metadata::{Artifact, Message, Metadata, MetadataCommand, Package};
+use cargo_metadata::{Artifact, CrateType, Message, Metadata, MetadataCommand, Package};
 use semver::Version;
 use shell_escape::escape;
 use tempfile::NamedTempFile;
@@ -919,8 +919,12 @@ fn componentize(
     cwd: &Path,
     bytes: &[u8],
 ) -> Result<()> {
-    let is_command =
-        artifact.profile.test || artifact.target.crate_types.iter().any(|t| t == "bin");
+    let is_command = artifact.profile.test
+        || artifact
+            .target
+            .crate_types
+            .iter()
+            .any(|t| *t == CrateType::Bin);
 
     log::debug!(
         "componentizing WebAssembly module `{path}` as a {kind} component (fresh = {fresh})",
