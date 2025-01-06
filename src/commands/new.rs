@@ -17,7 +17,10 @@ use semver::VersionReq;
 use toml_edit::{table, value, DocumentMut, Item, Table, Value};
 use wasm_pkg_client::caching::{CachingClient, FileCache};
 
-use crate::{config::Config, generator::SourceGenerator, metadata, metadata::DEFAULT_WIT_DIR};
+use crate::{
+    config::Config, generate_bindings, generator::SourceGenerator, load_component_metadata,
+    load_metadata, metadata, metadata::DEFAULT_WIT_DIR, CargoArguments,
+};
 
 const WIT_BINDGEN_RT_CRATE: &str = "wit-bindgen-rt";
 
@@ -159,7 +162,7 @@ impl NewCommand {
             None => None,
         };
         let client = config.client(self.common.cache_dir.clone(), false).await?;
-        let target = self.resolve_target(client, target).await?;
+        let target = self.resolve_target(Arc::clone(&client), target).await?;
         let source = self.generate_source(&target).await?;
 
         let mut command = self.new_command();
@@ -186,6 +189,16 @@ impl NewCommand {
         self.create_source_file(&config, &out_dir, source.as_ref(), &target)?;
         self.create_targets_file(&name, &out_dir)?;
         self.create_editor_settings_file(&out_dir)?;
+
+        // Now that we've created the project, generate the bindings so that
+        // users can start looking at code with an IDE and not see red squiggles.
+        let cargo_args = CargoArguments::parse()?;
+        let manifest_path = out_dir.join("Cargo.toml");
+        let metadata = load_metadata(Some(&manifest_path))?;
+        let packages =
+            load_component_metadata(&metadata, cargo_args.packages.iter(), cargo_args.workspace)?;
+        let _import_name_map =
+            generate_bindings(client, &config, &metadata, &packages, &cargo_args).await?;
 
         Ok(())
     }
