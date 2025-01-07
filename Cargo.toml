@@ -71,7 +71,7 @@ members = ["crates/core"]
 anyhow = "1.0.82"
 assert_cmd = "2.0.14"
 bytes = "1.6.0"
-cargo_metadata = "0.18.1"
+cargo_metadata = "0.19.1"
 cargo-component-core = { path = "crates/core", version = "0.19.0-dev" }
 cargo-config2 = "0.1.24"
 clap = { version = "4.5.4", features = ["derive", "env"] }
@@ -99,7 +99,7 @@ tokio = { version = "1.37.0", default-features = false, features = [
 ] }
 tokio-util = "0.7.10"
 toml_edit = { version = "0.22.9", features = ["serde"] }
-unicode-width = "0.1.11"
+unicode-width = "0.2.0"
 url = { version = "2.5.0", features = ["serde"] }
 warg-client = "0.9.0"
 warg-crypto = "0.9.0"
@@ -107,13 +107,13 @@ warg-protocol = "0.9.0"
 warg-server = "0.9.0"
 wasi-preview1-component-adapter-provider = "24"
 wasm-metadata = "0.220.0"
-wasm-pkg-client = "0.8.0"
+wasm-pkg-client = "0.9.0"
 wasmparser = "0.220.0"
 wasmprinter = "0.220.0"
 wat = "1.220.0"
 which = "6.0.1"
-wit-bindgen-core = "0.35.0"
-wit-bindgen-rust = "0.35.0"
+wit-bindgen-core = "0.36.0"
+wit-bindgen-rust = "0.36.0"
 wit-component = "0.220.0"
 wit-parser = "0.220.0"
 
