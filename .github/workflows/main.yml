@@ -37,7 +37,7 @@ jobs:
       uses: bytecodealliance/actions/wasmtime/setup@v1
       with:
         github_token: ${{ secrets.GITHUB_TOKEN }}
-        version: "v22.0.0"
+        version: "v29.0.1"
     - name: Run all tests
       run: cargo test --all
 
