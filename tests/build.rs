@@ -129,36 +129,6 @@ fn it_supports_wit_keywords() -> Result<()> {
 }
 
 #[test]
-fn it_adds_a_producers_field() -> Result<()> {
-    let project = Project::new("foo", true)?;
-
-    project
-        .cargo_component(["build", "--release"])
-        .assert()
-        .stderr(contains("Finished `release` profile [optimized] target(s)"))
-        .success();
-
-    let path = project.release_wasm("foo");
-
-    validate_component(&path)?;
-
-    let wasm = fs::read(&path)
-        .with_context(|| format!("failed to read wasm file `{path}`", path = path.display()))?;
-    let section = wasm_metadata::Producers::from_wasm(&wasm)?.expect("missing producers section");
-
-    assert_eq!(
-        section
-            .get("processed-by")
-            .expect("missing processed-by field")
-            .get(env!("CARGO_PKG_NAME"))
-            .expect("missing cargo-component field"),
-        option_env!("CARGO_VERSION_INFO").unwrap_or(env!("CARGO_PKG_VERSION"))
-    );
-
-    Ok(())
-}
-
-#[test]
 fn it_builds_wasm32_unknown_unknown_from_cli() -> Result<()> {
     let project = Project::new("foo", true)?;
 
@@ -1005,6 +975,134 @@ edition = "2021"
 
     validate_component(&project.debug_wasm("foo"))?;
     validate_component(&project.debug_wasm("bar"))?;
+
+    Ok(())
+}
+
+fn it_adds_a_producers_field() -> Result<()> {
+    let project = Project::new("foo", true)?;
+
+    project
+        .cargo_component(["build", "--release"])
+        .assert()
+        .stderr(contains("Finished `release` profile [optimized] target(s)"))
+        .success();
+
+    let path = project.release_wasm("foo");
+
+    validate_component(&path)?;
+
+    let wasm = fs::read(&path)
+        .with_context(|| format!("failed to read wasm file `{path}`", path = path.display()))?;
+    let section = wasm_metadata::Producers::from_wasm(&wasm)?.expect("missing producers section");
+
+    assert_eq!(
+        section
+            .get("processed-by")
+            .expect("missing processed-by field")
+            .get(env!("CARGO_PKG_NAME"))
+            .expect("missing cargo-component field"),
+        option_env!("CARGO_VERSION_INFO").unwrap_or(env!("CARGO_PKG_VERSION"))
+    );
+
+    Ok(())
+}
+
+#[test]
+fn it_adds_metadata_from_cargo_toml() -> Result<()> {
+    let name = "foo";
+    let authors = "Jane Doe <jane@example.com>";
+    let description = "A test package";
+    let license = "Apache-2.0";
+    let version = "1.0.0";
+    let documentation = "https://example.com/docs";
+    let homepage = "https://example.com/home";
+    let repository = "https://example.com/repo";
+
+    let project = Project::new(name, true)?;
+    project.update_manifest(|mut doc| {
+        let package = &mut doc["package"];
+        package["name"] = value(name);
+        package["version"] = value(version);
+        package["authors"] = value(Array::from_iter([authors]));
+        package["description"] = value(description);
+        package["license"] = value(license);
+        package["documentation"] = value(documentation);
+        package["homepage"] = value(homepage);
+        package["repository"] = value(repository);
+        Ok(doc)
+    })?;
+
+    project
+        .cargo_component(["build", "--release"])
+        .assert()
+        .stderr(contains("Finished `release` profile [optimized] target(s)"))
+        .success();
+
+    let path = project.release_wasm("foo");
+
+    validate_component(&path)?;
+
+    let wasm = fs::read(&path)
+        .with_context(|| format!("failed to read wasm file `{path}`", path = path.display()))?;
+
+    let metadata = match wasm_metadata::Payload::from_binary(&wasm)? {
+        wasm_metadata::Payload::Component { metadata, .. } => metadata,
+        wasm_metadata::Payload::Module(_) => unreachable!("found a wasm module"),
+    };
+
+    assert_eq!(
+        &metadata.name.as_ref().expect("missing name").to_string(),
+        name
+    );
+    assert_eq!(
+        &metadata
+            .author
+            .as_ref()
+            .expect("missing authors")
+            .to_string(),
+        authors
+    );
+    assert_eq!(
+        &metadata
+            .description
+            .as_ref()
+            .expect("missing description")
+            .to_string(),
+        description
+    );
+    assert_eq!(
+        &metadata
+            .licenses
+            .as_ref()
+            .expect("missing licenses")
+            .to_string(),
+        license
+    );
+    assert_eq!(
+        &metadata
+            .source
+            .as_ref()
+            .expect("missing source")
+            .to_string(),
+        repository
+    );
+    assert_eq!(
+        &metadata
+            .homepage
+            .as_ref()
+            .expect("missing homepage")
+            .to_string(),
+        homepage
+    );
+    assert_eq!(
+        &metadata
+            .version
+            .as_ref()
+            .expect("missing version")
+            .to_string(),
+        version
+    );
 
     Ok(())
 }
