@@ -12,7 +12,7 @@ use indexmap::{IndexMap, IndexSet};
 use semver::Version;
 use wasm_pkg_client::PackageRef;
 use wit_bindgen_core::Files;
-use wit_bindgen_rust::{Opts, WithOption};
+use wit_bindgen_rust::{AsyncConfig, Opts, WithOption};
 use wit_component::DecodedWasm;
 use wit_parser::{
     Interface, Package, PackageName, Resolve, Type, TypeDefKind, TypeOwner, UnresolvedPackageGroup,
@@ -134,6 +134,9 @@ impl<'a> BindingsGenerator<'a> {
             pub_export_macro: settings.pub_export_macro,
             generate_unused_types: settings.generate_unused_types,
             disable_custom_section_link_helpers: settings.disable_custom_section_link_helpers,
+
+            // TODO: pipe this through to the CLI options, requires valid serde impls
+            async_: AsyncConfig::None,
         };
 
         let mut files = Files::default();

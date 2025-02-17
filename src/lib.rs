@@ -26,7 +26,6 @@ use cargo_metadata::{Artifact, CrateType, Message, Metadata, MetadataCommand, Pa
 use semver::Version;
 use shell_escape::escape;
 use tempfile::NamedTempFile;
-use wasm_metadata::{Link, LinkType, RegistryMetadata};
 use wasm_pkg_client::{
     caching::{CachingClient, FileCache},
     PackageRef, PublishOpts, Registry,
@@ -1027,57 +1026,8 @@ pub struct PublishOptions<'a> {
     pub dry_run: bool,
 }
 
-fn add_registry_metadata(package: &Package, bytes: &[u8], path: &Path) -> Result<Vec<u8>> {
-    let mut metadata = RegistryMetadata::default();
-    if !package.authors.is_empty() {
-        metadata.set_authors(Some(package.authors.clone()));
-    }
-
-    if !package.categories.is_empty() {
-        metadata.set_categories(Some(package.categories.clone()));
-    }
-
-    metadata.set_description(package.description.clone());
-
-    // TODO: registry metadata should have keywords
-    // if !package.keywords.is_empty() {
-    //     metadata.set_keywords(Some(package.keywords.clone()));
-    // }
-
-    metadata.set_license(package.license.clone());
-
-    let mut links = Vec::new();
-    if let Some(docs) = &package.documentation {
-        links.push(Link {
-            ty: LinkType::Documentation,
-            value: docs.clone(),
-        });
-    }
-
-    if let Some(homepage) = &package.homepage {
-        links.push(Link {
-            ty: LinkType::Homepage,
-            value: homepage.clone(),
-        });
-    }
-
-    if let Some(repo) = &package.repository {
-        links.push(Link {
-            ty: LinkType::Repository,
-            value: repo.clone(),
-        });
-    }
-
-    if !links.is_empty() {
-        metadata.set_links(Some(links));
-    }
-
-    metadata.add_to_wasm(bytes).with_context(|| {
-        format!(
-            "failed to add registry metadata to component `{path}`",
-            path = path.display()
-        )
-    })
+fn add_registry_metadata(_package: &Package, bytes: &[u8], _path: &Path) -> Result<Vec<u8>> {
+    Ok(bytes.to_owned())
 }
 
 /// Publish a component for the given workspace and publish options.
