@@ -970,14 +970,8 @@ fn componentize(
         })?
         .validate(true);
 
-    let mut producers = wasm_metadata::Producers::empty();
-    producers.add(
-        "processed-by",
-        env!("CARGO_PKG_NAME"),
-        option_env!("CARGO_VERSION_INFO").unwrap_or(env!("CARGO_PKG_VERSION")),
-    );
-
-    let component = producers.add_to_wasm(&encoder.encode()?).with_context(|| {
+    let package = &cargo_metadata[&artifact.package_id];
+    let component = add_component_metadata(&package, &encoder.encode()?).with_context(|| {
         format!(
             "failed to add metadata to output component `{path}`",
             path = path.display()
@@ -1026,8 +1020,43 @@ pub struct PublishOptions<'a> {
     pub dry_run: bool,
 }
 
-fn add_registry_metadata(_package: &Package, bytes: &[u8], _path: &Path) -> Result<Vec<u8>> {
-    Ok(bytes.to_owned())
+/// Read metadata from `Cargo.toml` and add it to the component
+fn add_component_metadata(package: &Package, wasm: &[u8]) -> Result<Vec<u8>> {
+    let metadata = wasm_metadata::AddMetadata {
+        name: Some(package.name.clone()),
+        language: vec![("Rust".to_string(), "".to_string())],
+        processed_by: vec![(
+            env!("CARGO_PKG_NAME").to_string(),
+            option_env!("CARGO_VERSION_INFO")
+                .unwrap_or(env!("CARGO_PKG_VERSION"))
+                .to_string(),
+        )],
+        sdk: vec![],
+        author: Some(wasm_metadata::Author::new(package.authors.join(","))),
+        description: package
+            .description
+            .as_ref()
+            .map(|d| wasm_metadata::Description::new(d.clone())),
+        licenses: package
+            .license
+            .as_ref()
+            .map(|s| wasm_metadata::Licenses::new(&s))
+            .transpose()?,
+        source: package
+            .repository
+            .as_ref()
+            .map(|s| wasm_metadata::Source::new(s.to_string().as_str()))
+            .transpose()?,
+        homepage: package
+            .homepage
+            .as_ref()
+            .map(|s| wasm_metadata::Homepage::new(s.to_string().as_str()))
+            .transpose()?,
+        // TODO: get the git commit hash
+        revision: None,
+        version: Some(wasm_metadata::Version::new(package.version.to_string())),
+    };
+    metadata.to_wasm(wasm)
 }
 
 /// Publish a component for the given workspace and publish options.
@@ -1049,8 +1078,6 @@ pub async fn publish(
             path = options.path.display()
         )
     })?;
-
-    let bytes = add_registry_metadata(options.package, &bytes, options.path)?;
 
     config.terminal().status(
         "Publishing",
