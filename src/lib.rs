@@ -1032,7 +1032,10 @@ fn add_component_metadata(package: &Package, wasm: &[u8]) -> Result<Vec<u8>> {
                 .to_string(),
         )],
         sdk: vec![],
-        author: Some(wasm_metadata::Author::new(package.authors.join(","))),
+        author: match package.authors.len() {
+            0 => None,
+            _ => Some(wasm_metadata::Author::new(package.authors.join(","))),
+        },
         description: package
             .description
             .as_ref()
