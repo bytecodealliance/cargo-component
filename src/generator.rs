@@ -406,11 +406,9 @@ impl<'a> UnimplementedFunction<'a> {
                 self.print_optional_type(ty.as_ref(), trie, source)?;
                 source.push('>');
             }
-            TypeDefKind::Stream(stream) => {
+            TypeDefKind::Stream(ty) => {
                 source.push_str("Stream<");
-                self.print_optional_type(stream.element.as_ref(), trie, source)?;
-                source.push_str(", ");
-                self.print_optional_type(stream.end.as_ref(), trie, source)?;
+                self.print_optional_type(ty.as_ref(), trie, source)?;
                 source.push('>');
             }
             TypeDefKind::Type(ty) => self.print_type(ty, trie, source)?,
@@ -424,6 +422,9 @@ impl<'a> UnimplementedFunction<'a> {
             }
             TypeDefKind::Resource => {
                 bail!("unsupported anonymous resource type found in WIT package")
+            }
+            TypeDefKind::ErrorContext => {
+                bail!("unsupported error context type found in WIT package")
             }
             TypeDefKind::Unknown => unreachable!(),
         }
