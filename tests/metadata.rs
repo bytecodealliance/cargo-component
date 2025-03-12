@@ -48,7 +48,7 @@ fn it_prints_workspace_metadata() -> Result<()> {
         r#"[package]
 name = "baz"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
     
 [dependencies]
 "#,

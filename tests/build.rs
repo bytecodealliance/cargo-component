@@ -71,7 +71,7 @@ fn it_builds_a_workspace() -> Result<()> {
         r#"[package]
 name = "baz"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 "#,
@@ -421,7 +421,7 @@ fn empty_world_with_dep_valid() -> Result<()> {
             #[allow(warnings)]
             mod bindings;
 
-            #[no_mangle]
+            #[unsafe(no_mangle)]
             pub extern \"C\" fn foo() {
                 bindings::foo_bar::hello();
             }
@@ -952,6 +952,59 @@ fn it_does_not_generate_bindings_for_cargo_projects() -> Result<()> {
             .stderr(contains("Generating bindings").not())
             .success();
     }
+
+    Ok(())
+}
+
+#[test]
+/// This is exactly the `it_builds_a_workspace` test with just the edition changed to 2021.
+fn it_supports_edition_2021() -> Result<()> {
+    let dir = Rc::new(TempDir::new()?);
+    let project = Project::new_uninitialized(dir.clone(), dir.path().to_owned());
+
+    project.file(
+        "baz/Cargo.toml",
+        r#"[package]
+name = "baz"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+"#,
+    )?;
+
+    project.file("baz/src/lib.rs", "")?;
+
+    project
+        .cargo_component(["new", "--lib", "foo"])
+        .assert()
+        .stderr(contains("Updated manifest of package `foo`"))
+        .success();
+
+    project
+        .cargo_component(["new", "--lib", "bar"])
+        .assert()
+        .stderr(contains("Updated manifest of package `bar`"))
+        .success();
+
+    // Add the workspace after all of the projects have been created
+    project.file(
+        "Cargo.toml",
+        r#"[workspace]
+    members = ["foo", "bar", "baz"]
+    "#,
+    )?;
+
+    project
+        .cargo_component(["build"])
+        .assert()
+        .stderr(contains(
+            "Finished `dev` profile [unoptimized + debuginfo] target(s)",
+        ))
+        .success();
+
+    validate_component(&project.debug_wasm("foo"))?;
+    validate_component(&project.debug_wasm("bar"))?;
 
     Ok(())
 }
