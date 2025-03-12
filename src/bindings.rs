@@ -109,6 +109,7 @@ impl<'a> BindingsGenerator<'a> {
                 }
             },
             additional_derive_attributes: settings.derives.clone(),
+            additional_derive_ignore: Vec::new(),
             std_feature: settings.std_feature,
             // We use pregenerated bindings, rather than the `generate!` macro
             // from the `wit-bindgen` crate, so instead of getting the runtime
