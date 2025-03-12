@@ -112,8 +112,8 @@ wasmparser = "0.227.0"
 wasmprinter = "0.227.0"
 wat = "1.220.0"
 which = "6.0.1"
-wit-bindgen-core = { git = "https://github.com/bytecodealliance/wit-bindgen", rev = "1ab0006590f7f1eee36450354e7b96839fb86bba" }
-wit-bindgen-rust = { git = "https://github.com/bytecodealliance/wit-bindgen", rev = "1ab0006590f7f1eee36450354e7b96839fb86bba" }
+wit-bindgen-core = { git = "https://github.com/bytecodealliance/wit-bindgen", rev = "01dd9660c6dd8ca2ea8f069a830393db598625a8" }
+wit-bindgen-rust = { git = "https://github.com/bytecodealliance/wit-bindgen", rev = "01dd9660c6dd8ca2ea8f069a830393db598625a8" }
 wit-component = "0.227.0"
 wit-parser = "0.227.0"
 
