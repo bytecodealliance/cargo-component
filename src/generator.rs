@@ -279,6 +279,12 @@ impl<'a> UnimplementedFunction<'a> {
                 false,
             ),
             FunctionKind::Constructor(_) => ("new".into(), false, true),
+            FunctionKind::AsyncFreestanding { .. }
+            | FunctionKind::AsyncMethod { .. }
+            | FunctionKind::AsyncStatic { .. } => bail!(
+                "component-model-async unsupported: function of kind {:?}",
+                self.func.kind
+            ),
         };
 
         // TODO: it would be nice to share the printing of the signature of the function
@@ -299,27 +305,12 @@ impl<'a> UnimplementedFunction<'a> {
             }
         }
         source.push(')');
-        match self.func.results.len() {
-            0 => {}
-            1 => {
-                source.push_str(" -> ");
-                if constructor {
-                    source.push_str("Self");
-                } else {
-                    self.print_type(self.func.results.iter_types().next().unwrap(), trie, source)?;
-                }
-            }
-            _ => {
-                source.push_str(" -> (");
-                for (i, ty) in self.func.results.iter_types().enumerate() {
-                    if i > 0 {
-                        source.push_str(", ");
-                    }
-
-                    self.print_type(ty, trie, source)?;
-                }
-
-                source.push(')');
+        if let Some(t) = self.func.result {
+            source.push_str(" -> ");
+            if constructor {
+                source.push_str("Self");
+            } else {
+                self.print_type(&t, trie, source)?;
             }
         }
         source.push_str(" {\n        unimplemented!()\n    }\n");
@@ -341,6 +332,7 @@ impl<'a> UnimplementedFunction<'a> {
             Type::F64 => source.push_str("f64"),
             Type::Char => source.push_str("char"),
             Type::String => source.push_str("String"),
+            Type::ErrorContext => bail!("component-model-async unsupported: error-context"),
             Type::Id(id) => self.print_type_id(*id, trie, source, false)?,
         }
 
@@ -422,9 +414,6 @@ impl<'a> UnimplementedFunction<'a> {
             }
             TypeDefKind::Resource => {
                 bail!("unsupported anonymous resource type found in WIT package")
-            }
-            TypeDefKind::ErrorContext => {
-                bail!("unsupported error context type found in WIT package")
             }
             TypeDefKind::Unknown => unreachable!(),
         }
@@ -542,7 +531,7 @@ impl<'a> InterfaceGenerator<'a> {
         interface: &'a Interface,
         names: &mut ReservedNames,
         target_world: &'a World,
-    ) -> Self {
+    ) -> Result<Self> {
         let mut functions = Vec::new();
         let mut resources: IndexMap<_, Resource> = IndexMap::new();
 
@@ -556,6 +545,12 @@ impl<'a> InterfaceGenerator<'a> {
                 FunctionKind::Method(id)
                 | FunctionKind::Static(id)
                 | FunctionKind::Constructor(id) => id,
+                FunctionKind::AsyncFreestanding { .. }
+                | FunctionKind::AsyncMethod { .. }
+                | FunctionKind::AsyncStatic { .. } => bail!(
+                    "component-model-async unsupported: function of kind {:?}",
+                    func.kind
+                ),
             };
 
             // Create a resource entry for this resource
@@ -592,14 +587,14 @@ impl<'a> InterfaceGenerator<'a> {
             }
         }
 
-        Self {
+        Ok(Self {
             resolve,
             key,
             interface,
             functions,
             resources,
             target_world,
-        }
+        })
     }
 
     fn generate(&self, trie: &mut UseTrie) -> Result<String> {
@@ -676,7 +671,7 @@ struct ImplementationGenerator<'a> {
 }
 
 impl<'a> ImplementationGenerator<'a> {
-    fn new(resolve: &'a Resolve, world: &'a World, names: &mut ReservedNames) -> Self {
+    fn new(resolve: &'a Resolve, world: &'a World, names: &mut ReservedNames) -> Result<Self> {
         let mut functions = Vec::new();
         let mut interfaces = Vec::new();
 
@@ -692,18 +687,18 @@ impl<'a> ImplementationGenerator<'a> {
                     let interface = &resolve.interfaces[*iface];
                     interfaces.push(InterfaceGenerator::new(
                         resolve, key, interface, names, world,
-                    ));
+                    )?);
                 }
                 WorldItem::Type(_) => continue,
             }
         }
 
-        Self {
+        Ok(Self {
             resolve,
             functions,
             interfaces,
             target_world: world,
-        }
+        })
     }
 
     fn generate(&self, trie: &mut UseTrie) -> Result<Vec<String>> {
@@ -765,7 +760,7 @@ impl<'a> SourceGenerator<'a> {
     pub async fn generate(&self, world: Option<&str>) -> Result<String> {
         let (resolve, world) = self.decode(world).await?;
         let mut names = ReservedNames::default();
-        let generator = ImplementationGenerator::new(&resolve, &resolve.worlds[world], &mut names);
+        let generator = ImplementationGenerator::new(&resolve, &resolve.worlds[world], &mut names)?;
 
         let mut trie = UseTrie::default();
         trie.reserve_names(&names);

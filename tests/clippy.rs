@@ -72,7 +72,7 @@ fn it_checks_a_workspace() -> Result<()> {
         r#"[package]
 name = "baz"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
     
 [dependencies]
 "#,
