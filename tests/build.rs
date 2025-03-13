@@ -979,6 +979,7 @@ edition = "2021"
     Ok(())
 }
 
+#[test]
 fn it_adds_a_producers_field() -> Result<()> {
     let project = Project::new("foo", true)?;
 
@@ -1055,15 +1056,14 @@ fn it_adds_metadata_from_cargo_toml() -> Result<()> {
         &metadata.name.as_ref().expect("missing name").to_string(),
         name
     );
-    // TODO: uncomment this test case after `wasm-metadata` 0.256.0 has been released
-    // assert_eq!(
-    //     &metadata
-    //         .author
-    //         .as_ref()
-    //         .expect("missing authors")
-    //         .to_string(),
-    //     authors
-    // );
+    assert_eq!(
+        &metadata
+            .authors
+            .as_ref()
+            .expect("missing authors")
+            .to_string(),
+        authors
+    );
     assert_eq!(
         &metadata
             .description
