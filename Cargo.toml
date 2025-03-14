@@ -9,7 +9,7 @@ repository = { workspace = true }
 readme = "README.md"
 
 [workspace.package]
-version = "0.20.0-dev"
+version = "0.21.0"
 edition = "2021"
 authors = ["Peter Huene <peter@huene.dev>"]
 license = "Apache-2.0 WITH LLVM-exception"
@@ -72,7 +72,7 @@ anyhow = "1.0.82"
 assert_cmd = "2.0.14"
 bytes = "1.6.0"
 cargo_metadata = "0.19.1"
-cargo-component-core = { path = "crates/core", version = "0.20.0-dev" }
+cargo-component-core = { path = "crates/core", version = "0.21.0" }
 cargo-config2 = "0.1.24"
 clap = { version = "4.5.4", features = ["derive", "env"] }
 dirs = "5"
