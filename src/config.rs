@@ -411,7 +411,7 @@ impl CargoArguments {
     }
 
     /// Parses the arguments from an iterator.
-    fn parse_from<T>(iter: impl Iterator<Item = T>) -> Result<Self>
+    pub fn parse_from<T>(iter: impl Iterator<Item = T>) -> Result<Self>
     where
         T: Into<String>,
     {
