@@ -12,14 +12,14 @@ use indexmap::{IndexMap, IndexSet};
 use semver::Version;
 use wasm_pkg_client::PackageRef;
 use wit_bindgen_core::Files;
-use wit_bindgen_rust::{AsyncConfig, Opts, WithOption};
+use wit_bindgen_rust::{Opts, WithOption};
 use wit_component::DecodedWasm;
 use wit_parser::{
     Interface, Package, PackageName, Resolve, Type, TypeDefKind, TypeOwner, UnresolvedPackageGroup,
     World, WorldId, WorldItem, WorldKey,
 };
 
-use crate::{metadata::Ownership, registry::PackageDependencyResolution};
+use crate::{metadata::{AsyncConfig, Ownership}, registry::PackageDependencyResolution};
 
 // Used to format `unlocked-dep` import names for dependencies on
 // other components.
@@ -135,9 +135,14 @@ impl<'a> BindingsGenerator<'a> {
             pub_export_macro: settings.pub_export_macro,
             generate_unused_types: settings.generate_unused_types,
             disable_custom_section_link_helpers: settings.disable_custom_section_link_helpers,
-
-            // TODO: pipe this through to the CLI options, requires valid serde impls
-            async_: AsyncConfig::None,
+            async_: match &settings.async_ {
+                AsyncConfig::None => wit_bindgen_rust::AsyncConfig::None,
+                AsyncConfig::Some { imports, exports } => wit_bindgen_rust::AsyncConfig::Some {
+                    imports: imports.clone(),
+                    exports: exports.clone(),
+                },
+                AsyncConfig::All => wit_bindgen_rust::AsyncConfig::All,
+            }
         };
 
         let mut files = Files::default();

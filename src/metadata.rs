@@ -56,6 +56,18 @@ impl FromStr for Ownership {
     }
 }
 
+#[derive(Default, Debug, Clone, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AsyncConfig {
+    #[default]
+    None,
+    Some {
+        imports: Vec<String>,
+        exports: Vec<String>,
+    },
+    All,
+}
+
 /// Configuration for bindings generation.
 #[derive(Debug, Clone, Deserialize)]
 #[serde(default)]
@@ -110,6 +122,16 @@ pub struct Bindings {
     /// Disabling this can shave a few bytes off a binary but makes
     /// library-based usage of `generate!` prone to breakage.
     pub disable_custom_section_link_helpers: bool,
+    /// Determines which functions to lift or lower `async`, if any.
+    ///
+    /// Accepted values are:
+    ///     - none
+    ///     - all
+    ///     - some=<value>[,<value>...], where each <value> is of the form:
+    ///         - import:<name> or
+    ///         - export:<name>
+    #[serde(rename = "async")]
+    pub async_: AsyncConfig,
 }
 
 impl Default for Bindings {
@@ -132,6 +154,7 @@ impl Default for Bindings {
             pub_export_macro: Default::default(),
             generate_unused_types: Default::default(),
             disable_custom_section_link_helpers: Default::default(),
+            async_: Default::default(),
         }
     }
 }
