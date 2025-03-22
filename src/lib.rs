@@ -39,6 +39,7 @@ use config::{CargoArguments, CargoPackageSpec, Config};
 use lock::{acquire_lock_file_ro, acquire_lock_file_rw};
 use metadata::ComponentMetadata;
 use registry::{PackageDependencyResolution, PackageResolutionMap};
+use git::GitMetadata;
 
 mod bindings;
 pub mod commands;
@@ -48,6 +49,7 @@ mod lock;
 mod metadata;
 mod registry;
 mod target;
+mod git;
 
 fn is_wasm_target(target: &str) -> bool {
     target == "wasm32-wasi" || target == "wasm32-wasip1" || target == "wasm32-unknown-unknown"
@@ -971,7 +973,8 @@ fn componentize(
         .validate(true);
 
     let package = &cargo_metadata[&artifact.package_id];
-    let component = add_component_metadata(&package, &encoder.encode()?).with_context(|| {
+    let git = GitMetadata::from_package(package)?;
+    let component = add_component_metadata(package, git.as_ref(), &encoder.encode()?).with_context(|| {
         format!(
             "failed to add metadata to output component `{path}`",
             path = path.display()
@@ -1021,7 +1024,7 @@ pub struct PublishOptions<'a> {
 }
 
 /// Read metadata from `Cargo.toml` and add it to the component
-fn add_component_metadata(package: &Package, wasm: &[u8]) -> Result<Vec<u8>> {
+fn add_component_metadata(package: &Package, git: Option<&GitMetadata>, wasm: &[u8]) -> Result<Vec<u8>> {
     let metadata = wasm_metadata::AddMetadata {
         name: Some(package.name.clone()),
         language: vec![("Rust".to_string(), "".to_string())],
@@ -1055,8 +1058,7 @@ fn add_component_metadata(package: &Package, wasm: &[u8]) -> Result<Vec<u8>> {
             .as_ref()
             .map(|s| wasm_metadata::Homepage::new(s.to_string().as_str()))
             .transpose()?,
-        // TODO: get the git commit hash
-        revision: None,
+        revision: git.map(|git| wasm_metadata::Revision::new(git.commit().to_string())),
         version: Some(wasm_metadata::Version::new(package.version.to_string())),
     };
     metadata.to_wasm(wasm)
