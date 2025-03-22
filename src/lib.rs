@@ -36,20 +36,20 @@ use wit_component::ComponentEncoder;
 use crate::target::install_wasm32_wasip1;
 
 use config::{CargoArguments, CargoPackageSpec, Config};
+use git::GitMetadata;
 use lock::{acquire_lock_file_ro, acquire_lock_file_rw};
 use metadata::ComponentMetadata;
 use registry::{PackageDependencyResolution, PackageResolutionMap};
-use git::GitMetadata;
 
 mod bindings;
 pub mod commands;
 pub mod config;
 mod generator;
+mod git;
 mod lock;
 mod metadata;
 mod registry;
 mod target;
-mod git;
 
 fn is_wasm_target(target: &str) -> bool {
     target == "wasm32-wasi" || target == "wasm32-wasip1" || target == "wasm32-unknown-unknown"
@@ -974,12 +974,13 @@ fn componentize(
 
     let package = &cargo_metadata[&artifact.package_id];
     let git = GitMetadata::from_package(package)?;
-    let component = add_component_metadata(package, git.as_ref(), &encoder.encode()?).with_context(|| {
-        format!(
-            "failed to add metadata to output component `{path}`",
-            path = path.display()
-        )
-    })?;
+    let component = add_component_metadata(package, git.as_ref(), &encoder.encode()?)
+        .with_context(|| {
+            format!(
+                "failed to add metadata to output component `{path}`",
+                path = path.display()
+            )
+        })?;
 
     // To make the write atomic, first write to a temp file and then rename the file
     let temp_dir = cargo_metadata.target_directory.join("tmp");
@@ -1024,7 +1025,11 @@ pub struct PublishOptions<'a> {
 }
 
 /// Read metadata from `Cargo.toml` and add it to the component
-fn add_component_metadata(package: &Package, git: Option<&GitMetadata>, wasm: &[u8]) -> Result<Vec<u8>> {
+fn add_component_metadata(
+    package: &Package,
+    git: Option<&GitMetadata>,
+    wasm: &[u8],
+) -> Result<Vec<u8>> {
     let metadata = wasm_metadata::AddMetadata {
         name: Some(package.name.clone()),
         language: vec![("Rust".to_string(), "".to_string())],
