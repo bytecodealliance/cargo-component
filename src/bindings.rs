@@ -19,7 +19,10 @@ use wit_parser::{
     World, WorldId, WorldItem, WorldKey,
 };
 
-use crate::{metadata::{AsyncConfig, Ownership}, registry::PackageDependencyResolution};
+use crate::{
+    metadata::{AsyncConfig, Ownership},
+    registry::PackageDependencyResolution,
+};
 
 // Used to format `unlocked-dep` import names for dependencies on
 // other components.
@@ -142,7 +145,7 @@ impl<'a> BindingsGenerator<'a> {
                     exports: exports.clone(),
                 },
                 AsyncConfig::All => wit_bindgen_rust::AsyncConfig::All,
-            }
+            },
         };
 
         let mut files = Files::default();
