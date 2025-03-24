@@ -75,7 +75,7 @@ bytes = "1.6.0"
 cargo_metadata = "0.19.1"
 cargo-component-core = { path = "crates/core", version = "0.21.1" }
 cargo-config2 = "0.1.24"
-git2 = "0.20.1"
+git2 = { version = "0.20.1", default-features = false }
 clap = { version = "4.5.4", features = ["derive", "env"] }
 dirs = "5"
 futures = "0.3.30"
