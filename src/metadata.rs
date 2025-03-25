@@ -123,13 +123,6 @@ pub struct Bindings {
     /// library-based usage of `generate!` prone to breakage.
     pub disable_custom_section_link_helpers: bool,
     /// Determines which functions to lift or lower `async`, if any.
-    ///
-    /// Accepted values are:
-    ///     - none
-    ///     - all
-    ///     - some=<value>[,<value>...], where each <value> is of the form:
-    ///         - import:<name> or
-    ///         - export:<name>
     #[serde(rename = "async")]
     pub async_: AsyncConfig,
 }
