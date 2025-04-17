@@ -20,7 +20,7 @@ jobs:
         echo "RUSTC_WRAPPER=sccache" >> $GITHUB_ENV
         echo "SCCACHE_GHA_ENABLED=true" >> $GITHUB_ENV
     - name: Run sccache-cache
-      uses: mozilla-actions/sccache-action@v0.0.4
+      uses: mozilla-actions/sccache-action@v0.0.8
     - name: Install Rust
       run: |
         rustup set profile minimal
