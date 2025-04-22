@@ -537,7 +537,7 @@ dependencies = [
  "libc",
  "log",
  "p256",
- "parse_arg",
+ "parse_arg 0.1.6",
  "predicates",
  "pretty_env_logger",
  "rand_core",
@@ -2578,9 +2578,18 @@ dependencies = [
 
 [[package]]
 name = "parse_arg"
-version = "0.1.4"
+version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14248cc8eced350e20122a291613de29e4fa129ba2731818c4cdbb44fccd3e55"
+checksum = "32f05bccc8b6036fec4e0c511954e3997987a82acb6a0b50642ecf7c744fe225"
+dependencies = [
+ "parse_arg 1.0.1",
+]
+
+[[package]]
+name = "parse_arg"
+version = "1.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5bddc33f680b79eaf1e2e56da792c3c2236f86985bbc3a886e8ddee17ae4d3a4"
 
 [[package]]
 name = "pathdiff"
