@@ -305,3 +305,42 @@ fn it_supports_the_proxy_option() -> Result<()> {
 
     Ok(())
 }
+
+/// Ensure that cargo-component supports using the new command with target and custom registry
+#[test]
+fn target_with_registry() -> Result<()> {
+    let dir: TempDir = TempDir::new()?;
+
+    cargo_component([
+        "new",
+        "--lib",
+        "--target",
+        "docs:adder",
+        "--registry",
+        "oci://ghcr.io",
+        "--registry-ns-prefix",
+        "bytecodealliance/",
+        "adder",
+    ])
+    .current_dir(dir.path())
+    .assert()
+    .try_success()?;
+
+    // Ensure things still work if people forget the trailing /
+    cargo_component([
+        "new",
+        "--lib",
+        "--target",
+        "docs:adder",
+        "--registry",
+        "oci://ghcr.io",
+        "--registry-ns-prefix",
+        "bytecodealliance",
+        "adder-no-trailing-slash",
+    ])
+    .current_dir(dir.path())
+    .assert()
+    .try_success()?;
+
+    Ok(())
+}

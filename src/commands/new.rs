@@ -1,12 +1,11 @@
-use std::{
-    borrow::Cow,
-    fs,
-    path::{Path, PathBuf},
-    process::Command,
-    sync::Arc,
-};
+use std::borrow::Cow;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+use std::str::FromStr;
+use std::sync::Arc;
 
-use anyhow::{bail, Context, Result};
+use anyhow::{bail, ensure, Context, Result};
 use cargo_component_core::{
     command::CommonOptions,
     registry::{Dependency, DependencyResolution, DependencyResolver, RegistryResolution},
@@ -16,23 +15,61 @@ use heck::ToKebabCase;
 use semver::VersionReq;
 use toml_edit::{table, value, DocumentMut, Item, Table, Value};
 use wasm_pkg_client::caching::{CachingClient, FileCache};
+use wasm_pkg_client::{CustomConfig, PackageRef, Registry, RegistryMapping, RegistryMetadata};
 
-use crate::{
-    config::Config, generate_bindings, generator::SourceGenerator, load_component_metadata,
-    load_metadata, metadata, metadata::DEFAULT_WIT_DIR, CargoArguments,
-};
+use crate::config::Config;
+use crate::generator::SourceGenerator;
+use crate::metadata::DEFAULT_WIT_DIR;
+use crate::{generate_bindings, load_component_metadata, load_metadata, metadata, CargoArguments};
 
 const WIT_BINDGEN_RT_CRATE: &str = "wit-bindgen-rt";
 
-fn escape_wit(s: &str) -> Cow<str> {
-    match s {
-        "use" | "type" | "func" | "u8" | "u16" | "u32" | "u64" | "s8" | "s16" | "s32" | "s64"
-        | "float32" | "float64" | "char" | "record" | "flags" | "variant" | "enum" | "union"
-        | "bool" | "string" | "option" | "result" | "future" | "stream" | "list" | "_" | "as"
-        | "from" | "static" | "interface" | "tuple" | "import" | "export" | "world" | "package" => {
-            Cow::Owned(format!("%{s}"))
-        }
-        _ => s.into(),
+/// Name of a given package
+struct PackageName<'a> {
+    /// Namespace of the package
+    namespace: String,
+
+    /// Name of the package
+    name: String,
+
+    /// Value that should be used when displaying the package name
+    display: Cow<'a, str>,
+}
+
+impl<'a> PackageName<'a> {
+    /// Create a new package name
+    fn new(namespace: &str, name: Option<&'a str>, path: &'a Path) -> Result<Self> {
+        let (name, display) = match name {
+            Some(name) => (name.into(), name.into()),
+            None => (
+                path.file_name().expect("invalid path").to_string_lossy(),
+                // `cargo new` prints the given path to the new package, so
+                // use the path for the display value.
+                path.as_os_str().to_string_lossy(),
+            ),
+        };
+
+        let namespace_kebab = namespace.to_kebab_case();
+        ensure!(
+            !namespace_kebab.is_empty(),
+            "invalid component namespace `{namespace}`"
+        );
+
+        wit_parser::validate_id(&namespace_kebab).with_context(|| {
+            format!("component namespace `{namespace}` is not a legal WIT identifier")
+        })?;
+
+        let name_kebab = name.to_kebab_case();
+        ensure!(!name_kebab.is_empty(), "invalid component name `{name}`");
+
+        wit_parser::validate_id(&name_kebab)
+            .with_context(|| format!("component name `{name}` is not a legal WIT identifier"))?;
+
+        Ok(Self {
+            namespace: namespace_kebab,
+            name: name_kebab,
+            display,
+        })
     }
 }
 
@@ -87,9 +124,19 @@ pub struct NewCommand {
     #[clap(long = "target", short = 't', value_name = "TARGET", requires = "lib")]
     pub target: Option<String>,
 
-    /// Use the specified default registry when generating the package.
+    /// Registry to use as the default when generating the package
+    ///
+    /// (e.g. 'oci://ghcr.io')
+    /// NOTE: you may need to also specify --registry-ns-prefix
     #[clap(long = "registry", value_name = "REGISTRY")]
     pub registry: Option<String>,
+
+    /// Namespace prefix to use with the custom registry provided,
+    /// most commonly used with an OCI registry (e.g. 'oci://ghcr.io')
+    ///
+    /// (e.g. 'bytecodealliance/')
+    #[clap(long = "registry-ns-prefix", value_name = "REGISTRY_NS_PREFIX")]
+    pub registry_ns_prefix: Option<String>,
 
     /// Disable the use of `rustfmt` when generating source code.
     #[clap(long = "no-rustfmt")]
@@ -100,55 +147,58 @@ pub struct NewCommand {
     pub path: PathBuf,
 }
 
-struct PackageName<'a> {
-    namespace: String,
-    name: String,
-    display: Cow<'a, str>,
-}
-
-impl<'a> PackageName<'a> {
-    fn new(namespace: &str, name: Option<&'a str>, path: &'a Path) -> Result<Self> {
-        let (name, display) = match name {
-            Some(name) => (name.into(), name.into()),
-            None => (
-                path.file_name().expect("invalid path").to_string_lossy(),
-                // `cargo new` prints the given path to the new package, so
-                // use the path for the display value.
-                path.as_os_str().to_string_lossy(),
-            ),
-        };
-
-        let namespace_kebab = namespace.to_kebab_case();
-        if namespace_kebab.is_empty() {
-            bail!("invalid component namespace `{namespace}`");
-        }
-
-        wit_parser::validate_id(&namespace_kebab).with_context(|| {
-            format!("component namespace `{namespace}` is not a legal WIT identifier")
-        })?;
-
-        let name_kebab = name.to_kebab_case();
-        if name_kebab.is_empty() {
-            bail!("invalid component name `{name}`");
-        }
-
-        wit_parser::validate_id(&name_kebab)
-            .with_context(|| format!("component name `{name}` is not a legal WIT identifier"))?;
-
-        Ok(Self {
-            namespace: namespace_kebab,
-            name: name_kebab,
-            display,
-        })
-    }
-}
-
 impl NewCommand {
     /// Executes the command.
     pub async fn exec(self) -> Result<()> {
         log::debug!("executing new command");
 
-        let config = Config::new(self.common.new_terminal(), self.common.config.clone()).await?;
+        // Build configuration
+        let mut config =
+            Config::new(self.common.new_terminal(), self.common.config.clone()).await?;
+
+        // Support OCI registries when resolving target worlds
+        match (self.target.as_ref(), self.registry.as_ref()) {
+            // Support specifying OCI registries with
+            (Some(target), Some(oci_uri)) if oci_uri.starts_with("oci://") => {
+                // Build registry & mapping configuration
+                let raw_registry = oci_uri.split_at(6).1;
+                let registry =
+                    Registry::from_str(raw_registry).context("parsing provided registry")?;
+
+                // Configure OCI metadata
+                let mut metadata = RegistryMetadata::default();
+                metadata.preferred_protocol = Some("oci".into());
+                metadata.set_oci_registry(Some(registry.clone().into()));
+                if let Some(ref raw_ns_prefix) = self.registry_ns_prefix {
+                    // Ensure prefix, if provided, ends with '/'
+                    let ns_prefix = if raw_ns_prefix.is_empty() || raw_ns_prefix.ends_with("/") {
+                        raw_ns_prefix.into()
+                    } else {
+                        format!("{raw_ns_prefix}/")
+                    };
+                    metadata.set_oci_namespace_prefix(Some(ns_prefix))
+                }
+
+                // Build registry mapping
+                log::debug!(
+                    "using namespace registry [{raw_registry}] {} for target [{target}]",
+                    self.registry_ns_prefix
+                        .as_ref()
+                        .map(|v| format!("(prefix {}", v))
+                        .unwrap_or_default(),
+                );
+                let registry_mapping = RegistryMapping::Custom(CustomConfig { registry, metadata });
+
+                // Create an override for the given target package
+                config.pkg_config.set_package_registry_override(
+                    PackageRef::from_str(target)
+                        .with_context(|| format!("converting [{target}] to package ref"))?,
+                    registry_mapping,
+                );
+            }
+            // Ignore other cases
+            _ => {}
+        }
 
         let name = PackageName::new(&self.namespace, self.name.as_deref(), &self.path)?;
 
@@ -161,9 +211,19 @@ impl NewCommand {
             Some(s) => Some(format!("{s}@{version}", version = VersionReq::STAR).parse()?),
             None => None,
         };
-        let client = config.client(self.common.cache_dir.clone(), false).await?;
-        let target = self.resolve_target(Arc::clone(&client), target).await?;
-        let source = self.generate_source(&target).await?;
+        let client = config
+            .client(self.common.cache_dir.clone(), false)
+            .await
+            .context("building client")?;
+
+        let target = self
+            .resolve_target(Arc::clone(&client), target)
+            .await
+            .context("resolving target world")?;
+        let source = self
+            .generate_source(&target)
+            .await
+            .context("generating source code")?;
 
         let mut command = self.new_command();
         match command.status() {
@@ -550,5 +610,18 @@ world example {{
             }
             _ => Ok(None),
         }
+    }
+}
+
+/// Escape an identifier used in WIT, adding the `%` prefix if it's a known identifier
+fn escape_wit(s: &str) -> Cow<str> {
+    match s {
+        "use" | "type" | "func" | "u8" | "u16" | "u32" | "u64" | "s8" | "s16" | "s32" | "s64"
+        | "float32" | "float64" | "char" | "record" | "flags" | "variant" | "enum" | "union"
+        | "bool" | "string" | "option" | "result" | "future" | "stream" | "list" | "_" | "as"
+        | "from" | "static" | "interface" | "tuple" | "import" | "export" | "world" | "package" => {
+            Cow::Owned(format!("%{s}"))
+        }
+        _ => s.into(),
     }
 }
