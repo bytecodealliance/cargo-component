@@ -113,8 +113,8 @@ wasm-metadata = "0.227.0"
 #wasm-pkg-client = "0.9.0"
 #wasm-pkg-common = "0.10.0"
 # TODO: remove once wasm-pkg-tools update to add
-wasm-pkg-client = { git = "https://github.com/vados-cosmonic/bytecodealliance_wasm-pkg-tools", rev = "f41aeda3cc6c7eee489d1b8c1316a645f8df2b0c" }
-wasm-pkg-common = { git = "https://github.com/vados-cosmonic/bytecodealliance_wasm-pkg-tools", rev = "f41aeda3cc6c7eee489d1b8c1316a645f8df2b0c", features = [
+wasm-pkg-client = { git = "https://github.com/bytecodealliance/wasm-pkg-tools", rev = "5221bdca410563e2087d8adc36425361859e7263" }
+wasm-pkg-common = { git = "https://github.com/bytecodealliance/wasm-pkg-tools", rev = "5221bdca410563e2087d8adc36425361859e7263", features = [
   "oci_extras",
 ] }
 wasmparser = "0.227.0"
