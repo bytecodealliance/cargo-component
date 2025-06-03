@@ -382,6 +382,9 @@ impl<'a> UnimplementedFunction<'a> {
                     }
                     self.print_type(ty, trie, source)?;
                 }
+                if t.types.len() == 1 {
+                    source.push(',');
+                }
                 source.push(')');
             }
             TypeDefKind::Record(_) => {

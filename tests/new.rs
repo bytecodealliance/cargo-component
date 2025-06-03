@@ -305,3 +305,59 @@ fn it_supports_the_proxy_option() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn test_single_element_tuple_generation() -> Result<()> {
+    let (server, config, _task) = spawn_server(["test"]).await?;
+
+    publish_wit(
+        config,
+        "test:tuples",
+        "1.0.0",
+        r#"package test:tuples@1.0.0;
+
+world test-world {
+    export test-interface: interface {
+        test-function: func(params: tuple<string>) -> result<tuple<u32>, string>;
+        another-function: func(single: tuple<bool>) -> tuple<list<string>>;
+    }
+}
+"#,
+    )
+    .await?;
+
+    let project = server.project("test-tuple", true, ["--target", "test:tuples@1.0.0"])?;
+
+    project
+        .cargo_component(["build"])
+        .assert()
+        .stderr(contains(
+            "Finished `dev` profile [unoptimized + debuginfo] target(s)",
+        ))
+        .success();
+
+    let lib_rs = fs::read_to_string(project.root().join("src/lib.rs"))?;
+
+    assert!(
+        lib_rs.contains("params: (String,)"),
+        "Single-element tuple parameter should have trailing comma. Generated code:\n{}",
+        lib_rs
+    );
+    assert!(
+        lib_rs.contains("Result<(u32,), String>") || lib_rs.contains("-> (u32,)"),
+        "Single-element tuple return should have trailing comma. Generated code:\n{}",
+        lib_rs
+    );
+    assert!(
+        lib_rs.contains("single: (bool,)"),
+        "Single-element tuple parameter should have trailing comma. Generated code:\n{}",
+        lib_rs
+    );
+    assert!(
+        lib_rs.contains("-> (Vec<String>,)"),
+        "Single-element tuple return should have trailing comma. Generated code:\n{}",
+        lib_rs
+    );
+
+    Ok(())
+}
