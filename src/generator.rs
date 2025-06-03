@@ -376,11 +376,9 @@ impl<'a> UnimplementedFunction<'a> {
             }
             TypeDefKind::Tuple(t) => {
                 source.push('(');
-                for (i, ty) in t.types.iter().enumerate() {
-                    if i > 0 {
-                        source.push_str(", ");
-                    }
+                for ty in t.types.iter() {
                     self.print_type(ty, trie, source)?;
+                    source.push_str(", ");
                 }
                 source.push(')');
             }
