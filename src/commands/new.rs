@@ -352,15 +352,32 @@ impl NewCommand {
             }
         }
 
+        // Build table of dependencies
         let mut dependencies = Table::new();
-        component["dependencies"] = Item::Table(dependencies);
         if let Some(target) = &self.target {
             let pkg_ref = PackageRef::from_str(target)
                 .with_context(|| format!("converting [{target}] to package ref"))?;
             if let Some(meta) = config.pkg_config.package_registry_override(&pkg_ref) {
-                dependencies[target] = Dependency::Package(())
+                // TODO: create anon registry mapping
+                let registry = Some(String::from("anon_mapping"));
+                // TODO: properly determine version version
+                let version =
+                    VersionReq::parse("0.1.0").context("failed to parse versoin requirement")?;
+
+                // TODO: fix TOML configuration building
+                // dependencies.insert(
+                //     target,
+                //     value(Dependency::Package(
+                //         cargo_component_core::registry::RegistryPackage {
+                //             name: Some(pkg_ref.clone()),
+                //             version,
+                //             registry,
+                //         },
+                //     )),
+                // );
             }
         }
+        component["dependencies"] = Item::Table(dependencies);
 
         if self.proxy {
             component["proxy"] = value(true);
