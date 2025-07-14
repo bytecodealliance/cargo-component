@@ -362,7 +362,8 @@ impl<'a> BindingsGenerator<'a> {
                     )
                 }
                 None => format!(
-                    "failed to select the default world to use for local target `{path}`",
+                    "failed to select the default world to use for local target `{path}`. \
+                     Please ensure that a world is specified in Cargo.toml under [package.metadata.component.target].",
                     path = path.display()
                 ),
             })?;
